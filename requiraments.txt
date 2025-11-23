@@ -1,0 +1,7 @@
+discord.py>=2.3.0
+python-dotenv
+PyNaCl
+yt-dlp
+gTTS
+pyspellchecker
+requests
