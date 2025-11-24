@@ -5,12 +5,19 @@ from discord import app_commands
 from discord.ext import commands
 from gtts import gTTS
 
-NAME_FILE = "name.json"
+# CẤU HÌNH DATA
+DATA_FOLDER = "data"
+NAME_FILE = os.path.join(DATA_FOLDER, "name.json")
 
 class Voice(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.welcome_channels = {}
+        
+        # Tạo thư mục nếu chưa có
+        if not os.path.exists(DATA_FOLDER):
+            os.makedirs(DATA_FOLDER)
+            
         self.custom_names = self.load_custom_names()
 
     def load_custom_names(self):
@@ -20,6 +27,7 @@ class Voice(commands.Cog):
         except: return {}
 
     def save_custom_names(self):
+        if not os.path.exists(DATA_FOLDER): os.makedirs(DATA_FOLDER)
         with open(NAME_FILE, "w", encoding="utf-8") as f:
             json.dump(self.custom_names, f, ensure_ascii=False, indent=4)
 
@@ -60,7 +68,7 @@ class Voice(commands.Cog):
                 target_name = self.custom_names.get(user_id, member.display_name)
                 await self.speak_text(voice_client, f"Xin chào {target_name}")
 
-    # --- CÁC LỆNH SLASH (ĐÃ THÊM DEFER) ---
+    # --- CÁC LỆNH SLASH ---
 
     @app_commands.command(name="name", description="Xem tên bot gọi bạn")
     async def name(self, interaction: discord.Interaction):
@@ -78,7 +86,7 @@ class Voice(commands.Cog):
 
     @app_commands.command(name="welcome", description="Bật/Tắt chào")
     async def welcome(self, interaction: discord.Interaction):
-        await interaction.response.defer() # Defer ngay
+        await interaction.response.defer()
         
         if interaction.user.voice is None:
             await interaction.followup.send("❌ Vào voice trước đã!")

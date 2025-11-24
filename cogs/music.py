@@ -9,12 +9,14 @@ from discord.ext import commands
 from discord.ui import Button, View, Select
 
 # ====================================================
-# CẤU HÌNH
+# CẤU HÌNH & HẰNG SỐ
 # ====================================================
-PLAYLIST_FILE = "data/playlists.json"
-SETTINGS_FILE = "data/server_settings.json"
-SEARCH_LIMIT = 3 
+DATA_FOLDER = "data"
+PLAYLIST_FILE = os.path.join(DATA_FOLDER, "playlists.json")
+SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
+SEARCH_LIMIT = 5 
 
+# Cấu hình yt-dlp
 YDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -35,11 +37,12 @@ def is_url(string):
     return re.match(regex, string) is not None
 
 # ====================================================
-# 1. UI: MENU CHỌN BÀI HÁT (ĐÃ SỬA LỖI TƯƠNG TÁC)
+# 1. UI COMPONENTS
 # ====================================================
 class SongSelect(discord.ui.Select):
-    def __init__(self, cog, songs_list):
+    def __init__(self, cog, interaction, songs_list):
         self.cog = cog
+        self.origin_interaction = interaction
         self.songs_list = songs_list
         options = []
         for index, song in enumerate(songs_list):
@@ -48,25 +51,16 @@ class SongSelect(discord.ui.Select):
         super().__init__(placeholder=f"🔻 Tìm thấy {len(songs_list)} bài...", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        # Sử dụng interaction MỚI của sự kiện click này để phản hồi
         selected_index = int(self.values[0])
         selected_song = self.songs_list[selected_index]
-        
-        # 1. Chỉnh sửa tin nhắn để báo đã chọn (và xóa menu)
         await interaction.response.edit_message(content=f"✅ Đã chọn: **{selected_song['title']}**", view=None)
-        
-        # 2. Gọi hàm xử lý nhạc với interaction MỚI
-        await self.cog.process_song_request(interaction, selected_song, from_selection=True)
+        await self.cog.process_song_request(self.origin_interaction, selected_song, from_selection=True)
 
 class SongSelectionView(discord.ui.View):
-    def __init__(self, cog, songs_list):
-        # Tăng timeout lên 180s (3 phút) để người dùng thoải mái chọn
+    def __init__(self, cog, interaction, songs_list):
         super().__init__(timeout=180)
-        self.add_item(SongSelect(cog, songs_list))
+        self.add_item(SongSelect(cog, interaction, songs_list))
 
-# ====================================================
-# 2. UI: BẢNG ĐIỀU KHIỂN NHẠC
-# ====================================================
 class MusicController(discord.ui.View):
     def __init__(self, cog, guild_id, song_info):
         super().__init__(timeout=None)
@@ -83,37 +77,35 @@ class MusicController(discord.ui.View):
     def create_embed(self):
         loop_status = self.cog.loops.get(self.guild_id, False)
         volume = self.cog.volumes.get(self.guild_id, 0.5)
+        loop_text = "🔂 Bật (1 bài)" if loop_status else "➡️ Tắt"
+        
         embed = discord.Embed(title="🎶 Đang phát nhạc", description=f"**{self.song_info['title']}**", color=discord.Color.purple())
-        embed.set_footer(text=f"Vol: {int(volume*100)}% | Loop: {'Bật' if loop_status else 'Tắt'}")
+        embed.set_footer(text=f"Vol: {int(volume*100)}% | Loop: {loop_text}")
         return embed
 
-    @discord.ui.button(emoji="⏸️", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(emoji="⏯️", style=discord.ButtonStyle.secondary, row=0)
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
         vc = interaction.guild.voice_client
         if not vc: return
+        
         if vc.is_playing():
             vc.pause()
-            button.emoji = "▶️"
-            button.style = discord.ButtonStyle.secondary
+            button.emoji = "▶️" 
         elif vc.is_paused():
             vc.resume()
-            button.emoji = "⏸️"
-            button.style = discord.ButtonStyle.primary
+            button.emoji = "⏸️" 
+            
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.primary, row=0)
+    @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.secondary, row=0)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
-        vc = interaction.guild.voice_client
-        if vc and (vc.is_playing() or vc.is_paused()):
-            vc.stop()
-            await interaction.response.send_message("⏭️ Đang chuyển bài...", ephemeral=True)
-        else: await interaction.response.send_message("❌ Không có nhạc.", ephemeral=True)
+        await self.cog.skip_song(interaction.guild_id)
+        await interaction.response.send_message("⏭️ Đang chuyển bài...", ephemeral=True)
 
-    @discord.ui.button(emoji="🔁", style=discord.ButtonStyle.secondary, row=0)
+    @discord.ui.button(emoji="🔂", style=discord.ButtonStyle.secondary, row=0) 
     async def loop(self, interaction: discord.Interaction, button: discord.ui.Button):
         current = self.cog.loops.get(self.guild_id, False)
         self.cog.loops[self.guild_id] = not current
-        button.style = discord.ButtonStyle.green if self.cog.loops[self.guild_id] else discord.ButtonStyle.secondary
         new_embed = self.create_embed()
         await interaction.response.edit_message(embed=new_embed, view=self)
 
@@ -150,6 +142,31 @@ class MusicController(discord.ui.View):
             await interaction.response.edit_message(embed=new_embed)
         else: await interaction.response.send_message("❌ Lỗi volume.", ephemeral=True)
 
+class PlaylistSongSelect(discord.ui.Select):
+    def __init__(self, cog, interaction, songs_list, playlist_name):
+        self.cog = cog
+        self.origin_interaction = interaction
+        self.songs_list = songs_list
+        
+        options = []
+        limit_songs = songs_list[:25] 
+        for index, song in enumerate(limit_songs):
+            label = f"{index + 1}. {song['title']}"
+            if len(label) > 100: label = label[:97] + "..."
+            options.append(discord.SelectOption(label=label, value=str(index)))
+        super().__init__(placeholder=f"📂 Chọn bài trong '{playlist_name}'...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_index = int(self.values[0])
+        selected_song = self.songs_list[selected_index]
+        await interaction.response.edit_message(content=f"✅ Đã lấy từ Playlist: **{selected_song['title']}**", view=None)
+        await self.cog.process_song_request(self.origin_interaction, selected_song, from_selection=True)
+
+class PlaylistSelectionView(discord.ui.View):
+    def __init__(self, cog, interaction, songs_list, playlist_name):
+        super().__init__(timeout=180)
+        self.add_item(PlaylistSongSelect(cog, interaction, songs_list, playlist_name))
+
 # ====================================================
 # 3. CORE LOGIC (COG)
 # ====================================================
@@ -162,6 +179,12 @@ class Music(commands.Cog):
         self.current_songs = {} 
         self.ui_messages = {}   
         self.active_tasks = {}  
+        self.manual_stops = {}
+        self.force_skips = {}
+        
+        if not os.path.exists(DATA_FOLDER):
+            os.makedirs(DATA_FOLDER)
+
         self.playlists = self.load_json(PLAYLIST_FILE)
         self.settings = self.load_json(SETTINGS_FILE)
 
@@ -172,6 +195,7 @@ class Music(commands.Cog):
         except: return {}
 
     def save_json(self, filename, data):
+        if not os.path.exists(DATA_FOLDER): os.makedirs(DATA_FOLDER)
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
 
@@ -200,6 +224,7 @@ class Music(commands.Cog):
                     'stream_url': info['url'], 
                     'webpage_url': info.get('webpage_url', info.get('url')), 
                     'title': info['title'],
+                    'thumbnail': info.get('thumbnail', None),
                     'channel': info.get('uploader', 'Unknown')
                 }
             except: return None
@@ -214,6 +239,8 @@ class Music(commands.Cog):
     # --- BACKGROUND PLAYER LOOP ---
     async def player_loop(self, guild_id, channel):
         while True:
+            self.force_skips[guild_id] = False
+
             if guild_id not in self.queues or not self.queues[guild_id]:
                 if guild_id in self.current_songs: del self.current_songs[guild_id]
                 if guild_id in self.ui_messages:
@@ -221,13 +248,15 @@ class Music(commands.Cog):
                     except: pass
                     del self.ui_messages[guild_id]
                 if guild_id in self.active_tasks: del self.active_tasks[guild_id]
+                
+                if not self.manual_stops.get(guild_id, False):
+                    await channel.send("✅ **Đã phát hết nhạc trong hàng đợi.**")
+                
+                if guild_id in self.manual_stops: del self.manual_stops[guild_id]
                 break 
 
             song_data = self.queues[guild_id].pop(0)
             self.current_songs[guild_id] = song_data
-
-            if self.loops.get(guild_id, False):
-                self.queues[guild_id].append(song_data)
 
             voice_cog = self.bot.get_cog("Voice")
             if voice_cog and guild_id in voice_cog.welcome_channels:
@@ -261,8 +290,13 @@ class Music(commands.Cog):
                     if error: print(f"Player Error: {error}")
                     self.bot.loop.call_soon_threadsafe(next_song_event.set)
 
+                if guild.voice_client.is_playing(): guild.voice_client.stop()
                 guild.voice_client.play(transformer, after=after_callback)
                 await next_song_event.wait()
+
+                # Logic Loop 1 Bài
+                if self.loops.get(guild_id, False) and not self.force_skips.get(guild_id, False):
+                    self.queues[guild_id].insert(0, song_data)
 
             except Exception as e:
                 print(f"Loop Error: {e}")
@@ -270,23 +304,36 @@ class Music(commands.Cog):
                 await asyncio.sleep(1) 
 
     async def start_playing(self, channel, guild_id):
+        self.manual_stops[guild_id] = False
         if guild_id not in self.active_tasks or self.active_tasks[guild_id].done():
             self.active_tasks[guild_id] = asyncio.create_task(self.player_loop(guild_id, channel))
 
     async def stop_player(self, guild_id):
         self.queues[guild_id] = []
+        self.manual_stops[guild_id] = True
+        self.force_skips[guild_id] = True
         if guild_id in self.current_songs: del self.current_songs[guild_id]
         guild = self.bot.get_guild(guild_id)
         if guild and guild.voice_client: guild.voice_client.stop()
 
+    async def skip_song(self, guild_id):
+        self.force_skips[guild_id] = True 
+        guild = self.bot.get_guild(guild_id)
+        if guild and guild.voice_client and (guild.voice_client.is_playing() or guild.voice_client.is_paused()):
+            guild.voice_client.stop()
+
     async def process_song_request(self, interaction, song_data, from_selection=False):
-        if 'stream_url' not in song_data:
-             full_info = await self.get_song_info(song_data['webpage_url'] or song_data['url'])
-             if not full_info:
-                 await interaction.followup.send("❌ Lỗi tải bài hát.")
-                 return
-             song_info = full_info
-        else: song_info = song_data
+        final_song_data = {}
+        if 'stream_url' in song_data:
+            final_song_data = song_data
+        else:
+            final_song_data = {
+                'stream_url': None,
+                'webpage_url': song_data.get('webpage_url') or song_data.get('url'),
+                'title': song_data['title'],
+                'thumbnail': song_data.get('thumbnail', None),
+                'channel': song_data.get('channel', 'Unknown')
+            }
 
         guild_id = interaction.guild_id
         if guild_id not in self.queues: self.queues[guild_id] = []
@@ -300,18 +347,16 @@ class Music(commands.Cog):
                 await interaction.followup.send("❌ Vào Voice đi bạn ơi.")
                 return
 
-        self.queues[guild_id].append(song_info)
+        self.queues[guild_id].append(final_song_data)
         
         if guild_id not in self.active_tasks or self.active_tasks[guild_id].done():
             await self.start_playing(interaction.channel, guild_id)
-            await interaction.followup.send(f"▶️ Bắt đầu phát: **{song_info['title']}**")
+            await interaction.followup.send(f"▶️ Bắt đầu phát: **{final_song_data['title']}**")
         else:
-            await interaction.followup.send(f"✅ Đã thêm vào hàng đợi: **{song_info['title']}**")
+            await interaction.followup.send(f"✅ Đã thêm vào hàng đợi: **{final_song_data['title']}**")
 
-    # ====================================================
-    # 4. SLASH COMMANDS
-    # ====================================================
-    @app_commands.command(name="play", description="Phát nhạc")
+    # --- COMMANDS ---
+    @app_commands.command(name="play", description="Phát nhạc (Link hoặc Tên)")
     async def play(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer()
         if not interaction.user.voice: return await interaction.followup.send("❌ Chưa vào Voice.")
@@ -324,7 +369,7 @@ class Music(commands.Cog):
         else:
             results = await self.search_youtube(query)
             if not results: return await interaction.followup.send("❌ Không tìm thấy.")
-            view = SongSelectionView(self, results)
+            view = SongSelectionView(self, interaction, results)
             await interaction.followup.send(f"🔎 **Tìm thấy {len(results)} kết quả:**", view=view)
 
     @app_commands.command(name="stop", description="Dừng nhạc")
@@ -336,10 +381,8 @@ class Music(commands.Cog):
     @app_commands.command(name="skip", description="Bỏ qua bài")
     async def skip(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        if interaction.guild.voice_client and interaction.guild.voice_client.is_playing():
-            interaction.guild.voice_client.stop()
-            await interaction.followup.send("⏭️ Skip.")
-        else: await interaction.followup.send("❌ Không có nhạc.", ephemeral=True)
+        await self.skip_song(interaction.guild_id)
+        await interaction.followup.send("⏭️ Skip.")
 
     @app_commands.command(name="volume", description="Chỉnh âm lượng")
     async def volume(self, interaction: discord.Interaction, level: int):
@@ -348,6 +391,14 @@ class Music(commands.Cog):
         if interaction.guild.voice_client and interaction.guild.voice_client.source:
             interaction.guild.voice_client.source.volume = level / 100
         await interaction.followup.send(f"🔊 Vol: {level}%")
+
+    @app_commands.command(name="loop", description="Bật/Tắt lặp lại bài hiện tại")
+    async def loop(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        current = self.loops.get(interaction.guild_id, False)
+        self.loops[interaction.guild_id] = not current
+        status = "🔂 BẬT Loop 1 bài" if self.loops[interaction.guild_id] else "➡️ TẮT Loop"
+        await interaction.followup.send(status)
 
     @app_commands.command(name="default_volume", description="Cài đặt âm lượng mặc định")
     @app_commands.checks.has_permissions(administrator=True)
@@ -375,7 +426,7 @@ class Music(commands.Cog):
         if user_id not in self.playlists: self.playlists[user_id] = {}
         self.playlists[user_id][name] = data_to_save
         self.save_json(PLAYLIST_FILE, self.playlists)
-        await interaction.followup.send(f"💾 Đã lưu **{name}** ({len(data_to_save)} bài).")
+        await interaction.followup.send(f"💾 Đã lưu **{name}**.")
 
     @app_commands.command(name="pl_load", description="Nạp Playlist")
     async def pl_load(self, interaction: discord.Interaction, name: str):
@@ -388,12 +439,64 @@ class Music(commands.Cog):
         guild_id = interaction.guild_id
         if guild_id not in self.queues: self.queues[guild_id] = []
         for song in self.playlists[user_id][name]:
-            info = await self.get_song_info(song['webpage_url'])
-            if info: self.queues[guild_id].append(info)
+            # Lưu info rút gọn
+            info = {
+                'stream_url': None,
+                'webpage_url': song['webpage_url'],
+                'title': song['title'],
+                'channel': 'Playlist Load'
+            }
+            self.queues[guild_id].append(info)
         
         if guild_id not in self.active_tasks or self.active_tasks[guild_id].done():
             await self.start_playing(interaction.channel, guild_id)
         await interaction.followup.send(f"✅ Đã nạp playlist **{name}**.")
+
+    # --- LỆNH PL_PICK ĐÃ ĐƯỢC CẬP NHẬT LOGIC LỌC ---
+    @app_commands.command(name="pl_pick", description="Chọn 1 bài trong Playlist (Đã lọc bài đang phát/chờ)")
+    async def pl_pick(self, interaction: discord.Interaction, name: str):
+        await interaction.response.defer()
+        user_id = str(interaction.user.id)
+        guild_id = interaction.guild_id
+
+        if user_id not in self.playlists or name not in self.playlists[user_id]:
+            return await interaction.followup.send("❌ Không tìm thấy Playlist này.")
+        
+        all_songs = self.playlists[user_id][name]
+        if not all_songs:
+            return await interaction.followup.send("❌ Playlist trống.")
+
+        # --- LOGIC LỌC BÀI ĐANG BẬN ---
+        busy_urls = set()
+
+        # 1. Thêm bài đang phát vào danh sách bận
+        if guild_id in self.current_songs:
+            url = self.current_songs[guild_id].get('webpage_url')
+            if url: busy_urls.add(url)
+
+        # 2. Thêm bài trong hàng đợi vào danh sách bận
+        if guild_id in self.queues:
+            for s in self.queues[guild_id]:
+                url = s.get('webpage_url')
+                if url: busy_urls.add(url)
+
+        # 3. Lọc danh sách: Chỉ lấy bài KHÔNG nằm trong busy_urls
+        available_songs = [s for s in all_songs if s.get('webpage_url') not in busy_urls]
+
+        # 4. Kiểm tra kết quả lọc
+        if not available_songs:
+            return await interaction.followup.send(f"⚠️ Tất cả bài trong playlist **'{name}'** đều đang được phát hoặc nằm trong hàng đợi rồi!")
+
+        # Tạo Menu với danh sách đã lọc
+        view = PlaylistSelectionView(self, interaction, available_songs, name)
+        
+        # Tính toán số lượng bài bị ẩn để báo cho người dùng biết
+        hidden_count = len(all_songs) - len(available_songs)
+        msg = f"📂 **Chọn bài trong '{name}':**"
+        if hidden_count > 0:
+            msg += f"\n*(Đã ẩn {hidden_count} bài trùng với bài đang phát/chờ)*"
+            
+        await interaction.followup.send(msg, view=view)
 
     @app_commands.command(name="pl_list", description="Xem Playlist")
     async def pl_list(self, interaction: discord.Interaction):
