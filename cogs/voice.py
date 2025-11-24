@@ -66,7 +66,7 @@ class Voice(commands.Cog):
                 if voice_client.is_playing(): return 
                 user_id = str(member.id)
                 target_name = self.custom_names.get(user_id, member.display_name)
-                await self.speak_text(voice_client, f"Xin chào {target_name}")
+                await self.speak_text(voice_client, f" {target_name} đã vào phòng")
 
     # --- CÁC LỆNH SLASH ---
 
