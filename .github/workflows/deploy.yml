@@ -1,25 +1,26 @@
-name: Deploy Bot on Ubuntu
+name: Deploy Bot to VPS
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main" ] # Hoặc "master" tùy tên nhánh của bạn
 
 jobs:
-  build:
-    runs-on: self-hosted # Chạy trên VPS Ubuntu
+  deploy:
+    runs-on: self-hosted # Quan trọng: Lệnh này bảo nó chạy trên VPS của bạn
 
     steps:
+    # 1. Lấy code mới nhất về VPS
     - name: Checkout code
       uses: actions/checkout@v3
       with:
-        clean: false # Giữ lại .env và cookies.txt
+        clean: false # KHÔNG xóa file .env và cookies.txt cũ
 
+    # 2. Cài đặt thư viện (nếu có thêm mới)
     - name: Install dependencies
       run: |
-        # Cài các thư viện python mới nếu có
         pip3 install -r requirements.txt
 
+    # 3. Khởi động lại Bot để nhận code mới
     - name: Restart Bot Service
       run: |
-        # Khởi động lại service bot
         sudo systemctl restart mosabot
