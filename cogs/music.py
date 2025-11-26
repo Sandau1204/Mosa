@@ -16,6 +16,7 @@ PLAYLIST_FILE = os.path.join(DATA_FOLDER, "playlists.json")
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 SEARCH_LIMIT = 10 
 
+# Cấu hình yt-dlp (Giả lập iOS để tránh chặn IP Web)
 YDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -24,7 +25,9 @@ YDL_OPTIONS = {
     'default_search': 'auto',
     'source_address': '0.0.0.0',
     'nocheckcertificate': True,
-    'cookiefile': 'cookies.txt',
+    'cookiefile': 'cookies.txt', 
+    # Thay đổi dòng này: Dùng 'ios' thay vì 'android' hoặc 'web'
+    'extractor_args': {'youtube': {'player_client': ['ios']}},
 }
 
 FFMPEG_OPTIONS = {
