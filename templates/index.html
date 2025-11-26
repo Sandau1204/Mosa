@@ -9,127 +9,40 @@
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600&display=swap" rel="stylesheet">
     
     <style>
-        :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --primary: #6366f1;
-            --text-white: #ffffff;
-            --text-gray: #94a3b8;
-        }
-
-        body {
-            background-color: var(--bg);
-            color: var(--text-white);
-            font-family: 'Lexend', sans-serif;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .player-card {
-            background-color: var(--card);
-            border-radius: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            width: 100%;
-            max-width: 480px;
-            padding: 25px;
-            border: 1px solid rgba(255,255,255,0.05);
-        }
-
-        /* --- FORCE COLOR FIX (SỬA MÀU CHỮ) --- */
-        h1, h2, h3, h4, h5, h6, span, div {
-            color: inherit; /* Kế thừa màu trắng từ body */
-        }
-
-        #trackTitle {
-            color: #ffffff !important; /* Luôn trắng */
-            font-weight: 600;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            margin-bottom: 5px;
-        }
-
-        #trackArtist {
-            color: #cbd5e1 !important; /* Màu xám sáng */
-        }
-
-        /* Màu chữ trong ô nhập liệu */
-        .form-select, .form-control {
-            background-color: #0f172a !important;
-            border: 1px solid #334155;
-            color: #ffffff !important; 
-            border-radius: 10px;
-        }
-        
-        .form-select:focus, .form-control:focus {
-            background-color: #0f172a !important;
-            color: #ffffff !important;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25);
-        }
-
+        :root { --bg: #0f172a; --card: #1e293b; --primary: #6366f1; --text: #ffffff; --text-mute: #94a3b8; }
+        body { background-color: var(--bg); color: var(--text); font-family: 'Lexend', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .player-card { background-color: var(--card); border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 100%; max-width: 480px; padding: 25px; border: 1px solid rgba(255,255,255,0.05); }
+        .form-select, .form-control { background-color: #0f172a !important; border: 1px solid #334155; color: #ffffff !important; border-radius: 10px; }
+        .form-select:focus, .form-control:focus { background-color: #0f172a !important; color: #ffffff !important; border-color: var(--primary); box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25); }
         ::placeholder { color: #64748b !important; opacity: 1; }
-
-        /* --- CSS HÀNG ĐỢI (QUEUE) --- */
-        .queue-box {
-            background: #0f172a;
-            border-radius: 10px;
-            padding: 10px;
-            max-height: 180px;
-            overflow-y: auto;
-            margin-top: 15px;
-            border: 1px solid #334155;
-        }
         
-        /* Ép màu chữ cho từng dòng trong hàng đợi */
-        .queue-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px;
-            border-bottom: 1px solid #1e293b;
-            font-size: 0.95rem;
-            color: #ffffff !important; /* Chữ trắng tuyệt đối */
-        }
+        .modal-content { background-color: #1e293b; color: white; border: 1px solid #334155; }
+        .modal-header { border-bottom: 1px solid #334155; }
+        .list-group-item { background-color: #0f172a; color: white; border: 1px solid #334155; cursor: pointer; transition: 0.2s; }
+        .list-group-item:hover { background-color: #334155; border-color: var(--primary); }
+        .search-thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 5px; margin-right: 15px; }
         
-        .queue-item span {
-            color: #ffffff !important;
-        }
-
-        .queue-index {
-            color: var(--primary) !important; /* Số thứ tự màu tím */
-            font-weight: bold;
-            margin-right: 10px;
-        }
-        /* ------------------------------ */
-
-        .art-box {
-            width: 100%; height: 250px; border-radius: 15px; overflow: hidden; margin-bottom: 20px; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); background: #0f172a;
-        }
+        .art-box { width: 100%; height: 250px; border-radius: 15px; overflow: hidden; margin-bottom: 20px; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); background: #0f172a; }
         .art-img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        
-        .no-music-placeholder {
-            width: 100%; height: 100%; display: flex; justify-content: center; align-items: center;
-            background: linear-gradient(45deg, #1e293b, #0f172a); color: #334155; font-size: 4rem; position: relative; overflow: hidden;
-        }
-        .pulse-ring {
-            position: absolute; width: 100px; height: 100px; background: var(--primary); border-radius: 50%; opacity: 0; animation: pulseAnimation 3s infinite ease-out;
-        }
+        .no-music-placeholder { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: linear-gradient(45deg, #1e293b, #0f172a); color: #334155; font-size: 4rem; position: relative; overflow: hidden; }
+        .pulse-ring { position: absolute; width: 100px; height: 100px; background: var(--primary); border-radius: 50%; opacity: 0; animation: pulseAnimation 3s infinite ease-out; }
         @keyframes pulseAnimation { 0% { transform: scale(0.5); opacity: 0.2; } 100% { transform: scale(2.5); opacity: 0; } }
-
+        
+        .queue-box { background: #0f172a; border-radius: 10px; padding: 10px; max-height: 180px; overflow-y: auto; margin-top: 15px; border: 1px solid #334155; }
+        .queue-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #1e293b; font-size: 0.95rem; color: #ffffff !important; }
+        .queue-index { color: var(--primary) !important; font-weight: bold; margin-right: 10px; }
+        
         .controls button { background: none; border: none; color: #e2e8f0; font-size: 1.2rem; transition: 0.2s; width: 45px; height: 45px; border-radius: 50%; }
         .controls button:hover { background: rgba(255,255,255,0.1); color: var(--primary); }
         .controls .btn-play { background: var(--primary); color: white; width: 60px; height: 60px; font-size: 1.5rem; box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); }
         .controls .btn-play:hover { background: #818cf8; color: white; transform: scale(1.05); }
         .btn-active { color: #4ade80 !important; }
-
+        
         .status-badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 15px; background: #334155; color: #94a3b8; }
         .status-connected { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
     </style>
 </head>
 <body>
-
     <div class="player-card text-center">
         <div class="header-title mb-3 fw-bold text-primary">MOSA DASHBOARD</div>
         
@@ -146,18 +59,8 @@
 
         <div class="mb-3"><span id="trackChannel" class="status-badge">Chưa kết nối</span></div>
         
-        <div class="art-box">
-            <img id="trackArt" src="" class="art-img">
-            <div id="noMusicPlaceholder" class="no-music-placeholder">
-                <div class="pulse-ring"></div>
-                <i class="fas fa-music" style="position: relative; z-index: 2;"></i>
-            </div>
-        </div>
-
-        <div class="track-info mb-4">
-            <h5 id="trackTitle">Sẵn sàng</h5>
-            <small id="trackArtist">Vui lòng chọn bài hát</small>
-        </div>
+        <div class="art-box"><img id="trackArt" src="" class="art-img"><div id="noMusicPlaceholder" class="no-music-placeholder"><div class="pulse-ring"></div><i class="fas fa-music" style="position: relative; z-index: 2;"></i></div></div>
+        <div class="track-info mb-4"><h5 id="trackTitle">Sẵn sàng</h5><small id="trackArtist" style="color: #94a3b8;">Vui lòng chọn bài hát</small></div>
         
         <div class="controls d-flex justify-content-center align-items-center gap-3 mb-4">
             <button onclick="cmd('loop')" id="btnLoop"><i class="fas fa-repeat"></i></button>
@@ -168,110 +71,119 @@
         </div>
         
         <div class="input-group mb-3">
-            <input type="text" id="searchQuery" class="form-control" placeholder="Link YouTube hoặc tên bài...">
-            <button onclick="playMusic()" class="btn btn-primary"><i class="fas fa-search"></i></button>
+            <input type="text" id="searchQuery" class="form-control" placeholder="Link YouTube hoặc tên bài..." onkeypress="handleEnter(event)">
+            <button onclick="handleSearchOrPlay()" class="btn btn-primary"><i class="fas fa-search"></i></button>
         </div>
         <button onclick="cmd('stop')" class="btn btn-sm btn-outline-danger w-100">Dừng Nhạc & Xóa Hàng Đợi</button>
         
         <div class="queue-box text-start">
-            <div class="text-muted small mb-2" style="color: #94a3b8 !important;">
-                <i class="fas fa-list"></i> Danh sách chờ phát:
-            </div>
-            <div id="queueList">
-                <div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div>
-            </div>
+            <div class="text-muted small mb-2" style="color: #94a3b8 !important;"><i class="fas fa-list"></i> Hàng đợi:</div>
+            <div id="queueList"><div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div></div>
         </div>
     </div>
 
+    <div class="modal fade" id="searchModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Kết quả tìm kiếm</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div class="list-group list-group-flush" id="searchResults"></div></div></div></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const BASE_URL = "/mosa"; // Giữ nguyên nếu dùng nginx reverse proxy, nếu localhost thì để ""
         let currentGuildId = localStorage.getItem('lastGuild') || "";
         let isFetching = false;
+        const searchModal = new bootstrap.Modal(document.getElementById('searchModal'));
 
         window.onload = () => { loadGuilds(); setInterval(updateState, 1000); }
 
         function loadGuilds() {
-            fetch('/api/guilds').then(r=>r.json()).then(d => {
+            fetch(`${BASE_URL}/api/guilds`).then(r=>r.json()).then(d => {
                 const sel = document.getElementById('guildSelect');
                 sel.innerHTML = '<option value="" disabled selected>Chọn Server...</option>';
-                if (d.length === 0) return;
+                if(d.length === 0) return;
                 d.forEach(g => sel.add(new Option(g.name, g.id)));
                 if(currentGuildId && d.some(g => g.id === currentGuildId)) { sel.value = currentGuildId; loadChannels(); }
-            }).catch(e => console.log("Chưa kết nối được API"));
+            }).catch(e => console.log("API Error"));
         }
-
         function loadChannels() {
             const gid = document.getElementById('guildSelect').value;
             localStorage.setItem('lastGuild', gid); currentGuildId = gid;
             const chSel = document.getElementById('channelSelect');
-            chSel.innerHTML = '<option disabled selected>Đang tải...</option>';
-            fetch(`/api/channels?guild_id=${gid}`).then(r=>r.json()).then(d => {
+            // Giữ lại option hiện tại nếu đang load lại để tránh nhấp nháy
+            if (chSel.options.length <= 1) chSel.innerHTML = '<option disabled selected>Đang tải...</option>';
+            
+            fetch(`${BASE_URL}/api/channels?guild_id=${gid}`).then(r=>r.json()).then(d => {
+                const currentVal = chSel.value; // Lưu giá trị đang chọn
                 chSel.innerHTML = '<option disabled selected>Chọn Kênh...</option>';
                 d.forEach(c => chSel.add(new Option(c.name, c.id)));
+                
+                // Nếu giá trị cũ vẫn còn trong danh sách mới, chọn lại nó
+                if (currentVal && Array.from(chSel.options).some(o => o.value === currentVal)) {
+                    chSel.value = currentVal;
+                }
             });
         }
-
         function joinChannel() {
             const gid = currentGuildId; const cid = document.getElementById('channelSelect').value;
-            if(!gid || !cid || cid === "Chọn Kênh...") return alert("Vui lòng chọn Server và Kênh Voice!");
-            fetch(`/api/join?guild_id=${gid}&channel_id=${cid}`, {method:'POST'}).then(r=>r.json()).then(d => { if(d.status === 'ok') alert("Bot đang vào kênh..."); });
+            if(!gid || !cid || cid === "Chọn Kênh...") return alert("Chọn Server và Kênh!");
+            fetch(`${BASE_URL}/api/join?guild_id=${gid}&channel_id=${cid}`, {method:'POST'}).then(r=>r.json()).then(d => { if(d.status === 'ok') alert("Bot đang vào..."); });
         }
+        function leaveChannel() { if(currentGuildId) fetch(`${BASE_URL}/api/control/leave?guild_id=${currentGuildId}`, {method:'POST'}); }
+        function cmd(a) { if(currentGuildId) fetch(`${BASE_URL}/api/control/${a}?guild_id=${currentGuildId}`, {method:'POST'}); }
+        function handleEnter(e) { if(e.key === 'Enter') handleSearchOrPlay(); }
+        function handleSearchOrPlay() {
+            const q = document.getElementById('searchQuery').value.trim(); if(!currentGuildId || !q) return alert("Nhập thông tin!");
+            const btn = document.querySelector('.input-group .btn'); const originalIcon = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            if (q.startsWith("http")) { playDirect(q); btn.innerHTML = originalIcon; } 
+            else {
+                fetch(`${BASE_URL}/api/search?query=${encodeURIComponent(q)}`).then(r => r.json()).then(data => {
+                    btn.innerHTML = originalIcon;
+                    if(data.length === 0) return alert("Không tìm thấy!");
+                    const list = document.getElementById('searchResults'); list.innerHTML = "";
+                    data.forEach(s => {
+                        const item = document.createElement('div'); item.className = "list-group-item d-flex align-items-center";
+                        item.onclick = () => { playDirect(s.url); searchModal.hide(); };
+                        item.innerHTML = `<img src="${s.thumbnail||'https://i.imgur.com/t2107W6.png'}" class="search-thumb"><div><div class="fw-bold text-truncate" style="max-width:300px;">${s.title}</div><small class="text-muted">${s.uploader} • ${s.duration}</small></div>`;
+                        list.appendChild(item);
+                    });
+                    searchModal.show();
+                }).catch(() => { btn.innerHTML = originalIcon; alert("Lỗi tìm kiếm."); });
+            }
+        }
+        function playDirect(url) { fetch(`${BASE_URL}/api/play?guild_id=${currentGuildId}&query=${encodeURIComponent(url)}`, {method:'POST'}).then(() => document.getElementById('searchQuery').value = ''); }
         
-        function leaveChannel() {
-            if(!currentGuildId) return alert("Chưa chọn Server!");
-            fetch(`/api/control/leave?guild_id=${currentGuildId}`, {method:'POST'}).then(r=>r.json()).then(d => { if(d.status === 'ok') alert("Bot đã rời kênh!"); else alert("Lỗi hoặc bot chưa vào kênh."); });
-        }
-
-        function cmd(action) {
-            if(!currentGuildId) return alert("Chưa chọn Server!");
-            fetch(`/api/control/${action}?guild_id=${currentGuildId}`, {method:'POST'});
-        }
-
-        function playMusic() {
-            const q = document.getElementById('searchQuery').value;
-            if(!currentGuildId || !q) return alert("Nhập link/tên bài và chọn Server!");
-            const btn = document.querySelector('.input-group .btn'); const originalIcon = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            fetch(`/api/play?guild_id=${currentGuildId}&query=${encodeURIComponent(q)}`, {method:'POST'}).then(() => { document.getElementById('searchQuery').value = ''; btn.innerHTML = originalIcon; });
-        }
-
         function updateState() {
-            if(!currentGuildId || isFetching) return;
-            isFetching = true;
-            fetch(`/api/status?guild_id=${currentGuildId}`).then(r=>r.json()).then(d => {
-                const artImg = document.getElementById('trackArt');
-                const placeholder = document.getElementById('noMusicPlaceholder');
-                if(d.thumbnail && d.title) {
-                    artImg.src = d.thumbnail; artImg.style.display = 'block'; placeholder.style.display = 'none';
-                    document.getElementById('trackTitle').innerText = d.title;
-                    document.getElementById('trackArtist').innerText = d.channel || "Đang phát";
-                } else {
-                    artImg.style.display = 'none'; artImg.src = ""; placeholder.style.display = 'flex';
-                    document.getElementById('trackTitle').innerText = "Sẵn sàng";
-                    document.getElementById('trackArtist').innerText = "Vui lòng chọn bài hát";
-                }
-
+            if(!currentGuildId || isFetching) return; isFetching = true;
+            fetch(`${BASE_URL}/api/status?guild_id=${currentGuildId}`).then(r=>r.json()).then(d => {
+                const art = document.getElementById('trackArt'), ph = document.getElementById('noMusicPlaceholder');
+                if(d.thumbnail && d.title) { art.src = d.thumbnail; art.style.display = 'block'; ph.style.display = 'none'; document.getElementById('trackTitle').innerText = d.title; document.getElementById('trackArtist').innerText = d.channel || "Đang phát"; }
+                else { art.style.display = 'none'; art.src = ""; ph.style.display = 'flex'; document.getElementById('trackTitle').innerText = "Sẵn sàng"; document.getElementById('trackArtist').innerText = "Vui lòng chọn bài hát"; }
+                
                 const st = document.getElementById('trackChannel');
                 if(d.connected_channel) { st.innerHTML = `<i class="fas fa-wifi"></i> ${d.connected_channel}`; st.className = "status-badge status-connected"; } 
                 else { st.innerHTML = "Chưa kết nối"; st.className = "status-badge"; }
+                
+                // --- ĐỒNG BỘ DROP-DOWN MENU ---
+                // Nếu bot đang ở trong kênh Voice (có ID) và ID đó khác với cái đang chọn trong menu
+                // Thì tự động chọn lại cho đúng
+                const chSel = document.getElementById('channelSelect');
+                if (d.connected_channel_id && chSel.options.length > 1) {
+                     // Kiểm tra xem kênh bot đang ở có nằm trong danh sách dropdown không
+                     let options = Array.from(chSel.options);
+                     let optionExists = options.some(o => o.value === d.connected_channel_id);
+                     
+                     // Nếu tồn tại và khác giá trị hiện tại -> Chuyển
+                     if (optionExists && chSel.value !== d.connected_channel_id) {
+                         chSel.value = d.connected_channel_id;
+                     }
+                }
+                // ------------------------------
 
                 document.getElementById('iconPlay').className = d.is_playing ? "fas fa-pause" : "fas fa-play";
                 document.getElementById('btnLoop').className = d.loop ? "btn-active" : "";
-
                 const qDiv = document.getElementById('queueList'); let html = "";
-                if(d.queue && d.queue.length > 0) {
-                    d.queue.forEach((s, i) => {
-                        html += `
-                        <div class="queue-item">
-                            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                <span class="queue-index">${i+1}.</span> ${s.title}
-                            </div>
-                        </div>`;
-                    });
-                } else {
-                    html = '<div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div>';
-                }
-                if(qDiv.innerHTML !== html) qDiv.innerHTML = html;
-                isFetching = false;
+                if(d.queue && d.queue.length > 0) d.queue.forEach((s, i) => html += `<div class="queue-item"><span><span class="queue-index">${i+1}.</span> ${s.title}</span></div>`);
+                else html = '<div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div>';
+                if(qDiv.innerHTML !== html) qDiv.innerHTML = html; isFetching = false;
             }).catch(() => isFetching = false);
         }
     </script>

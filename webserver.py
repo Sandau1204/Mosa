@@ -9,14 +9,12 @@ import json
 app = Flask(__name__)
 bot_instance = None 
 
-# Tắt log gây nhiễu của Flask
+# Tắt log gây nhiễu
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-# --- CẤU HÌNH ĐƯỜNG DẪN ---
-# Nếu bạn muốn truy cập qua localhost:5000 (không có /mosa), hãy đổi thành PREFIX = ""
+# Cấu hình đường dẫn
 PREFIX = "/mosa" 
-
 DATA_FOLDER = "data"
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 
@@ -25,7 +23,7 @@ def run_web(bot):
     bot_instance = bot
     app.run(host='0.0.0.0', port=5000)
 
-# --- HELPER: ĐỌC CẤU HÌNH KÊNH ---
+# --- HELPER ---
 def get_music_channel_id(guild_id):
     if not os.path.exists(SETTINGS_FILE): return None
     try:
@@ -33,172 +31,126 @@ def get_music_channel_id(guild_id):
         return data.get(str(guild_id), {}).get("music_channel_id")
     except: return None
 
-# --- CLASS GIẢ LẬP TƯƠNG TÁC (ĐỂ BOT HIỂU LỆNH TỪ WEB) ---
+# --- CLASS FAKE INTERACTION ---
 class FakeInteraction:
     def __init__(self, guild, channel, user):
         self.guild = guild
         self.guild_id = guild.id
         self.channel = channel
         self.user = user
-        
-        # Giả lập các thuộc tính cần thiết
         self.response = self.Response()
         self.followup = self.Followup(channel)
-
     class Response:
         def is_done(self): return True
         async def defer(self, ephemeral=False): pass
-
     class Followup:
-        def __init__(self, channel):
-            self.channel = channel
-        
+        def __init__(self, c): self.c = c
         async def send(self, content=None, view=None, ephemeral=False):
-            # Chỉ gửi tin nhắn nếu không phải là tin ephemeral (tin ẩn)
-            if not ephemeral and self.channel:
-                try:
-                    await self.channel.send(content, view=view)
+            if not ephemeral and self.c: 
+                try: await self.c.send(content, view=view)
                 except: pass
 
-# ====================================================
-# ROUTES API
-# ====================================================
+# --- ROUTES ---
 
 @app.route(f'{PREFIX}/')
-def index():
-    return render_template('index.html')
+def index(): return render_template('index.html')
 
 @app.route(f'{PREFIX}/api/guilds')
 def get_guilds():
     if not bot_instance: return jsonify([])
-    # Trả về danh sách server bot đang tham gia
     return jsonify([{"id": str(g.id), "name": g.name} for g in bot_instance.guilds])
 
 @app.route(f'{PREFIX}/api/channels')
 def get_channels():
-    guild_id = request.args.get('guild_id')
-    if not bot_instance or not guild_id: return jsonify([])
+    gid = request.args.get('guild_id')
+    if not bot_instance or not gid: return jsonify([])
     try:
-        guild = bot_instance.get_guild(int(guild_id))
-        if not guild: return jsonify([])
-        # Trả về danh sách kênh Voice
-        voice_channels = [{"id": str(c.id), "name": c.name} for c in guild.voice_channels]
-        return jsonify(voice_channels)
+        g = bot_instance.get_guild(int(gid))
+        return jsonify([{"id": str(c.id), "name": c.name} for c in g.voice_channels]) if g else jsonify([])
     except: return jsonify([])
 
 @app.route(f'{PREFIX}/api/join', methods=['POST'])
 def join_channel():
-    guild_id = request.args.get('guild_id')
-    channel_id = request.args.get('channel_id')
-    if not bot_instance or not guild_id or not channel_id: return jsonify({"status": "error"})
-    
+    gid = request.args.get('guild_id'); cid = request.args.get('channel_id')
+    if not bot_instance or not gid or not cid: return jsonify({"status": "error"})
     try:
-        guild = bot_instance.get_guild(int(guild_id))
-        channel = guild.get_channel(int(channel_id))
-        
-        async def connect_task():
-            if guild.voice_client:
-                if guild.voice_client.channel.id != channel.id: 
-                    await guild.voice_client.move_to(channel)
-            else: 
-                await channel.connect()
-        
-        asyncio.run_coroutine_threadsafe(connect_task(), bot_instance.loop)
+        g = bot_instance.get_guild(int(gid)); c = g.get_channel(int(cid))
+        async def conn():
+            if g.voice_client: 
+                if g.voice_client.channel.id != c.id: await g.voice_client.move_to(c)
+            else: await c.connect()
+        asyncio.run_coroutine_threadsafe(conn(), bot_instance.loop)
         return jsonify({"status": "ok"})
     except: return jsonify({"status": "error"})
 
-@app.route('/api/status')
+@app.route(f'{PREFIX}/api/status')
 def get_status():
-    guild_id = request.args.get('guild_id')
-    if not bot_instance or not guild_id: return jsonify({})
+    gid = request.args.get('guild_id')
+    if not bot_instance or not gid: return jsonify({})
     mc = bot_instance.get_cog('Music')
     if not mc: return jsonify({})
     try:
-        guild_id_int = int(guild_id)
-        current = mc.current_songs.get(guild_id_int, {})
-        q = mc.queues.get(guild_id_int, [])
-        g = bot_instance.get_guild(guild_id_int)
+        gid_int = int(gid)
+        cur = mc.current_songs.get(gid_int, {})
+        q = mc.queues.get(gid_int, [])
+        g = bot_instance.get_guild(gid_int)
         
-        is_playing = False
-        channel_name = ""
-        channel_id = "" # <--- MỚI: Biến lưu ID kênh
-        
+        playing = False; c_name = ""; c_id = ""
         if g and g.voice_client:
-            is_playing = g.voice_client.is_playing()
-            channel_name = g.voice_client.channel.name
-            channel_id = str(g.voice_client.channel.id) # <--- MỚI: Lấy ID kênh
+            playing = g.voice_client.is_playing()
+            c_name = g.voice_client.channel.name
+            c_id = str(g.voice_client.channel.id)
 
         return jsonify({
-            "title": current.get('title', ''), 
-            "thumbnail": current.get('thumbnail', None),
-            "channel": current.get('channel', ''), 
-            "is_playing": is_playing,
-            "loop": mc.loops.get(gid_int, False), 
-            "queue": [{"title": s['title']} for s in q],
-            "connected_channel": channel_name,
-            "connected_channel_id": channel_id # <--- MỚI: Trả về ID kênh
+            "title": cur.get('title', ''), "thumbnail": cur.get('thumbnail', None),
+            "channel": cur.get('channel', ''), "is_playing": playing,
+            "loop": mc.loops.get(gid_int, False), "queue": [{"title": s['title']} for s in q],
+            "connected_channel": c_name, "connected_channel_id": c_id
         })
     except: return jsonify({})
 
 @app.route(f'{PREFIX}/api/control/<action>', methods=['POST'])
 def control(action):
-    guild_id = request.args.get('guild_id')
-    if not bot_instance or not guild_id: return jsonify({"status": "error"})
+    gid = request.args.get('guild_id')
+    if not bot_instance or not gid: return jsonify({"status": "error"})
+    gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
+    vc = g.voice_client if g else None
+    def run(coro): asyncio.run_coroutine_threadsafe(coro, bot_instance.loop)
     
-    guild_id_int = int(guild_id)
-    music_cog = bot_instance.get_cog('Music')
-    guild = bot_instance.get_guild(guild_id_int)
-    vc = guild.voice_client if guild else None
-    
-    def run_async(coro): asyncio.run_coroutine_threadsafe(coro, bot_instance.loop)
-    
-    # Nút Leave không cần check VC (để thoát khi bị kẹt)
     if not vc and action != "leave": return jsonify({"status": "no_voice"})
 
     if action == "pause_resume":
         if vc.is_playing(): vc.pause()
         elif vc.is_paused(): vc.resume()
-        run_async(music_cog.update_ui(guild_id_int))
-    
-    elif action == "skip": 
-        run_async(music_cog.skip_song(guild_id_int))
-    
-    elif action == "stop": 
-        run_async(music_cog.stop_player(guild_id_int))
-        
+        run(mc.update_ui(gid_int))
+    elif action == "skip": run(mc.skip_song(gid_int))
+    elif action == "stop": run(mc.stop_player(gid_int))
     elif action == "leave":
-        run_async(music_cog.stop_player(guild_id_int))
-        async def do_leave(): 
-            await asyncio.sleep(0.1) 
-            if guild.voice_client: await guild.voice_client.disconnect()
-        run_async(do_leave())
-    
+        run(mc.stop_player(gid_int))
+        async def lv(): 
+            await asyncio.sleep(0.1); 
+            if g.voice_client: await g.voice_client.disconnect()
+        run(lv())
     elif action == "loop": 
-        music_cog.loops[guild_id_int] = not music_cog.loops.get(guild_id_int, False)
-        run_async(music_cog.update_ui(guild_id_int))
-
+        mc.loops[gid_int] = not mc.loops.get(gid_int, False); run(mc.update_ui(gid_int))
     elif action == "vol_up":
-        vol = music_cog.volumes.get(guild_id_int, 0.5) + 0.1
-        music_cog.volumes[guild_id_int] = min(1.0, vol)
-        if vc.source: vc.source.volume = music_cog.volumes[guild_id_int]
-        run_async(music_cog.update_ui(guild_id_int))
-
+        v = min(1.0, mc.volumes.get(gid_int, 0.5) + 0.1); mc.volumes[gid_int] = v
+        if vc.source: vc.source.volume = v
+        run(mc.update_ui(gid_int))
     elif action == "vol_down":
-        vol = music_cog.volumes.get(guild_id_int, 0.5) - 0.1
-        music_cog.volumes[guild_id_int] = max(0.0, vol)
-        if vc.source: vc.source.volume = music_cog.volumes[guild_id_int]
-        run_async(music_cog.update_ui(guild_id_int))
-
+        v = max(0.0, mc.volumes.get(gid_int, 0.5) - 0.1); mc.volumes[gid_int] = v
+        if vc.source: vc.source.volume = v
+        run(mc.update_ui(gid_int))
     return jsonify({"status": "ok"})
 
 @app.route(f'{PREFIX}/api/search', methods=['GET'])
 def search_api():
     query = request.args.get('query')
     if not bot_instance or not query: return jsonify([])
-    music_cog = bot_instance.get_cog('Music')
+    mc = bot_instance.get_cog('Music')
     
     async def do_search():
-        return await music_cog.search_youtube(query)
+        return await mc.search_youtube(query)
     
     future = asyncio.run_coroutine_threadsafe(do_search(), bot_instance.loop)
     try:
@@ -210,66 +162,61 @@ def search_api():
             
             if url:
                 clean_results.append({
-                    'title': r.get('title', 'Unknown'),
-                    'url': url,
-                    'thumbnail': r.get('thumbnail', ''),
-                    'uploader': r.get('uploader', ''),
+                    'title': r.get('title', 'Unknown'), 'url': url,
+                    'thumbnail': r.get('thumbnail', ''), 'uploader': r.get('uploader', ''),
                     'duration': r.get('duration_string', '')
                 })
         return jsonify(clean_results)
     except: return jsonify([])
 
+# --- API PLAY ĐÃ SỬA LỖI BIẾN GID_INT ---
 @app.route(f'{PREFIX}/api/play', methods=['POST'])
 def play_api():
-    guild_id = request.args.get('guild_id')
-    query = request.args.get('query')
-    if not bot_instance or not guild_id or not query: return jsonify({"status": "error"})
+    gid = request.args.get('guild_id'); query = request.args.get('query')
+    if not bot_instance or not gid or not query: return jsonify({"status": "error"})
     
     try:
-        guild_id_int = int(guild_id)
-        music_cog = bot_instance.get_cog('Music')
-        guild = bot_instance.get_guild(guild_id_int)
+        gid_int = int(gid) # Đồng nhất tên biến là gid_int
+        mc = bot_instance.get_cog('Music')
+        g = bot_instance.get_guild(gid_int)
         
-        # --- LOGIC CHỌN KÊNH CHAT ---
+        # --- LOGIC CHỌN KÊNH ---
         text_channel = None
 
-        # 1. Ưu tiên kênh đã Setup bằng /set_music
-        setup_id = get_music_channel_id(guild_id_int)
+        # 1. Ưu tiên kênh Setup
+        setup_id = get_music_channel_id(gid_int) # Đã sửa lỗi ở đây
         if setup_id:
-            text_channel = guild.get_channel(setup_id)
+            text_channel = g.get_channel(setup_id)
         
-        # 2. Nếu không, dùng kênh có UI cũ
-        if not text_channel and guild_id_int in music_cog.ui_messages:
-            try: text_channel = music_cog.ui_messages[guild_id_int].channel
+        # 2. Fallback kênh UI cũ
+        if not text_channel and gid_int in mc.ui_messages:
+            try: text_channel = mc.ui_messages[gid_int].channel
             except: pass
         
-        # 3. Nếu không, dùng kênh chat trong Voice
-        if not text_channel and guild.voice_client and hasattr(guild.voice_client.channel, 'send'):
-             text_channel = guild.voice_client.channel
+        # 3. Fallback kênh Voice
+        if not text_channel and g.voice_client and hasattr(g.voice_client.channel, 'send'):
+             text_channel = g.voice_client.channel
 
-        # 4. Fallback
-        if not text_channel and guild.text_channels: 
-            text_channel = guild.text_channels[0]
+        # 4. Fallback kênh Text đầu tiên
+        if not text_channel and g.text_channels: 
+            text_channel = g.text_channels[0]
 
         if text_channel:
             async def do_play():
-                if not guild.voice_client: return 
+                if not g.voice_client: return 
                 
-                # Nếu là link -> Get Info
                 if "http" in query: 
-                    info = await music_cog.get_song_info(query)
-                # Nếu là tên (do người dùng chọn từ search) -> Search lại để lấy info chuẩn
+                    info = await mc.get_song_info(query)
                 else:
-                    res = await music_cog.search_youtube(query)
+                    res = await mc.search_youtube(query)
                     info = res[0] if res else None
                 
                 if info:
-                    fake_user = guild.me 
-                    fake_inter = FakeInteraction(guild, text_channel, fake_user)
-                    await music_cog.process_song_request(fake_inter, info)
+                    fake = FakeInteraction(g, text_channel, g.me)
+                    await mc.process_song_request(fake, info)
             
             asyncio.run_coroutine_threadsafe(do_play(), bot_instance.loop)
         return jsonify({"status": "ok"})
     except Exception as e:
-        print(e)
+        print(f"Play API Error: {e}")
         return jsonify({"status": "error"})
