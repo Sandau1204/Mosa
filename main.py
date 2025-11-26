@@ -1,8 +1,10 @@
 import discord
 import os
 import asyncio
+import threading
 from discord.ext import commands
 from dotenv import load_dotenv
+from webserver import run_web
 
 # Load biến môi trường
 load_dotenv()
@@ -52,4 +54,11 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
             pass # Bỏ qua nếu mất kết nối hoàn toàn
 
 if __name__ == '__main__':
+    # --- PHẦN NÀY BẮT BUỘC PHẢI CÓ ĐỂ CHẠY WEB ---
+    print("🌐 Đang khởi động Web Dashboard...")
+    t = threading.Thread(target=run_web, args=(bot,))
+    t.daemon = True
+    t.start()
+    # ---------------------------------------------
+
     bot.run(TOKEN)
