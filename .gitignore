@@ -1,2 +1,4 @@
 .env
+cookies.txt
+ffmpeg.exe
 __pycache__/
