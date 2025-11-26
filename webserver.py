@@ -107,35 +107,36 @@ def join_channel():
         return jsonify({"status": "ok"})
     except: return jsonify({"status": "error"})
 
-@app.route(f'{PREFIX}/api/status')
+@app.route('/api/status')
 def get_status():
     guild_id = request.args.get('guild_id')
     if not bot_instance or not guild_id: return jsonify({})
-    
-    music_cog = bot_instance.get_cog('Music')
-    if not music_cog: return jsonify({})
-    
+    mc = bot_instance.get_cog('Music')
+    if not mc: return jsonify({})
     try:
         guild_id_int = int(guild_id)
-        current = music_cog.current_songs.get(guild_id_int, {})
-        queue = music_cog.queues.get(guild_id_int, [])
-        loop = music_cog.loops.get(guild_id_int, False)
-        guild = bot_instance.get_guild(guild_id_int)
+        current = mc.current_songs.get(guild_id_int, {})
+        q = mc.queues.get(guild_id_int, [])
+        g = bot_instance.get_guild(guild_id_int)
         
         is_playing = False
         channel_name = ""
-        if guild and guild.voice_client:
-            is_playing = guild.voice_client.is_playing()
-            channel_name = guild.voice_client.channel.name
+        channel_id = "" # <--- MỚI: Biến lưu ID kênh
+        
+        if g and g.voice_client:
+            is_playing = g.voice_client.is_playing()
+            channel_name = g.voice_client.channel.name
+            channel_id = str(g.voice_client.channel.id) # <--- MỚI: Lấy ID kênh
 
         return jsonify({
-            "title": current.get('title', ''),
+            "title": current.get('title', ''), 
             "thumbnail": current.get('thumbnail', None),
-            "channel": current.get('channel', ''),
+            "channel": current.get('channel', ''), 
             "is_playing": is_playing,
-            "loop": loop,
-            "queue": [{"title": s['title']} for s in queue],
-            "connected_channel": channel_name
+            "loop": mc.loops.get(gid_int, False), 
+            "queue": [{"title": s['title']} for s in q],
+            "connected_channel": channel_name,
+            "connected_channel_id": channel_id # <--- MỚI: Trả về ID kênh
         })
     except: return jsonify({})
 
