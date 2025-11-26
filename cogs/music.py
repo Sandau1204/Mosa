@@ -417,6 +417,6 @@ class Music(commands.Cog):
         await interaction.response.defer(); uid = str(interaction.user.id)
         if uid in self.playlists and name in self.playlists[uid]: del self.playlists[uid][name]; self.save_json(PLAYLIST_FILE, self.playlists); await interaction.followup.send(f"🗑️ Đã xóa **{name}**.")
         else: await interaction.followup.send("❌ Không tìm thấy.")
-
+        
 async def setup(bot):
     await bot.add_cog(Music(bot))
