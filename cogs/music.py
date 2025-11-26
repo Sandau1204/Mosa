@@ -236,9 +236,7 @@ class Music(commands.Cog):
                 play_url = await loop.run_in_executor(None, lambda: self.refresh_url(song_data['webpage_url'])) or song_data['stream_url']
                 
                 # Tự động tìm FFmpeg (Ưu tiên file local)
-                ffmpeg_local = os.path.abspath("ffmpeg.exe")
-                exe = ffmpeg_local if os.path.exists(ffmpeg_local) else "ffmpeg"
-                
+            
                 source = discord.FFmpegPCMAudio(play_url, executable=exe, **FFMPEG_OPTIONS)
                 vol = self.volumes.get(guild_id, self.get_default_volume(guild_id)); self.volumes[guild_id] = vol
                 

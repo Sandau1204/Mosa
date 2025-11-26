@@ -1,0 +1,25 @@
+name: Deploy Bot on Ubuntu
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: self-hosted # Chạy trên VPS Ubuntu
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        clean: false # Giữ lại .env và cookies.txt
+
+    - name: Install dependencies
+      run: |
+        # Cài các thư viện python mới nếu có
+        pip3 install -r requirements.txt
+
+    - name: Restart Bot Service
+      run: |
+        # Khởi động lại service bot
+        sudo systemctl restart mosabot
