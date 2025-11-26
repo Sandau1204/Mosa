@@ -1,18 +1,18 @@
-├── main.py                           # Main bot entry point
-├── cogs/                             # Bot feature modules (cogs)
-│   ├── admin.py                      # Admin commands (clear, kick, ban)
-│   ├── general.py                    # General utilities (ping, hello, avatar)
-│   ├── music.py                      # Music playback & playlist management
-│   ├── tarot.py                      # Tarot card readings
-│   ├── voice.py                      # Voice features & TTS
-│   ├── wordgame.py                   # English word chain game
-│   └── wordgame_vi.py                # Vietnamese word chain game
-├── data/                             # JSON data files for bot state
-│   ├── name.json                     # Custom user names
-│   ├── playlists.json                # Music playlists
-│   ├── server_settings.json          # Per-server settings
-│   ├── tarot_config.json             # Tarot channel configuration
-│   ├── tarot_data.json               # Tarot card data
-│   ├── vietnamese_dictionary.txt     # Vietnamese word dictionary (auto-downloaded)
-│   └── wordgame.json                 # Word game state
-└── requirements.txt                  # Python dependencies
+MosaBot/
+├── .env                     # File chứa Token
+├── requirements.txt         # Thư viện cần cài
+├── main.py                  # File chạy chính
+├── webserver.py             # File chạy Web
+├── cookies.txt              # File cookie YouTube (Bạn tự lấy)
+├── ffmpeg.exe               # (Chỉ cần nếu chạy trên Windows)
+├── data/                    # Thư mục dữ liệu (Tự động tạo)
+├── templates/
+│   └── index.html           # Giao diện Web
+└── cogs/
+    ├── __init__.py          # File rỗng
+    ├── music.py             # Module Nhạc (Quan trọng nhất)
+    ├── voice.py             # Module Voice/TTS/Welcome
+    ├── wordgame.py          # Nối từ Anh
+    ├── wordgame_vi.py       # Nối từ Việt
+    ├── admin.py             # Lệnh Admin
+    └── general.py           # Lệnh cơ bản

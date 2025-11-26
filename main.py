@@ -4,9 +4,8 @@ import asyncio
 import threading
 from discord.ext import commands
 from dotenv import load_dotenv
-from webserver import run_web
+from webserver import run_web 
 
-# Load biến môi trường
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
@@ -16,49 +15,34 @@ intents.members = True
 
 class MyBot(commands.Bot):
     def __init__(self):
-        super().__init__(
-            command_prefix='!',
-            intents=intents,
-            help_command=None
-        )
+        super().__init__(command_prefix='!', intents=intents, help_command=None)
 
     async def setup_hook(self):
-        # Nạp các module
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py'):
                 await self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'✅ Đã nạp module: {filename}')
-        
-        # Đồng bộ lệnh
         await self.tree.sync()
         print("🔄 Đã đồng bộ Slash Commands!")
 
     async def on_ready(self):
-        print(f'🤖 Đã đăng nhập: {self.user} (ID: {self.user.id})')
-        await self.change_presence(activity=discord.Game(name="/help để xem lệnh"))
+        print(f'🤖 Bot đã online: {self.user} (ID: {self.user.id})')
+        await self.change_presence(activity=discord.Game(name="/play để nghe nhạc"))
 
 bot = MyBot()
 
-# --- XỬ LÝ LỖI TOÀN CỤC (Khi mạng lag quá timeout) ---
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
-    # Nếu lệnh đã được phản hồi (defer) nhưng bị lỗi sau đó
-    if interaction.response.is_done():
-        # Gửi tin nhắn nối tiếp (followup) báo lỗi
-        await interaction.followup.send(f"⚠️ Mạng bị lag hoặc có lỗi: {str(error)}", ephemeral=True)
+    if not interaction.response.is_done():
+        await interaction.response.send_message(f"⚠️ Lỗi: {str(error)}", ephemeral=True)
     else:
-        # Nếu chưa kịp phản hồi gì cả
-        try:
-            await interaction.response.send_message(f"⚠️ Bot không phản hồi kịp (Timeout): {str(error)}", ephemeral=True)
-        except:
-            pass # Bỏ qua nếu mất kết nối hoàn toàn
+        await interaction.followup.send(f"⚠️ Lỗi: {str(error)}", ephemeral=True)
 
 if __name__ == '__main__':
-    # --- PHẦN NÀY BẮT BUỘC PHẢI CÓ ĐỂ CHẠY WEB ---
+    # Chạy Web Server
     print("🌐 Đang khởi động Web Dashboard...")
     t = threading.Thread(target=run_web, args=(bot,))
     t.daemon = True
     t.start()
-    # ---------------------------------------------
-
+    
     bot.run(TOKEN)

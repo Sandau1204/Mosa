@@ -3,10 +3,15 @@ import threading
 import asyncio
 import discord
 import logging
+import os
+import json
 
 app = Flask(__name__)
 bot_instance = None 
 log = logging.getLogger('werkzeug'); log.setLevel(logging.ERROR)
+
+DATA_FOLDER = "data"
+SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 
 def run_web(bot):
     global bot_instance; bot_instance = bot
@@ -25,6 +30,14 @@ class FakeInteraction:
             if not ephemeral and self.c: 
                 try: await self.c.send(content, view=view)
                 except: pass
+
+# Helper đọc file settings
+def get_music_channel_id(guild_id):
+    if not os.path.exists(SETTINGS_FILE): return None
+    try:
+        data = json.load(open(SETTINGS_FILE, "r", encoding="utf-8"))
+        return data.get(str(guild_id), {}).get("music_channel_id")
+    except: return None
 
 @app.route('/')
 def index(): return render_template('index.html')
@@ -85,7 +98,6 @@ def control(action):
     gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
     vc = g.voice_client if g else None
     def run(coro): asyncio.run_coroutine_threadsafe(coro, bot_instance.loop)
-    
     if not vc and action != "leave": return jsonify({"status": "no_voice"})
 
     if action == "pause_resume":
@@ -96,9 +108,7 @@ def control(action):
     elif action == "stop": run(mc.stop_player(gid_int))
     elif action == "leave":
         run(mc.stop_player(gid_int))
-        async def lv(): 
-            await asyncio.sleep(0.1); 
-            if g.voice_client: await g.voice_client.disconnect()
+        async def lv(): await asyncio.sleep(0.1); (await g.voice_client.disconnect()) if g.voice_client else None
         run(lv())
     elif action == "loop": 
         mc.loops[gid_int] = not mc.loops.get(gid_int, False); run(mc.update_ui(gid_int))
@@ -140,26 +150,34 @@ def play_api():
     if not bot_instance or not gid or not query: return jsonify({"status": "error"})
     gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
     
-    # Logic Ưu tiên kênh Setup
-    tch = None
-    setup_id = mc.settings.get(str(gid_int), {}).get("music_channel")
-    if setup_id: tch = g.get_channel(setup_id)
-    
-    if not tch and gid_int in mc.ui_messages:
-        try: tch = mc.ui_messages[gid_int].channel
-        except: pass
-    if not tch and g.voice_client and hasattr(g.voice_client.channel, 'send'): tch = g.voice_client.channel
-    if not tch and g.text_channels: tch = g.text_channels[0]
+    # --- LOGIC CHỌN KÊNH ĐỒNG BỘ ---
+    text_channel = None
 
-    if tch:
+    # 1. Ưu tiên số 1: Kênh đã Setup bằng lệnh /set_music
+    setup_id = get_music_channel_id(gid_int)
+    if setup_id:
+        text_channel = g.get_channel(setup_id)
+    
+    # 2. Nếu chưa setup, dùng kênh Voice Chat
+    if not text_channel and g.voice_client and hasattr(g.voice_client.channel, 'send'):
+        text_channel = g.voice_client.channel
+
+    # 3. Fallback: Dùng kênh đang có UI hoặc kênh text đầu tiên
+    if not text_channel and gid_int in mc.ui_messages:
+        try: text_channel = mc.ui_messages[gid_int].channel
+        except: pass
+    if not text_channel and g.text_channels: text_channel = g.text_channels[0]
+
+    if text_channel:
         async def do_play():
             if not g.voice_client: return 
             if "http" in query: info = await mc.get_song_info(query)
             else:
                 res = await mc.search_youtube(query)
                 info = res[0] if res else None
+            
             if info:
-                fake = FakeInteraction(g, tch, g.me)
+                fake = FakeInteraction(g, text_channel, g.me)
                 await mc.process_song_request(fake, info)
         asyncio.run_coroutine_threadsafe(do_play(), bot_instance.loop)
     return jsonify({"status": "ok"})
