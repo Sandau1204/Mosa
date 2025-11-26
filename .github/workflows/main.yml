@@ -1,0 +1,32 @@
+name: First Workflow # Tên hiển thị trên tab Actions
+
+# 1. Sự kiện kích hoạt (Triggers)
+on:
+  push:
+    branches: [ "main" ] # Chạy khi có code push lên nhánh main
+  pull_request:
+    branches: [ "main" ] # Chạy khi có pull request vào nhánh main
+
+# 2. Các công việc cần thực hiện (Jobs)
+jobs:
+  build-and-test: # Tên định danh của job
+    runs-on: ubuntu-latest # Môi trường chạy (Runner): Ubuntu mới nhất
+
+    # 3. Các bước chi tiết (Steps)
+    steps:
+      # Bước A: Lấy code từ repo về máy ảo (Checkout)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Bước B: Cài đặt môi trường (ví dụ Node.js)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Bước C: Chạy lệnh (Run command)
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Test
+        run: npm test
