@@ -47,6 +47,8 @@ jobs:
             # 5. Khởi động lại IIS hoặc Service để nhận code mới
             # iisreset /stop
             # iisreset /start
+            # tải lại libr
+            pip install -r requirements.txt
             # Restart bot để nhận code mới
             pm2 restart "mosa"
             
