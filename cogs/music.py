@@ -334,11 +334,13 @@ class Music(commands.Cog):
         await interaction.response.defer(); self.volumes[interaction.guild_id] = level/100
         if interaction.guild.voice_client and interaction.guild.voice_client.source: interaction.guild.voice_client.source.volume = level/100
         await self.update_ui(interaction.guild_id); await interaction.followup.send(f"🔊 Vol: {level}%")
+        
     @app_commands.command(name="loop", description="Loop 1 bài")
     async def loop(self, interaction: discord.Interaction):
         if not await self.check_music_channel(interaction): return
         await interaction.response.defer(); self.loops[interaction.guild_id] = not self.loops.get(interaction.guild_id, False)
         await self.update_ui(interaction.guild_id); await interaction.followup.send("🔂 Loop: " + str(self.loops[interaction.guild_id]))
+        
     @app_commands.command(name="default_volume", description="Cài volume mặc định")
     @app_commands.checks.has_permissions(administrator=True)
     async def default_volume(self, interaction: discord.Interaction, level: int):
@@ -346,6 +348,7 @@ class Music(commands.Cog):
         if gid not in self.settings: self.settings[gid] = {}
         self.settings[gid]["default_volume"] = level/100; self.save_json(SETTINGS_FILE, self.settings)
         await interaction.followup.send(f"💾 Default Vol: {level}%")
+        
     @app_commands.command(name="pl_save", description="Lưu Playlist")
     async def pl_save(self, interaction: discord.Interaction, name: str):
         if not await self.check_music_channel(interaction): return
@@ -358,6 +361,7 @@ class Music(commands.Cog):
         if uid not in self.playlists: self.playlists[uid] = {}
         self.playlists[uid][name] = data; self.save_json(PLAYLIST_FILE, self.playlists)
         await interaction.followup.send(f"💾 Đã lưu **{name}**.")
+        
     @app_commands.command(name="pl_load", description="Nạp Playlist")
     async def pl_load(self, interaction: discord.Interaction, name: str):
         if not await self.check_music_channel(interaction): return
@@ -370,6 +374,7 @@ class Music(commands.Cog):
             self.queues[gid].append({'stream_url': None, 'webpage_url': s['webpage_url'], 'title': s['title'], 'channel': 'Playlist'})
         if gid not in self.active_tasks or self.active_tasks[gid].done(): await self.start_playing(interaction.channel, gid)
         await interaction.followup.send(f"✅ Đã nạp playlist **{name}**.")
+        
     @app_commands.command(name="pl_pick", description="Chọn 1 bài trong Playlist")
     async def pl_pick(self, interaction: discord.Interaction, name: str):
         if not await self.check_music_channel(interaction): return
@@ -385,12 +390,14 @@ class Music(commands.Cog):
         view = PlaylistSelectionView(self, interaction, avail, name)
         msg = f"📂 **Chọn bài '{name}':**" + (f"\n*(Ẩn {len(all_s)-len(avail)} bài trùng)*" if len(all_s)>len(avail) else "")
         await interaction.followup.send(msg, view=view)
+        
     @app_commands.command(name="pl_list", description="Xem Playlist")
     async def pl_list(self, interaction: discord.Interaction):
         if not await self.check_music_channel(interaction): return
         await interaction.response.defer(); uid = str(interaction.user.id)
         if uid in self.playlists: await interaction.followup.send(f"📂 **Playlist:**\n" + "\n".join([f"{k}: {len(v)} bài" for k, v in self.playlists[uid].items()]))
         else: await interaction.followup.send("📭 Trống.")
+        
     @app_commands.command(name="pl_delete", description="Xóa Playlist")
     async def pl_delete(self, interaction: discord.Interaction, name: str):
         if not await self.check_music_channel(interaction): return

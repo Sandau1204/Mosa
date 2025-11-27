@@ -1,0 +1,51 @@
+name: Production Deploy
+
+# 1. Kích hoạt khi có code mới được đẩy lên nhánh main
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    name: Deploy to VPS Windows 2012 R2
+    runs-on: ubuntu-latest # Runner của GitHub (không phải VPS của bạn)
+    
+    steps:
+      - name: Connect and Execute Commands
+        uses: appleboy/ssh-action@master
+        with:
+          # Lấy thông tin từ Secrets bạn đã cài đặt
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          
+          # Nếu 1 lệnh bị lỗi, dừng ngay lập tức để báo đỏ
+          script_stop: true
+          
+          # Thời gian chờ tối đa (30 phút), phòng trường hợp mạng lag
+          command_timeout: 30m
+          
+          # Nội dung lệnh sẽ chạy trên VPS của bạn
+          script: |
+            # In ra dòng chữ để biết đã bắt đầu
+            Write-Host "--- BAT DAU DEPLOY ---"
+            
+            # 1. Di chuyển vào thư mục code trên VPS
+            # Sửa đường dẫn dưới đây thành đường dẫn thật của bạn
+            Set-Location "C:\inetpub\wwwroot\MyProject"
+            
+            # 2. Reset lại mọi thay đổi cục bộ (nếu có) để tránh xung đột
+            git reset --hard
+            
+            # 3. Kéo code mới về
+            git pull origin main
+            
+            # 4. (Tuỳ chọn) Cài đặt thư viện nếu là Node.js
+            # npm install
+            
+            # 5. Khởi động lại IIS hoặc Service để nhận code mới
+            # iisreset /stop
+            # iisreset /start
+            
+            Write-Host "--- DEPLOY THANH CONG ---"
