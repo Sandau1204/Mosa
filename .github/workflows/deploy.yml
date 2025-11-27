@@ -47,5 +47,7 @@ jobs:
             # 5. Khởi động lại IIS hoặc Service để nhận code mới
             # iisreset /stop
             # iisreset /start
+            # Restart bot để nhận code mới
+            pm2 restart "my-bot"
             
             Write-Host "--- DEPLOY THANH CONG ---"
