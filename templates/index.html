@@ -3,115 +3,306 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mosa Music Panel</title>
+    <title>Mosa Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --primary: #6366f1; --text: #ffffff; --text-mute: #94a3b8; }
-        body { background-color: var(--bg); color: var(--text); font-family: 'Lexend', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-        .player-card { background-color: var(--card); border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 100%; max-width: 480px; padding: 25px; border: 1px solid rgba(255,255,255,0.05); }
-        .form-select, .form-control { background-color: #0f172a !important; border: 1px solid #334155; color: #ffffff !important; border-radius: 10px; }
-        .form-select:focus, .form-control:focus { background-color: #0f172a !important; color: #ffffff !important; border-color: var(--primary); box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25); }
-        ::placeholder { color: #64748b !important; opacity: 1; }
-        
-        .modal-content { background-color: #1e293b; color: white; border: 1px solid #334155; }
-        .modal-header { border-bottom: 1px solid #334155; }
-        .list-group-item { background-color: #0f172a; color: white; border: 1px solid #334155; cursor: pointer; transition: 0.2s; }
-        .list-group-item:hover { background-color: #334155; border-color: var(--primary); }
-        .search-thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 5px; margin-right: 15px; }
-        
-        .art-box { width: 100%; height: 250px; border-radius: 15px; overflow: hidden; margin-bottom: 20px; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); background: #0f172a; }
-        .art-img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        .no-music-placeholder { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: linear-gradient(45deg, #1e293b, #0f172a); color: #334155; font-size: 4rem; position: relative; overflow: hidden; }
-        .pulse-ring { position: absolute; width: 100px; height: 100px; background: var(--primary); border-radius: 50%; opacity: 0; animation: pulseAnimation 3s infinite ease-out; }
-        @keyframes pulseAnimation { 0% { transform: scale(0.5); opacity: 0.2; } 100% { transform: scale(2.5); opacity: 0; } }
-        
-        .queue-box { background: #0f172a; border-radius: 10px; padding: 10px; max-height: 180px; overflow-y: auto; margin-top: 15px; border: 1px solid #334155; }
-        
-        /* Cập nhật style cho item hàng đợi */
-        .queue-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #1e293b; font-size: 0.95rem; color: #ffffff !important; background: #0f172a; }
-        
-        /* Style cho nút kéo thả (Handle) */
-        .drag-handle { 
-            cursor: grab; 
-            padding: 10px; /* Tăng diện tích chạm cho điện thoại */
-            color: #64748b; 
-            touch-action: none; /* Ngăn chặn cuộn trang khi chạm vào icon này */
+        :root {
+            --bg-body: #121212;
+            --bg-card: #1e1e1e;
+            --bg-hover: #2a2a2a;
+            --primary: #1db954; /* Màu xanh lá giống Spotify/Ảnh mẫu */
+            --primary-hover: #1ed760;
+            --text-main: #ffffff;
+            --text-sub: #b3b3b3;
+            --danger: #e91429;
+            --border-radius: 16px;
         }
-        .drag-handle:active { cursor: grabbing; color: var(--primary); }
-        
-        .queue-index { color: var(--primary) !important; font-weight: bold; margin-right: 10px; pointer-events: none; }
-        
-        .controls button { background: none; border: none; color: #e2e8f0; font-size: 1.2rem; transition: 0.2s; width: 45px; height: 45px; border-radius: 50%; }
-        .controls button:hover { background: rgba(255,255,255,0.1); color: var(--primary); }
-        .controls .btn-play { background: var(--primary); color: white; width: 60px; height: 60px; font-size: 1.5rem; box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); }
-        .controls .btn-play:hover { background: #818cf8; color: white; transform: scale(1.05); }
-        .btn-active { color: #4ade80 !important; }
-        
-        .status-badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 15px; background: #334155; color: #94a3b8; }
-        .status-connected { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
 
-        .playlist-badge { font-size: 0.7rem; background: var(--primary); border-radius: 4px; padding: 2px 5px; margin-left: 5px; }
-        .track-list-container { max-height: 300px; overflow-y: auto; display: none; margin-top: 10px; border-top: 1px solid #334155; }
-        .track-item { padding: 8px; border-bottom: 1px solid #334155; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
-        .track-item:hover { background: #334155; }
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
 
-        /* Progress Bar Style */
-        .progress-container { display: flex; align-items: center; font-size: 0.8rem; color: #94a3b8; margin-bottom: 15px; width: 100%; }
-        .progress-bar-slider { flex-grow: 1; margin: 0 10px; -webkit-appearance: none; height: 4px; background: #334155; border-radius: 2px; outline: none; cursor: pointer; }
-        .progress-bar-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: var(--primary); border-radius: 50%; cursor: pointer; transition: 0.2s; }
-        .progress-bar-slider::-webkit-slider-thumb:hover { transform: scale(1.3); }
+        /* --- LAYOUT CHÍNH --- */
+        .dashboard-container {
+            width: 100%;
+            max-width: 1000px;
+            background-color: var(--bg-card);
+            border-radius: var(--border-radius);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* HEADER */
+        .top-bar {
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+            background: #242424;
+        }
+        .brand {
+            font-weight: 800;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand i { color: var(--primary); }
+        
+        .top-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        /* Custom Select giống nút bấm trong ảnh */
+        .custom-select {
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            outline: none;
+        }
+        .custom-select:hover { background-color: #444; }
+
+        /* MAIN CONTENT GRID */
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr; /* Chia cột: Player nhỏ hơn Queue một chút */
+            gap: 0;
+            min-height: 500px;
+        }
+
+        /* --- CỘT TRÁI: PLAYER --- */
+        .player-section {
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, #1e1e1e 0%, #121212 100%);
+            border-right: 1px solid #333;
+        }
+
+        .art-container {
+            width: 250px;
+            height: 250px;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            margin-bottom: 25px;
+            position: relative;
+            background: #000;
+        }
+        .art-img { width: 100%; height: 100%; object-fit: cover; }
+        .no-music {
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            color: #444; font-size: 3rem;
+            background: #111;
+        }
+        
+        .track-info { text-align: center; width: 100%; margin-bottom: 20px; }
+        .track-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-artist { color: var(--text-sub); font-size: 0.9rem; }
+        .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; background: #333; margin-top: 5px; display: inline-block;}
+        .status-connected { color: var(--primary); background: rgba(29, 185, 84, 0.1); border: 1px solid var(--primary); }
+
+        /* Progress Bar */
+        .progress-wrapper { width: 100%; display: flex; align-items: center; gap: 10px; font-size: 0.75rem; color: var(--text-sub); margin-bottom: 20px; }
+        .progress-range {
+            flex-grow: 1; height: 4px; border-radius: 2px;
+            background: #444; appearance: none; cursor: pointer;
+        }
+        .progress-range::-webkit-slider-thumb {
+            appearance: none; width: 12px; height: 12px;
+            background: var(--text-main); border-radius: 50%;
+            opacity: 0; transition: 0.2s;
+        }
+        .progress-wrapper:hover .progress-range::-webkit-slider-thumb { opacity: 1; }
+        .progress-range::-webkit-slider-runnable-track { background: var(--primary); height: 4px; } /* Trick: In JS we adjust gradient */
+
+        /* Controls */
+        .controls-row { display: flex; align-items: center; gap: 20px; }
+        .btn-control { background: none; border: none; color: var(--text-sub); font-size: 1.2rem; transition: 0.2s; }
+        .btn-control:hover { color: white; }
+        .btn-play {
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: black; /* Icon màu đen trên nền xanh */
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.5rem;
+            transition: 0.2s;
+        }
+        .btn-play:hover { transform: scale(1.05); background-color: var(--primary-hover); }
+        .btn-active { color: var(--primary) !important; position: relative; }
+        .btn-active::after { content: '.'; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); font-size: 20px; color: var(--primary); }
+
+        /* --- CỘT PHẢI: QUEUE --- */
+        .queue-section {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            background-color: #181818;
+            position: relative;
+        }
+        
+        .queue-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #333;
+        }
+        .queue-title { font-weight: 700; color: var(--text-sub); text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
+        
+        .queue-actions .btn { padding: 5px 12px; font-size: 0.8rem; border-radius: 20px; }
+        .btn-saved { background: #333; color: white; border: none; }
+        .btn-saved:hover { background: #444; }
+        .btn-clear { background: rgba(233, 20, 41, 0.1); color: var(--danger); border: none; }
+        .btn-clear:hover { background: rgba(233, 20, 41, 0.2); }
+
+        .queue-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        /* Custom Scrollbar */
+        .queue-list::-webkit-scrollbar { width: 6px; }
+        .queue-list::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        .queue-list::-webkit-scrollbar-track { background: transparent; }
+
+        .queue-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px; border-radius: 8px;
+            transition: 0.2s; border-bottom: 1px solid #242424;
+        }
+        .queue-item:hover { background-color: var(--bg-hover); }
+        .q-info { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+        .q-index { color: var(--primary); font-weight: bold; font-size: 0.9rem; min-width: 20px; }
+        .q-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.95rem; }
+        .drag-handle { color: #555; cursor: grab; padding: 5px; }
+        .drag-handle:hover { color: white; }
+
+        /* Search Bar at Bottom */
+        .search-container {
+            margin-top: 15px;
+            background: #2a2a2a;
+            border-radius: 25px;
+            padding: 5px 15px;
+            display: flex; align-items: center;
+        }
+        .search-input {
+            background: transparent; border: none; color: white;
+            flex-grow: 1; padding: 8px; outline: none;
+        }
+        .search-btn { background: none; border: none; color: var(--text-sub); transition: 0.2s; }
+        .search-btn:hover { color: white; }
+
+        /* Modal Styles */
+        .modal-content { background-color: #242424; color: white; border: 1px solid #444; border-radius: 12px; }
+        .modal-header { border-bottom: 1px solid #444; }
+        .list-group-item { background-color: transparent; color: #ddd; border-color: #444; }
+        .list-group-item:hover { background-color: #333; color: white; }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .main-content { grid-template-columns: 1fr; }
+            .player-section { border-right: none; border-bottom: 1px solid #333; padding: 20px; }
+            .queue-section { min-height: 300px; }
+        }
     </style>
 </head>
 <body>
-    <div class="player-card text-center">
-        <div class="header-title mb-3 fw-bold text-primary">MOSA DASHBOARD</div>
-        
-        <div class="row g-2 mb-3">
-            <div class="col-5"><select id="guildSelect" class="form-select" onchange="loadChannels()"><option value="" disabled selected>Chọn Server...</option></select></div>
-            <div class="col-4"><select id="channelSelect" class="form-select"><option value="" disabled selected>Kênh...</option></select></div>
-            <div class="col-3">
-                <div class="btn-group w-100" role="group">
-                    <button onclick="joinChannel()" class="btn btn-outline-success" title="Vào kênh"><i class="fas fa-link"></i></button>
-                    <button onclick="leaveChannel()" class="btn btn-outline-danger" title="Rời kênh"><i class="fas fa-sign-out-alt"></i></button>
-                </div>
+
+    <div class="dashboard-container">
+        <div class="top-bar">
+            <div class="brand">
+                <i class="fab fa-spotify fa-lg"></i>
+                <span>MOSA DASHBOARD</span>
+            </div>
+            <div class="top-controls">
+                <select id="guildSelect" class="custom-select" onchange="loadChannels()">
+                    <option value="" disabled selected>Chọn Server</option>
+                </select>
+                <select id="channelSelect" class="custom-select">
+                    <option value="" disabled selected>Chọn Kênh</option>
+                </select>
+                <button onclick="joinChannel()" class="custom-select" style="background: var(--primary); color: black; font-weight: bold;" title="Kết nối"><i class="fas fa-plug"></i></button>
+                <button onclick="leaveChannel()" class="custom-select" style="background: var(--danger); font-weight: bold;" title="Ngắt kết nối"><i class="fas fa-power-off"></i></button>
             </div>
         </div>
 
-        <div class="mb-3"><span id="trackChannel" class="status-badge">Chưa kết nối</span></div>
-        
-        <div class="art-box"><img id="trackArt" src="" class="art-img"><div id="noMusicPlaceholder" class="no-music-placeholder"><div class="pulse-ring"></div><i class="fas fa-music" style="position: relative; z-index: 2;"></i></div></div>
-        
-        <div class="track-info mb-2"><h5 id="trackTitle">Sẵn sàng</h5><small id="trackArtist" style="color: #94a3b8;">Vui lòng chọn bài hát</small></div>
-        
-        <div class="progress-container">
-            <span id="timeCurrent">00:00</span>
-            <input type="range" id="progressBar" class="progress-bar-slider" value="0" min="0" max="100" onchange="seekAudio(this.value)" oninput="isSeeking=true">
-            <span id="timeTotal">00:00</span>
-        </div>
+        <div class="main-content">
+            
+            <div class="player-section">
+                <div class="art-container">
+                    <img id="trackArt" src="" class="art-img" style="display: none;">
+                    <div id="noMusicPlaceholder" class="no-music">
+                        <i class="fas fa-music"></i>
+                    </div>
+                </div>
 
-        <div class="controls d-flex justify-content-center align-items-center gap-3 mb-4">
-            <button onclick="cmd('loop')" id="btnLoop"><i class="fas fa-repeat"></i></button>
-            <button onclick="cmd('vol_down')"><i class="fas fa-volume-low"></i></button>
-            <button onclick="cmd('pause_resume')" class="btn-play"><i id="iconPlay" class="fas fa-play"></i></button>
-            <button onclick="cmd('vol_up')"><i class="fas fa-volume-high"></i></button>
-            <button onclick="cmd('skip')"><i class="fas fa-forward"></i></button>
-        </div>
-        
-        <div class="input-group mb-2">
-            <input type="text" id="searchQuery" class="form-control" placeholder="Nhập tên bài hoặc link..." onkeypress="handleEnter(event)">
-            <button onclick="handleSearchOrPlay()" class="btn btn-primary"><i class="fas fa-search"></i></button>
-        </div>
-        
-        <button onclick="openPlaylists()" class="btn btn-outline-info w-100 mb-2"><i class="fas fa-list-ul"></i> Playlist đã lưu</button>
-        <button onclick="cmd('stop')" class="btn btn-sm btn-outline-danger w-100">Dừng Nhạc & Xóa Hàng Đợi</button>
-        
-        <div class="queue-box text-start">
-            <div class="text-muted small mb-2" style="color: #94a3b8 !important;"><i class="fas fa-list"></i> Hàng đợi (Giữ icon ☰ để xếp):</div>
-            <div id="queueList"><div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div></div>
+                <div class="track-info">
+                    <div id="trackTitle" class="track-title">Ready to Play</div>
+                    <div id="trackArtist" class="track-artist">Vui lòng chọn bài hát</div>
+                    <div id="trackChannel" class="status-badge">Disconnected</div>
+                </div>
+
+                <div class="progress-wrapper">
+                    <span id="timeCurrent">00:00</span>
+                    <input type="range" id="progressBar" class="progress-range" value="0" min="0" max="100" onchange="seekAudio(this.value)" oninput="isSeeking=true">
+                    <span id="timeTotal">00:00</span>
+                </div>
+
+                <div class="controls-row">
+                    <button onclick="cmd('loop')" id="btnLoop" class="btn-control" title="Lặp lại"><i class="fas fa-repeat"></i></button>
+                    <button onclick="cmd('vol_down')" class="btn-control"><i class="fas fa-volume-low"></i></button>
+                    
+                    <button onclick="cmd('pause_resume')" class="btn-control btn-play">
+                        <i id="iconPlay" class="fas fa-play"></i>
+                    </button>
+                    
+                    <button onclick="cmd('vol_up')" class="btn-control"><i class="fas fa-volume-high"></i></button>
+                    <button onclick="cmd('skip')" class="btn-control" title="Bỏ qua"><i class="fas fa-forward-step"></i></button>
+                </div>
+            </div>
+
+            <div class="queue-section">
+                <div class="queue-header">
+                    <div class="queue-title">Hàng Đợi Phát</div>
+                    <div class="queue-actions">
+                        <button onclick="openPlaylists()" class="btn btn-saved"><i class="fas fa-bookmark"></i> Saved Playlist</button>
+                        <button onclick="cmd('stop')" class="btn btn-clear"><i class="fas fa-trash"></i> Clear</button>
+                    </div>
+                </div>
+
+                <div id="queueList" class="queue-list">
+                    <div class="text-center text-muted mt-5">Danh sách trống</div>
+                </div>
+
+                <div class="search-container">
+                    <i class="fas fa-search text-muted"></i>
+                    <input type="text" id="searchQuery" class="search-input" placeholder="Tìm tên bài hát hoặc dán link..." onkeypress="handleEnter(event)">
+                    <button onclick="handleSearchOrPlay()" class="search-btn"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -125,6 +316,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // --- LOGIC JAVASCRIPT GIỮ NGUYÊN TỪ BẢN CŨ ĐỂ ĐẢM BẢO HOẠT ĐỘNG ---
         const BASE_URL = "/mosa"; 
         let currentGuildId = localStorage.getItem('lastGuild') || "";
         let isFetching = false;
@@ -135,11 +327,11 @@
         const playlistModal = new bootstrap.Modal(document.getElementById('playlistModal'));
         let cachedPlaylists = [];
 
-        // --- CẤU HÌNH SORTABLE VỚI HANDLE ---
+        // Sortable Config
         let queueSortable = new Sortable(document.getElementById('queueList'), {
             animation: 150, 
             draggable: ".queue-item",
-            handle: ".drag-handle", // [QUAN TRỌNG] Chỉ cho phép kéo khi chạm vào class này
+            handle: ".drag-handle", 
             onStart: function() { isDragging = true; },
             onEnd: function(evt) { isDragging = false; if(evt.oldIndex !== evt.newIndex) moveQueueItem(evt.oldIndex, evt.newIndex); }
         });
@@ -163,40 +355,74 @@
             isFetching = true;
             fetch(`${BASE_URL}/api/status?guild_id=${currentGuildId}`).then(r=>r.json()).then(d => {
                 const art = document.getElementById('trackArt'), ph = document.getElementById('noMusicPlaceholder');
-                if(d.thumbnail && d.title) { art.src = d.thumbnail; art.style.display = 'block'; ph.style.display = 'none'; document.getElementById('trackTitle').innerText = d.title; document.getElementById('trackArtist').innerText = d.channel || "Đang phát"; }
-                else { art.style.display = 'none'; art.src = ""; ph.style.display = 'flex'; document.getElementById('trackTitle').innerText = "Sẵn sàng"; document.getElementById('trackArtist').innerText = "Vui lòng chọn bài hát"; }
                 
+                // Update Art & Info
+                if(d.thumbnail && d.title) { 
+                    art.src = d.thumbnail; art.style.display = 'block'; ph.style.display = 'none'; 
+                    document.getElementById('trackTitle').innerText = d.title; 
+                    document.getElementById('trackArtist').innerText = d.channel || "Đang phát"; 
+                } else { 
+                    art.style.display = 'none'; art.src = ""; ph.style.display = 'flex'; 
+                    document.getElementById('trackTitle').innerText = "Sẵn sàng"; 
+                    document.getElementById('trackArtist').innerText = "Vui lòng chọn bài hát"; 
+                }
+                
+                // Update Status
                 const st = document.getElementById('trackChannel');
-                if(d.connected_channel) { st.innerHTML = `<i class="fas fa-wifi"></i> ${d.connected_channel}`; st.className = "status-badge status-connected"; } 
-                else { st.innerHTML = "Chưa kết nối"; st.className = "status-badge"; }
+                if(d.connected_channel) { 
+                    st.innerHTML = `<i class="fas fa-wifi"></i> ${d.connected_channel}`; 
+                    st.className = "status-badge status-connected"; 
+                } else { 
+                    st.innerHTML = "Disconnected"; 
+                    st.className = "status-badge"; 
+                }
                 
+                // Sync Channel Selector
                 const chSel = document.getElementById('channelSelect');
                 if (d.connected_channel_id && chSel.options.length > 1) {
                      let options = Array.from(chSel.options);
                      if (options.some(o => o.value === d.connected_channel_id) && chSel.value !== d.connected_channel_id) chSel.value = d.connected_channel_id;
                 }
 
+                // Update Controls
                 document.getElementById('iconPlay').className = d.is_playing ? "fas fa-pause" : "fas fa-play";
-                document.getElementById('btnLoop').className = d.loop ? "btn-active" : "";
+                document.getElementById('btnLoop').className = d.loop ? "btn-control btn-active" : "btn-control";
                 
+                // Update Progress
                 if (!isSeeking && d.duration > 0) {
                     const bar = document.getElementById('progressBar');
                     bar.max = d.duration;
                     bar.value = d.position;
+                    // Update background slider style for progress effect
+                    const percentage = (d.position / d.duration) * 100;
+                    bar.style.background = `linear-gradient(to right, var(--primary) ${percentage}%, #444 ${percentage}%)`;
+                    
                     document.getElementById('timeCurrent').innerText = formatTime(d.position);
                     document.getElementById('timeTotal').innerText = formatTime(d.duration);
                 }
 
+                // Update Queue
                 const qDiv = document.getElementById('queueList'); let html = "";
-                // [MỚI] Thêm class 'drag-handle' vào icon để chỉ định vùng kéo thả
-                if(d.queue && d.queue.length > 0) d.queue.forEach((s, i) => html += `<div class="queue-item"><span><span class="queue-index">${i+1}.</span> ${s.title}</span> <i class="fas fa-bars drag-handle"></i></div>`);
-                else html = '<div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div>';
+                if(d.queue && d.queue.length > 0) {
+                    d.queue.forEach((s, i) => {
+                        html += `
+                        <div class="queue-item">
+                            <div class="q-info">
+                                <span class="q-index">${i+1}</span>
+                                <div class="q-name" title="${s.title}">${s.title}</div>
+                            </div>
+                            <i class="fas fa-grip-lines drag-handle"></i>
+                        </div>`;
+                    });
+                } else {
+                    html = '<div class="text-center text-muted mt-5" style="font-size:0.9rem;">Hàng đợi trống<br>Thêm bài hát để bắt đầu</div>';
+                }
                 if(qDiv.innerHTML !== html) qDiv.innerHTML = html; 
                 isFetching = false;
             }).catch(() => isFetching = false);
         }
 
-        // --- CÁC HÀM XỬ LÝ KHÁC (GIỮ NGUYÊN) ---
+        // --- CÁC HÀM XỬ LÝ KHÁC (API CALLS) ---
         function moveQueueItem(fromIdx, toIdx) { if(currentGuildId) fetch(`${BASE_URL}/api/queue/move?guild_id=${currentGuildId}&from=${fromIdx}&to=${toIdx}`, {method: 'POST'}); }
         
         function openPlaylists() {
@@ -207,7 +433,7 @@
                 if(d.length === 0) { cont.innerHTML = '<div class="text-center py-3">Chưa có playlist nào được lưu.</div>'; return; }
                 let html = '';
                 d.forEach((pl, idx) => {
-                    html += `<div class="list-group-item bg-dark text-white border-secondary mb-2 rounded"><div class="d-flex justify-content-between align-items-center"><div><h6 class="mb-0 fw-bold">${pl.name} <span class="playlist-badge">${pl.count} bài</span></h6><small class="text-muted">Tạo bởi: ${pl.owner}</small></div><div class="btn-group"><button onclick="toggleTracks(${idx})" class="btn btn-sm btn-outline-secondary">Xem bài</button><button onclick="playFullPlaylist('${pl.owner_id}', '${pl.name}')" class="btn btn-sm btn-success"><i class="fas fa-play"></i> Phát tất cả</button></div></div><div id="tracks-${idx}" class="track-list-container">${pl.tracks.map(t => `<div class="track-item"><div class="text-truncate me-2">${t.title}</div><button onclick="playSingleTrack('${t.webpage_url || t.url}')" class="btn btn-xs btn-outline-primary"><i class="fas fa-play"></i></button></div>`).join('')}</div></div>`;
+                    html += `<div class="list-group-item bg-dark text-white border-secondary mb-2 rounded"><div class="d-flex justify-content-between align-items-center"><div><h6 class="mb-0 fw-bold">${pl.name} <span class="badge bg-success ms-2">${pl.count} bài</span></h6><small class="text-muted">User: ${pl.owner}</small></div><div class="btn-group"><button onclick="toggleTracks(${idx})" class="btn btn-sm btn-outline-secondary">Xem</button><button onclick="playFullPlaylist('${pl.owner_id}', '${pl.name}')" class="btn btn-sm btn-success"><i class="fas fa-play"></i> Phát</button></div></div><div id="tracks-${idx}" style="display:none; margin-top:10px; border-top:1px solid #444; padding-top:10px;">${pl.tracks.map(t => `<div class="d-flex justify-content-between align-items-center mb-1"><small class="text-truncate" style="max-width:80%;">${t.title}</small><button onclick="playSingleTrack('${t.webpage_url || t.url}')" class="btn btn-sm btn-link text-white"><i class="fas fa-play"></i></button></div>`).join('')}</div></div>`;
                 });
                 cont.innerHTML = html;
             });
@@ -219,7 +445,7 @@
         
         function loadGuilds() {
             fetch(`${BASE_URL}/api/guilds`).then(r=>r.json()).then(d => {
-                const sel = document.getElementById('guildSelect'); sel.innerHTML = '<option value="" disabled selected>Chọn Server...</option>';
+                const sel = document.getElementById('guildSelect'); sel.innerHTML = '<option value="" disabled selected>Chọn Server</option>';
                 if(d.length === 0) return; d.forEach(g => sel.add(new Option(g.name, g.id)));
                 if(currentGuildId && d.some(g => g.id === currentGuildId)) { sel.value = currentGuildId; loadChannels(); } 
                 else if (d.length === 1) { sel.value = d[0].id; loadChannels(); }
@@ -227,29 +453,29 @@
         }
         function loadChannels() {
             const gid = document.getElementById('guildSelect').value; localStorage.setItem('lastGuild', gid); currentGuildId = gid;
-            const chSel = document.getElementById('channelSelect'); if (chSel.options.length <= 1) chSel.innerHTML = '<option disabled selected>Đang tải...</option>';
+            const chSel = document.getElementById('channelSelect'); chSel.innerHTML = '<option disabled selected>Đang tải...</option>';
             fetch(`${BASE_URL}/api/channels?guild_id=${gid}`).then(r=>r.json()).then(d => {
-                const currentVal = chSel.value; chSel.innerHTML = '<option disabled selected>Chọn Kênh...</option>';
+                const currentVal = chSel.value; chSel.innerHTML = '<option disabled selected>Chọn Kênh</option>';
                 d.forEach(c => chSel.add(new Option(c.name, c.id)));
                 if (currentVal && Array.from(chSel.options).some(o => o.value === currentVal)) chSel.value = currentVal;
             });
         }
-        function joinChannel() { const gid = currentGuildId; const cid = document.getElementById('channelSelect').value; if(!gid || !cid || cid === "Chọn Kênh...") return alert("Chọn Server và Kênh!"); fetch(`${BASE_URL}/api/join?guild_id=${gid}&channel_id=${cid}`, {method:'POST'}).then(r=>r.json()).then(d => { if(d.status === 'ok') alert("Bot đang vào..."); }); }
+        function joinChannel() { const gid = currentGuildId; const cid = document.getElementById('channelSelect').value; if(!gid || !cid || cid === "Chọn Kênh") return alert("Chọn Server và Kênh!"); fetch(`${BASE_URL}/api/join?guild_id=${gid}&channel_id=${cid}`, {method:'POST'}).then(r=>r.json()).then(d => { if(d.status === 'ok') alert("Bot đang vào..."); }); }
         function leaveChannel() { if(currentGuildId) fetch(`${BASE_URL}/api/control/leave?guild_id=${currentGuildId}`, {method:'POST'}); }
         function cmd(a) { if(currentGuildId) fetch(`${BASE_URL}/api/control/${a}?guild_id=${currentGuildId}`, {method:'POST'}); }
         function handleEnter(e) { if(e.key === 'Enter') handleSearchOrPlay(); }
         function handleSearchOrPlay() {
             const q = document.getElementById('searchQuery').value.trim(); if(!currentGuildId) return alert("⚠️ Bạn chưa chọn Server!"); if(!q) return alert("⚠️ Vui lòng nhập thông tin!");
-            const btn = document.querySelector('.input-group .btn'); const originalIcon = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const btn = document.querySelector('.search-btn'); const originalIcon = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             if (q.startsWith("http")) { playDirect(q); btn.innerHTML = originalIcon; } 
             else {
                 fetch(`${BASE_URL}/api/search?query=${encodeURIComponent(q)}`).then(r => r.json()).then(data => {
                     btn.innerHTML = originalIcon; if(data.length === 0) return alert("Không tìm thấy!");
                     const list = document.getElementById('searchResults'); list.innerHTML = "";
                     data.forEach(s => {
-                        const item = document.createElement('div'); item.className = "list-group-item d-flex align-items-center";
+                        const item = document.createElement('button'); item.className = "list-group-item list-group-item-action d-flex align-items-center gap-3 py-2";
                         item.onclick = () => { playDirect(s.url); searchModal.hide(); };
-                        item.innerHTML = `<img src="${s.thumbnail||'https://i.imgur.com/t2107W6.png'}" class="search-thumb"><div><div class="fw-bold text-truncate" style="max-width:300px;">${s.title}</div><small class="text-muted">${s.uploader} • ${s.duration}</small></div>`;
+                        item.innerHTML = `<img src="${s.thumbnail||'https://i.imgur.com/t2107W6.png'}" style="width:50px;height:40px;object-fit:cover;border-radius:4px;"><div><div class="fw-bold text-truncate" style="max-width:300px;">${s.title}</div><small class="text-muted">${s.uploader} • ${s.duration}</small></div>`;
                         list.appendChild(item);
                     }); searchModal.show();
                 }).catch(() => { btn.innerHTML = originalIcon; alert("Lỗi tìm kiếm."); });
