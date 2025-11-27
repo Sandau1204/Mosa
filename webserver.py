@@ -143,6 +143,23 @@ def control(action):
         run(mc.update_ui(gid_int))
     return jsonify({"status": "ok"})
 
+@app.route(f'{PREFIX}/api/queue/move', methods=['POST'])
+def move_queue_item():
+    gid = request.args.get('guild_id')
+    from_idx = request.args.get('from')
+    to_idx = request.args.get('to')
+    if not bot_instance or not gid or from_idx is None or to_idx is None: 
+        return jsonify({"status": "error"})
+    
+    try:
+        mc = bot_instance.get_cog('Music')
+        if mc:
+            success = mc.move_song(int(gid), int(from_idx), int(to_idx))
+            if success: return jsonify({"status": "ok"})
+    except Exception as e:
+        print(f"Move Error: {e}")
+    return jsonify({"status": "error"})
+
 @app.route(f'{PREFIX}/api/search', methods=['GET'])
 def search_api():
     query = request.args.get('query')
@@ -159,7 +176,6 @@ def search_api():
         for r in results:
             url = r.get('webpage_url') or r.get('url')
             if not url and r.get('id'): url = f"https://www.youtube.com/watch?v={r['id']}"
-            
             if url:
                 clean_results.append({
                     'title': r.get('title', 'Unknown'), 'url': url,
@@ -169,54 +185,93 @@ def search_api():
         return jsonify(clean_results)
     except: return jsonify([])
 
-# --- API PLAY ĐÃ SỬA LỖI BIẾN GID_INT ---
 @app.route(f'{PREFIX}/api/play', methods=['POST'])
 def play_api():
     gid = request.args.get('guild_id'); query = request.args.get('query')
     if not bot_instance or not gid or not query: return jsonify({"status": "error"})
     
     try:
-        gid_int = int(gid) # Đồng nhất tên biến là gid_int
+        gid_int = int(gid) 
         mc = bot_instance.get_cog('Music')
         g = bot_instance.get_guild(gid_int)
+        text_channel = _get_text_channel(g, mc)
         
-        # --- LOGIC CHỌN KÊNH ---
-        text_channel = None
-
-        # 1. Ưu tiên kênh Setup
-        setup_id = get_music_channel_id(gid_int) # Đã sửa lỗi ở đây
-        if setup_id:
-            text_channel = g.get_channel(setup_id)
-        
-        # 2. Fallback kênh UI cũ
-        if not text_channel and gid_int in mc.ui_messages:
-            try: text_channel = mc.ui_messages[gid_int].channel
-            except: pass
-        
-        # 3. Fallback kênh Voice
-        if not text_channel and g.voice_client and hasattr(g.voice_client.channel, 'send'):
-             text_channel = g.voice_client.channel
-
-        # 4. Fallback kênh Text đầu tiên
-        if not text_channel and g.text_channels: 
-            text_channel = g.text_channels[0]
-
         if text_channel:
             async def do_play():
                 if not g.voice_client: return 
-                
-                if "http" in query: 
-                    info = await mc.get_song_info(query)
+                if "http" in query: info = await mc.get_song_info(query)
                 else:
                     res = await mc.search_youtube(query)
                     info = res[0] if res else None
-                
                 if info:
                     fake = FakeInteraction(g, text_channel, g.me)
                     await mc.process_song_request(fake, info)
-            
             asyncio.run_coroutine_threadsafe(do_play(), bot_instance.loop)
         return jsonify({"status": "ok"})
     except Exception as e:
         print(f"Play API Error: {e}")
         return jsonify({"status": "error"})
+
+# --- API MỚI CHO PLAYLIST ---
+
+@app.route(f'{PREFIX}/api/playlists')
+def get_playlists_api():
+    if not bot_instance: return jsonify([])
+    mc = bot_instance.get_cog('Music')
+    if not mc: return jsonify([])
+    
+    res = []
+    # mc.playlists cấu trúc: {user_id: {playlist_name: [songs]}}
+    for uid, playlists in mc.playlists.items():
+        try:
+            user = bot_instance.get_user(int(uid))
+            user_name = user.name if user else f"User {uid}"
+        except: user_name = f"User {uid}"
+        
+        for pl_name, tracks in playlists.items():
+            res.append({
+                "owner": user_name,
+                "owner_id": uid,
+                "name": pl_name,
+                "count": len(tracks),
+                "tracks": tracks
+            })
+    return jsonify(res)
+
+@app.route(f'{PREFIX}/api/playlist/play_all', methods=['POST'])
+def play_playlist_all_api():
+    gid = request.args.get('guild_id')
+    uid = request.args.get('user_id')
+    name = request.args.get('name')
+    
+    if not bot_instance or not gid or not uid or not name: return jsonify({"status": "error"})
+    try:
+        gid_int = int(gid)
+        mc = bot_instance.get_cog('Music')
+        g = bot_instance.get_guild(gid_int)
+        
+        songs = mc.playlists.get(str(uid), {}).get(name)
+        if not songs: return jsonify({"status": "error", "message": "Not found"})
+        
+        text_channel = _get_text_channel(g, mc)
+        if text_channel:
+             async def do():
+                 fake = FakeInteraction(g, text_channel, g.me)
+                 # process_song_request đã hỗ trợ List từ bước trước
+                 await mc.process_song_request(fake, songs) 
+             asyncio.run_coroutine_threadsafe(do(), bot_instance.loop)
+             return jsonify({"status": "ok"})
+        return jsonify({"status": "error", "message": "No channel"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+# Hàm phụ tìm kênh chat
+def _get_text_channel(g, mc):
+    setup_id = get_music_channel_id(g.id)
+    if setup_id: return g.get_channel(setup_id)
+    if g.id in mc.ui_messages:
+        try: return mc.ui_messages[g.id].channel
+        except: pass
+    if g.voice_client and hasattr(g.voice_client.channel, 'send'): return g.voice_client.channel
+    if g.text_channels: return g.text_channels[0]
+    return None
