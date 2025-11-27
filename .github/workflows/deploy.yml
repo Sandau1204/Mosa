@@ -33,7 +33,7 @@ jobs:
             
             # 1. Di chuyển vào thư mục code trên VPS
             # Sửa đường dẫn dưới đây thành đường dẫn thật của bạn
-            Set-Location "C:\inetpub\wwwroot\MyProject"
+            Set-Location "C:\Users\Administrator\Mosa"
             
             # 2. Reset lại mọi thay đổi cục bộ (nếu có) để tránh xung đột
             git reset --hard
