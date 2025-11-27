@@ -7,7 +7,8 @@ import os
 import json
 import time 
 
-app = Flask(__name__)
+
+app = Flask(__name__, static_url_path='/mosa/static')
 bot_instance = None 
 
 # Tắt log gây nhiễu
