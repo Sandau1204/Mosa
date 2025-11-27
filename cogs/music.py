@@ -26,12 +26,7 @@ YDL_OPTIONS = {
     'default_search': 'auto',
     'source_address': '0.0.0.0',
     'nocheckcertificate': True,
-    
-    # --- QUAN TRỌNG: Dùng Cookies để vượt qua lỗi 403 ---
     'cookiefile': 'cookies.txt', 
-    
-    # --- QUAN TRỌNG: Giả lập Client iOS (Thường ít bị chặn hơn Android/Web) ---
-    'extractor_args': {'youtube': {'player_client': ['ios']}},
 }
 
 FFMPEG_OPTIONS = {
