@@ -16,8 +16,7 @@ PLAYLIST_FILE = os.path.join(DATA_FOLDER, "playlists.json")
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 SEARCH_LIMIT = 5
 
-# --- CẤU HÌNH YT-DLP (ĐÃ SỬA LỖI FORMAT) ---
-# Lưu ý: Đảm bảo file cookies.txt của bạn vẫn còn hạn sử dụng
+# --- CẤU HÌNH YT-DLP ---
 YDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -89,7 +88,6 @@ class MusicController(discord.ui.View):
 
     @discord.ui.button(emoji="⏸️", style=discord.ButtonStyle.secondary, row=0, custom_id="btn_pause")
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Sửa lỗi AttributeError ở đây: Dùng interaction.guild.voice_client
         vc = interaction.guild.voice_client 
         if not vc: return
         if vc.is_playing():
@@ -133,7 +131,7 @@ class MusicController(discord.ui.View):
         await interaction.response.send_message("🛑 Đã dừng nhạc.", ephemeral=False)
 
     async def update_volume(self, interaction, change):
-        vc = interaction.guild.voice_client # Sửa lỗi tương tự ở đây
+        vc = interaction.guild.voice_client 
         if vc and vc.source:
             current_vol = self.cog.volumes.get(self.guild_id, 0.5)
             new_vol = round(max(0.0, min(1.0, current_vol + change)), 2)
@@ -176,11 +174,18 @@ class Music(commands.Cog):
         if not os.path.exists(DATA_FOLDER): os.makedirs(DATA_FOLDER)
         json.dump(d, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=4)
     def get_default_volume(self, gid): return self.settings.get(str(gid), {}).get("default_volume", 0.5)
+    
+    # --- CHECK KÊNH HỢP LỆ (ĐÃ SỬA KEY ĐỂ ĐỒNG BỘ WEB) ---
     async def check_music_channel(self, interaction: discord.Interaction):
+        # FakeInteraction đến từ Webserver -> Luôn cho phép
         if interaction.__class__.__name__ == 'FakeInteraction': return True
-        setup_id = self.settings.get(str(interaction.guild_id), {}).get("music_channel")
+        
+        # Lấy ID kênh cài đặt (Key là music_channel_id)
+        setup_id = self.settings.get(str(interaction.guild_id), {}).get("music_channel_id")
+        
         if setup_id and interaction.channel_id != setup_id:
-            await interaction.response.send_message(f"🚫 Chỉ dùng lệnh nhạc tại <#{setup_id}>", ephemeral=True); return False
+            await interaction.response.send_message(f"🚫 Bot chỉ nhận lệnh nhạc tại kênh <#{setup_id}>", ephemeral=True)
+            return False
         return True
 
     async def search_youtube(self, q):
@@ -234,8 +239,6 @@ class Music(commands.Cog):
                 loop = asyncio.get_event_loop()
                 play_url = await loop.run_in_executor(None, lambda: self.refresh_url(song_data['webpage_url'])) or song_data['stream_url']
                 
-                # --- CHẾ ĐỘ TỰ ĐỘNG: TỰ TÌM FFMPEG ---
-                # Nếu trên Windows có file exe cạnh bên thì dùng, không thì dùng lệnh hệ thống (Linux)
                 ffmpeg_local = os.path.abspath("ffmpeg.exe")
                 exe = ffmpeg_local if os.path.exists(ffmpeg_local) else "ffmpeg"
                 
@@ -296,13 +299,20 @@ class Music(commands.Cog):
         else: await interaction.followup.send(f"✅ Đã thêm: **{final_data['title']}**")
 
     # --- COMMANDS ---
-    @app_commands.command(name="music_setup", description="[Admin] Chọn kênh nhạc")
+    
+    # ĐÃ ĐỔI TÊN LỆNH VÀ KEY JSON
+    @app_commands.command(name="set_music", description="[Admin] Đặt kênh này làm kênh nhạc duy nhất (Đồng bộ Web)")
     @app_commands.checks.has_permissions(manage_channels=True)
-    async def music_setup(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        await interaction.response.defer(); gid = str(interaction.guild_id)
+    async def set_music(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        gid = str(interaction.guild_id)
         if gid not in self.settings: self.settings[gid] = {}
-        self.settings[gid]["music_channel"] = channel.id; self.save_json(SETTINGS_FILE, self.settings)
-        await interaction.followup.send(f"✅ Đã chọn kênh nhạc: {channel.mention}")
+        
+        # SỬ DỤNG KEY "music_channel_id" ĐỂ KHỚP VỚI WEBSERVER.PY
+        self.settings[gid]["music_channel_id"] = interaction.channel.id
+        self.save_json(SETTINGS_FILE, self.settings)
+        
+        await interaction.followup.send(f"✅ Đã thiết lập {interaction.channel.mention} là kênh nhạc duy nhất!\n(Các lệnh nhạc trên Web và Bot sẽ chỉ hoạt động tại đây)")
 
     @app_commands.command(name="play", description="Phát nhạc")
     async def play(self, interaction: discord.Interaction, query: str):
