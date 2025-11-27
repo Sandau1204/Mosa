@@ -22,7 +22,12 @@
         }
 
         body {
-            background-color: var(--bg-color);
+            background-image: url("{{ url_for('static', filename='background.jpg') }}");
+            background-size: cover;     
+            background-position: center; 
+            background-repeat: no-repeat; 
+            background-attachment: fixed; 
+            background-color: var(--bg-color); 
             color: var(--text-main);
             font-family: 'Lexend', sans-serif;
             min-height: 100vh;
