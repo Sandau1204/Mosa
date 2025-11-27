@@ -2,308 +2,117 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mosa Player</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mosa Music Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     
     <style>
-        :root { 
-            --bg-black: #000000; 
-            --bg-dark: #121212; 
-            --bg-elevated: #242424; 
-            --bg-highlight: #2a2a2a;
-            --text-base: #ffffff; 
-            --text-subdued: #a7a7a7; 
-            --primary: #1db954; 
-            --primary-hover: #1ed760;
-            --bar-height: 90px;
-        }
+        :root { --bg: #0f172a; --card: #1e293b; --primary: #6366f1; --text: #ffffff; --text-mute: #94a3b8; }
+        body { background-color: var(--bg); color: var(--text); font-family: 'Lexend', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .player-card { background-color: var(--card); border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 100%; max-width: 480px; padding: 25px; border: 1px solid rgba(255,255,255,0.05); }
+        .form-select, .form-control { background-color: #0f172a !important; border: 1px solid #334155; color: #ffffff !important; border-radius: 10px; }
+        .form-select:focus, .form-control:focus { background-color: #0f172a !important; color: #ffffff !important; border-color: var(--primary); box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25); }
+        ::placeholder { color: #64748b !important; opacity: 1; }
         
-        * { box-sizing: border-box; }
+        .modal-content { background-color: #1e293b; color: white; border: 1px solid #334155; }
+        .modal-header { border-bottom: 1px solid #334155; }
+        .list-group-item { background-color: #0f172a; color: white; border: 1px solid #334155; cursor: pointer; transition: 0.2s; }
+        .list-group-item:hover { background-color: #334155; border-color: var(--primary); }
+        .search-thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 5px; margin-right: 15px; }
         
-        body { 
-            background-color: var(--bg-black); 
-            color: var(--text-base); 
-            font-family: 'Lexend', sans-serif; 
-            height: 100vh; 
-            overflow: hidden; 
-            margin: 0;
-        }
-
-        /* --- LAYOUT --- */
-        .spotify-container {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            grid-template-rows: 1fr var(--bar-height);
-            height: 100vh;
-            width: 100vw;
-            grid-template-areas: 
-                "sidebar main"
-                "player player";
-        }
-
-        /* --- SIDEBAR --- */
-        .sidebar {
-            grid-area: sidebar;
-            background-color: var(--bg-black);
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
+        .art-box { width: 100%; height: 250px; border-radius: 15px; overflow: hidden; margin-bottom: 20px; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); background: #0f172a; }
+        .art-img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .no-music-placeholder { width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: linear-gradient(45deg, #1e293b, #0f172a); color: #334155; font-size: 4rem; position: relative; overflow: hidden; }
+        .pulse-ring { position: absolute; width: 100px; height: 100px; background: var(--primary); border-radius: 50%; opacity: 0; animation: pulseAnimation 3s infinite ease-out; }
+        @keyframes pulseAnimation { 0% { transform: scale(0.5); opacity: 0.2; } 100% { transform: scale(2.5); opacity: 0; } }
         
-        .logo { font-size: 1.5rem; font-weight: 700; color: var(--text-base); display: flex; align-items: center; gap: 10px; }
-        .logo i { font-size: 2rem; }
-
-        .nav-btn {
-            background: none; border: none; color: var(--text-subdued);
-            font-weight: 600; font-size: 1rem; text-align: left;
-            padding: 10px 0; transition: 0.2s; cursor: pointer; display: flex; align-items: center; gap: 15px;
-        }
-        .nav-btn:hover, .nav-btn.active { color: var(--text-base); }
-        .nav-btn i { font-size: 1.2rem; width: 24px; text-align: center; }
-
-        .sidebar-divider { height: 1px; background-color: #282828; margin: 10px 0; }
+        .queue-box { background: #0f172a; border-radius: 10px; padding: 10px; max-height: 180px; overflow-y: auto; margin-top: 15px; border: 1px solid #334155; }
         
-        .lib-header { color: var(--text-subdued); font-size: 0.8rem; font-weight: 700; letter-spacing: 1px; margin-bottom: 10px; }
-
-        /* --- MAIN CONTENT --- */
-        .main-view {
-            grid-area: main;
-            background: linear-gradient(180deg, #202020 0%, var(--bg-dark) 100%);
-            border-radius: 8px;
-            margin: 8px 8px 0 0;
-            overflow-y: auto;
-            position: relative;
-            padding: 20px;
-        }
-
-        /* Header trong Main View (Server Select) */
-        .top-bar {
-            display: flex; gap: 10px; margin-bottom: 20px;
-            background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; backdrop-filter: blur(10px);
-        }
-        .form-select-dark {
-            background-color: #3e3e3e; border: none; color: white; font-size: 0.9rem; border-radius: 20px; padding: 5px 15px; cursor: pointer;
-        }
-        .form-select-dark:focus { box-shadow: none; background-color: #4f4f4f; color: white; }
-
-        /* Track Info Area */
-        .track-hero {
-            display: flex; gap: 20px; align-items: flex-end; margin-bottom: 30px;
-            padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .hero-art {
-            width: 200px; height: 200px; 
-            box-shadow: 0 4px 60px rgba(0,0,0,0.5);
-            background: #282828; display: flex; align-items: center; justify-content: center;
-        }
-        .hero-art img { width: 100%; height: 100%; object-fit: cover; }
-        .hero-placeholder { font-size: 4rem; color: #555; }
+        /* Cập nhật style cho item hàng đợi */
+        .queue-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #1e293b; font-size: 0.95rem; color: #ffffff !important; background: #0f172a; }
         
-        .hero-info h1 { font-size: 3rem; font-weight: 800; margin: 0; line-height: 1.1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;}
-        .hero-info p { color: var(--text-subdued); margin-top: 10px; font-weight: 500; }
-        .status-badge { font-size: 0.8rem; padding: 4px 12px; border-radius: 12px; background: var(--bg-elevated); border: 1px solid transparent; }
-        .status-connected { border-color: var(--primary); color: var(--primary); }
-
-        /* Queue List */
-        .queue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; color: var(--text-subdued); font-size: 0.9rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; }
-        .queue-item {
-            display: flex; align-items: center; gap: 15px;
-            padding: 10px; border-radius: 4px;
-            color: var(--text-subdued); transition: 0.2s;
-            background: transparent; border: none;
+        /* Style cho nút kéo thả (Handle) */
+        .drag-handle { 
+            cursor: grab; 
+            padding: 10px; /* Tăng diện tích chạm cho điện thoại */
+            color: #64748b; 
+            touch-action: none; /* Ngăn chặn cuộn trang khi chạm vào icon này */
         }
-        .queue-item:hover { background-color: rgba(255,255,255,0.1); color: var(--text-base); }
-        .queue-index { width: 20px; text-align: right; color: var(--primary); font-size: 0.9rem; }
-        .queue-title { flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; color: white; }
-        .drag-handle { cursor: grab; padding: 5px 10px; color: var(--text-subdued); opacity: 0; transition: 0.2s; }
-        .queue-item:hover .drag-handle { opacity: 1; }
+        .drag-handle:active { cursor: grabbing; color: var(--primary); }
         
-        /* --- PLAYER BAR (BOTTOM) --- */
-        .player-bar {
-            grid-area: player;
-            background-color: var(--bg-card);
-            border-top: 1px solid #282828;
-            padding: 0 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            z-index: 100;
-        }
-
-        /* Left: Info mini */
-        .pb-left { display: flex; align-items: center; gap: 14px; width: 30%; min-width: 180px; }
-        .mini-art { width: 56px; height: 56px; background: #282828; border-radius: 4px; overflow: hidden; position: relative; }
-        .mini-art img { width: 100%; height: 100%; object-fit: cover; }
-        .mini-info { display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
-        .mini-title { font-size: 0.9rem; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .mini-artist { font-size: 0.75rem; color: var(--text-subdued); }
-
-        /* Center: Controls */
-        .pb-center { display: flex; flex-direction: column; align-items: center; width: 40%; max-width: 722px; }
-        .control-buttons { display: flex; align-items: center; gap: 20px; margin-bottom: 8px; }
-        .btn-control { background: none; border: none; color: #b3b3b3; font-size: 1.2rem; cursor: pointer; transition: 0.2s; }
-        .btn-control:hover { color: white; }
-        .btn-play-circle { 
-            width: 32px; height: 32px; background: white; color: black; border-radius: 50%; 
-            display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: 0.2s; 
-        }
-        .btn-play-circle:hover { transform: scale(1.05); }
-        .btn-active { color: var(--primary) !important; position: relative; }
-        .btn-active::after { content: '•'; position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); font-size: 1.5rem; color: var(--primary); }
-
-        /* Progress Bar */
-        .progress-area { width: 100%; display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: #a7a7a7; }
-        .prog-slider {
-            -webkit-appearance: none; width: 100%; height: 4px; border-radius: 2px;
-            background: #4d4d4d; outline: none; cursor: pointer;
-        }
-        .prog-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: white; display: none; }
-        .progress-area:hover .prog-slider::-webkit-slider-thumb { display: block; }
-        .prog-slider:hover { background: var(--primary); }
-
-        /* Right: Extra controls */
-        .pb-right { width: 30%; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+        .queue-index { color: var(--primary) !important; font-weight: bold; margin-right: 10px; pointer-events: none; }
         
-        /* Mobile Adaptations */
-        @media (max-width: 768px) {
-            .spotify-container { 
-                grid-template-columns: 1fr; 
-                grid-template-rows: 1fr 130px; /* Taller player bar for mobile */
-                grid-template-areas: "main" "player";
-            }
-            .sidebar { display: none; }
-            .main-view { margin: 0; padding: 15px; border-radius: 0; }
-            .track-hero { flex-direction: column; align-items: center; text-align: center; gap: 15px; }
-            .hero-art { width: 220px; height: 220px; }
-            .hero-info h1 { font-size: 1.8rem; }
-            
-            .player-bar { flex-direction: column; padding: 10px; height: auto; justify-content: space-around; }
-            .pb-left { width: 100%; display: none; } /* Hide mini player info on mobile, main view shows it */
-            .pb-center { width: 100%; }
-            .pb-right { display: none; } /* Hide volume on mobile */
-            
-            .drag-handle { opacity: 1; padding: 15px; font-size: 1.2rem; } /* Bigger handle for touch */
-            
-            .mobile-controls-extra { display: flex; width: 100%; justify-content: space-around; margin-bottom: 10px; }
-        }
+        .controls button { background: none; border: none; color: #e2e8f0; font-size: 1.2rem; transition: 0.2s; width: 45px; height: 45px; border-radius: 50%; }
+        .controls button:hover { background: rgba(255,255,255,0.1); color: var(--primary); }
+        .controls .btn-play { background: var(--primary); color: white; width: 60px; height: 60px; font-size: 1.5rem; box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); }
+        .controls .btn-play:hover { background: #818cf8; color: white; transform: scale(1.05); }
+        .btn-active { color: #4ade80 !important; }
+        
+        .status-badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 15px; background: #334155; color: #94a3b8; }
+        .status-connected { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
 
-        /* Modal Styles */
-        .modal-content { background-color: #282828; color: white; border: none; }
-        .modal-header { border-bottom: 1px solid #3e3e3e; }
-        .btn-close { filter: invert(1); }
-        .list-group-item { background-color: transparent; color: white; border-color: #3e3e3e; }
-        .list-group-item:hover { background-color: #3e3e3e; }
+        .playlist-badge { font-size: 0.7rem; background: var(--primary); border-radius: 4px; padding: 2px 5px; margin-left: 5px; }
+        .track-list-container { max-height: 300px; overflow-y: auto; display: none; margin-top: 10px; border-top: 1px solid #334155; }
+        .track-item { padding: 8px; border-bottom: 1px solid #334155; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
+        .track-item:hover { background: #334155; }
+
+        /* Progress Bar Style */
+        .progress-container { display: flex; align-items: center; font-size: 0.8rem; color: #94a3b8; margin-bottom: 15px; width: 100%; }
+        .progress-bar-slider { flex-grow: 1; margin: 0 10px; -webkit-appearance: none; height: 4px; background: #334155; border-radius: 2px; outline: none; cursor: pointer; }
+        .progress-bar-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: var(--primary); border-radius: 50%; cursor: pointer; transition: 0.2s; }
+        .progress-bar-slider::-webkit-slider-thumb:hover { transform: scale(1.3); }
     </style>
 </head>
 <body>
-
-    <div class="spotify-container">
-        <aside class="sidebar">
-            <div class="logo"><i class="fab fa-spotify" style="color: var(--primary);"></i> Mosa Player</div>
-            
-            <nav>
-                <button class="nav-btn active" onclick="handleSearchOrPlay()"><i class="fas fa-home"></i> Trang chủ</button>
-                <button class="nav-btn" onclick="openSearchModal()"><i class="fas fa-search"></i> Tìm kiếm</button>
-                <button class="nav-btn" onclick="openPlaylists()"><i class="fas fa-book"></i> Thư viện</button>
-            </nav>
-            
-            <div class="sidebar-divider"></div>
-            
-            <div class="lib-header">PLAYLIST CỦA BẠN</div>
-            <div style="overflow-y: auto; flex-grow: 1; color: var(--text-subdued); font-size: 0.9rem;">
-                <div class="p-2 cursor-pointer hover-white" onclick="openPlaylists()"><i class="fas fa-plus-square"></i> Tạo Playlist</div>
-                <div class="p-2 cursor-pointer hover-white" onclick="openPlaylists()"><i class="fas fa-heart" style="color: #a567fb"></i> Bài hát đã thích</div>
-            </div>
-        </aside>
-
-        <main class="main-view">
-            <div class="top-bar">
-                <div class="d-flex gap-2 w-100">
-                    <select id="guildSelect" class="form-select-dark w-50" onchange="loadChannels()"><option disabled selected>Server...</option></select>
-                    <select id="channelSelect" class="form-select-dark w-50"><option disabled selected>Kênh...</option></select>
-                    <button onclick="joinChannel()" class="btn btn-sm btn-success rounded-pill px-3">Join</button>
-                    <button onclick="leaveChannel()" class="btn btn-sm btn-outline-light rounded-pill px-3"><i class="fas fa-sign-out-alt"></i></button>
+    <div class="player-card text-center">
+        <div class="header-title mb-3 fw-bold text-primary">MOSA DASHBOARD</div>
+        
+        <div class="row g-2 mb-3">
+            <div class="col-5"><select id="guildSelect" class="form-select" onchange="loadChannels()"><option value="" disabled selected>Chọn Server...</option></select></div>
+            <div class="col-4"><select id="channelSelect" class="form-select"><option value="" disabled selected>Kênh...</option></select></div>
+            <div class="col-3">
+                <div class="btn-group w-100" role="group">
+                    <button onclick="joinChannel()" class="btn btn-outline-success" title="Vào kênh"><i class="fas fa-link"></i></button>
+                    <button onclick="leaveChannel()" class="btn btn-outline-danger" title="Rời kênh"><i class="fas fa-sign-out-alt"></i></button>
                 </div>
             </div>
+        </div>
 
-            <div class="text-end mb-2">
-                <span id="trackChannel" class="status-badge">Offline</span>
-            </div>
+        <div class="mb-3"><span id="trackChannel" class="status-badge">Chưa kết nối</span></div>
+        
+        <div class="art-box"><img id="trackArt" src="" class="art-img"><div id="noMusicPlaceholder" class="no-music-placeholder"><div class="pulse-ring"></div><i class="fas fa-music" style="position: relative; z-index: 2;"></i></div></div>
+        
+        <div class="track-info mb-2"><h5 id="trackTitle">Sẵn sàng</h5><small id="trackArtist" style="color: #94a3b8;">Vui lòng chọn bài hát</small></div>
+        
+        <div class="progress-container">
+            <span id="timeCurrent">00:00</span>
+            <input type="range" id="progressBar" class="progress-bar-slider" value="0" min="0" max="100" onchange="seekAudio(this.value)" oninput="isSeeking=true">
+            <span id="timeTotal">00:00</span>
+        </div>
 
-            <div class="track-hero">
-                <div class="hero-art">
-                    <img id="trackArt" src="" style="display: none;">
-                    <div id="noMusicPlaceholder" class="hero-placeholder"><i class="fas fa-music"></i></div>
-                </div>
-                <div class="hero-info">
-                    <p class="text-uppercase small fw-bold">Đang phát</p>
-                    <h1 id="trackTitle">Chưa chọn bài</h1>
-                    <p id="trackArtist">Hãy thêm nhạc vào hàng đợi</p>
-                </div>
-            </div>
-
-            <div class="d-flex gap-3 mb-4">
-                <button onclick="cmd('pause_resume')" class="btn btn-success rounded-circle p-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px;">
-                    <i id="iconPlayHero" class="fas fa-play" style="font-size: 1.5rem; color: black; margin-left: 3px;"></i>
-                </button>
-                <button onclick="openTuneModal()" class="btn btn-outline-secondary rounded-pill px-4 fw-bold border-0 text-white">
-                    <i class="fas fa-sliders-h"></i> Hiệu ứng
-                </button>
-                <button onclick="cmd('stop')" class="btn btn-outline-secondary rounded-pill px-4 fw-bold border-0 text-white">
-                    <i class="fas fa-trash"></i> Xóa Queue
-                </button>
-            </div>
-
-            <div class="input-group mb-4" style="background: #2a2a2a; border-radius: 30px; padding: 5px 15px; border: 1px solid #333;">
-                <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-search"></i></span>
-                <input type="text" id="searchQuery" class="form-control bg-transparent border-0 text-white shadow-none" placeholder="Bạn muốn nghe gì?" onkeypress="handleEnter(event)">
-            </div>
-
-            <div class="queue-section">
-                <div class="queue-header">
-                    <span># TIÊU ĐỀ</span>
-                    <span><i class="far fa-clock"></i></span>
-                </div>
-                <div id="queueList">
-                    <div class="text-center py-5 text-muted">Hàng đợi trống</div>
-                </div>
-            </div>
-        </main>
-
-        <footer class="player-bar">
-            <div class="pb-left">
-                <div class="mini-art"><img id="miniArt" src=""></div>
-                <div class="mini-info">
-                    <div id="miniTitle" class="mini-title">Chưa phát</div>
-                    <div id="miniArtist" class="mini-artist">--</div>
-                </div>
-            </div>
-
-            <div class="pb-center">
-                <div class="control-buttons">
-                    <button class="btn-control" onclick="cmd('loop')" id="btnLoop" title="Lặp lại"><i class="fas fa-repeat"></i></button>
-                    <button class="btn-control" onclick="cmd('skip')" title="Trước"><i class="fas fa-step-backward"></i></button>
-                    <button class="btn-play-circle" onclick="cmd('pause_resume')"><i id="iconPlay" class="fas fa-play"></i></button>
-                    <button class="btn-control" onclick="cmd('skip')" title="Tiếp theo"><i class="fas fa-step-forward"></i></button>
-                    <button class="btn-control" onclick="openTuneModal()" title="Tune"><i class="fas fa-sliders-h"></i></button>
-                </div>
-                <div class="progress-area">
-                    <span id="timeCurrent">0:00</span>
-                    <input type="range" id="progressBar" class="prog-slider" value="0" min="0" max="100" onchange="seekAudio(this.value)" oninput="isSeeking=true">
-                    <span id="timeTotal">0:00</span>
-                </div>
-            </div>
-
-            <div class="pb-right">
-                <i class="fas fa-volume-up text-muted"></i>
-                <input type="range" class="prog-slider" style="width: 100px;" onchange="cmd('vol_up')" min="0" max="100" value="50">
-            </div>
-        </footer>
+        <div class="controls d-flex justify-content-center align-items-center gap-3 mb-4">
+            <button onclick="cmd('loop')" id="btnLoop"><i class="fas fa-repeat"></i></button>
+            <button onclick="cmd('vol_down')"><i class="fas fa-volume-low"></i></button>
+            <button onclick="cmd('pause_resume')" class="btn-play"><i id="iconPlay" class="fas fa-play"></i></button>
+            <button onclick="cmd('vol_up')"><i class="fas fa-volume-high"></i></button>
+            <button onclick="cmd('skip')"><i class="fas fa-forward"></i></button>
+        </div>
+        
+        <div class="input-group mb-2">
+            <input type="text" id="searchQuery" class="form-control" placeholder="Nhập tên bài hoặc link..." onkeypress="handleEnter(event)">
+            <button onclick="handleSearchOrPlay()" class="btn btn-primary"><i class="fas fa-search"></i></button>
+        </div>
+        
+        <button onclick="openPlaylists()" class="btn btn-outline-info w-100 mb-2"><i class="fas fa-list-ul"></i> Playlist đã lưu</button>
+        <button onclick="cmd('stop')" class="btn btn-sm btn-outline-danger w-100">Dừng Nhạc & Xóa Hàng Đợi</button>
+        
+        <div class="queue-box text-start">
+            <div class="text-muted small mb-2" style="color: #94a3b8 !important;"><i class="fas fa-list"></i> Hàng đợi (Giữ icon ☰ để xếp):</div>
+            <div id="queueList"><div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div></div>
+        </div>
     </div>
 
     <div class="modal fade" id="searchModal" tabindex="-1" aria-hidden="true">
@@ -312,21 +121,6 @@
 
     <div class="modal fade" id="playlistModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Playlist Đã Lưu</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="playlistContainer" class="list-group">Đang tải...</div></div></div></div>
-    </div>
-
-    <div class="modal fade" id="tuneModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Bộ lọc âm thanh</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body d-grid gap-2">
-                    <button onclick="setTune('Off')" class="btn btn-dark text-start">🚫 Tắt hiệu ứng</button>
-                    <button onclick="setTune('Bassboost')" class="btn btn-dark text-start">🥁 Bassboost</button>
-                    <button onclick="setTune('Nightcore')" class="btn btn-dark text-start">🌙 Nightcore</button>
-                    <button onclick="setTune('Vaporwave')" class="btn btn-dark text-start">🌫️ Vaporwave</button>
-                    <button onclick="setTune('8D')" class="btn btn-dark text-start">🎧 8D Audio</button>
-                </div>
-            </div>
-        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -339,14 +133,13 @@
         
         const searchModal = new bootstrap.Modal(document.getElementById('searchModal'));
         const playlistModal = new bootstrap.Modal(document.getElementById('playlistModal'));
-        const tuneModal = new bootstrap.Modal(document.getElementById('tuneModal'));
         let cachedPlaylists = [];
 
-        // Kéo thả hàng đợi
+        // --- CẤU HÌNH SORTABLE VỚI HANDLE ---
         let queueSortable = new Sortable(document.getElementById('queueList'), {
             animation: 150, 
             draggable: ".queue-item",
-            handle: ".drag-handle", // Chỉ cho phép kéo khi chạm vào icon
+            handle: ".drag-handle", // [QUAN TRỌNG] Chỉ cho phép kéo khi chạm vào class này
             onStart: function() { isDragging = true; },
             onEnd: function(evt) { isDragging = false; if(evt.oldIndex !== evt.newIndex) moveQueueItem(evt.oldIndex, evt.newIndex); }
         });
@@ -354,10 +147,10 @@
         window.onload = () => { loadGuilds(); setInterval(updateState, 1000); }
 
         function formatTime(seconds) {
-            if (!seconds || isNaN(seconds)) return "0:00";
+            if (!seconds || isNaN(seconds)) return "00:00";
             const min = Math.floor(seconds / 60);
             const sec = Math.floor(seconds % 60);
-            return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+            return `${min < 10 ? '0' : ''}${min}:${sec < 10 ? '0' : ''}${sec}`;
         }
 
         function seekAudio(val) {
@@ -365,62 +158,27 @@
             if(currentGuildId) fetch(`${BASE_URL}/api/control/seek?guild_id=${currentGuildId}&seconds=${val}`, {method: 'POST'});
         }
 
-        // JS cho nút mở modal
-        function openSearchModal() { document.getElementById('searchQuery').focus(); }
-        function openTuneModal() { tuneModal.show(); }
-        
-        function setTune(effect) {
-            if(!currentGuildId) return alert("Chưa chọn server!");
-            fetch(`${BASE_URL}/api/control/tune?guild_id=${currentGuildId}&effect=${effect}`, {method: 'POST'})
-            .then(r => r.json()).then(d => {
-                if(d.status === 'ok') { alert("Đã áp dụng: " + effect); tuneModal.hide(); }
-                else alert("Lỗi khi chỉnh hiệu ứng.");
-            });
-        }
-
         function updateState() {
             if(!currentGuildId || isFetching || isDragging) return; 
             isFetching = true;
             fetch(`${BASE_URL}/api/status?guild_id=${currentGuildId}`).then(r=>r.json()).then(d => {
-                // Main Hero Info
                 const art = document.getElementById('trackArt'), ph = document.getElementById('noMusicPlaceholder');
-                const miniArt = document.getElementById('miniArt');
+                if(d.thumbnail && d.title) { art.src = d.thumbnail; art.style.display = 'block'; ph.style.display = 'none'; document.getElementById('trackTitle').innerText = d.title; document.getElementById('trackArtist').innerText = d.channel || "Đang phát"; }
+                else { art.style.display = 'none'; art.src = ""; ph.style.display = 'flex'; document.getElementById('trackTitle').innerText = "Sẵn sàng"; document.getElementById('trackArtist').innerText = "Vui lòng chọn bài hát"; }
                 
-                if(d.thumbnail && d.title) { 
-                    art.src = d.thumbnail; art.style.display = 'block'; ph.style.display = 'none'; 
-                    miniArt.src = d.thumbnail; 
-                    document.getElementById('trackTitle').innerText = d.title; 
-                    document.getElementById('trackArtist').innerText = d.channel || "Đang phát";
-                    document.getElementById('miniTitle').innerText = d.title;
-                    document.getElementById('miniArtist').innerText = d.channel;
-                } else { 
-                    art.style.display = 'none'; art.src = ""; ph.style.display = 'flex'; 
-                    miniArt.src = "https://i.imgur.com/t2107W6.png";
-                    document.getElementById('trackTitle').innerText = "Sẵn sàng"; 
-                    document.getElementById('trackArtist').innerText = "Vui lòng chọn bài hát";
-                    document.getElementById('miniTitle').innerText = "Chưa phát";
-                }
-                
-                // Status Badge
                 const st = document.getElementById('trackChannel');
-                if(d.connected_channel) { st.innerHTML = `<i class="fas fa-volume-up"></i> ${d.connected_channel}`; st.className = "status-badge status-connected"; } 
-                else { st.innerHTML = "Offline"; st.className = "status-badge"; }
+                if(d.connected_channel) { st.innerHTML = `<i class="fas fa-wifi"></i> ${d.connected_channel}`; st.className = "status-badge status-connected"; } 
+                else { st.innerHTML = "Chưa kết nối"; st.className = "status-badge"; }
                 
-                // Sync Channel Dropdown
                 const chSel = document.getElementById('channelSelect');
                 if (d.connected_channel_id && chSel.options.length > 1) {
                      let options = Array.from(chSel.options);
                      if (options.some(o => o.value === d.connected_channel_id) && chSel.value !== d.connected_channel_id) chSel.value = d.connected_channel_id;
                 }
 
-                // Play/Pause Icons
-                const iconCls = d.is_playing ? "fas fa-pause" : "fas fa-play";
-                document.getElementById('iconPlay').className = iconCls;
-                document.getElementById('iconPlayHero').className = iconCls;
+                document.getElementById('iconPlay').className = d.is_playing ? "fas fa-pause" : "fas fa-play";
+                document.getElementById('btnLoop').className = d.loop ? "btn-active" : "";
                 
-                document.getElementById('btnLoop').className = d.loop ? "btn-control btn-active" : "btn-control";
-                
-                // Progress Bar
                 if (!isSeeking && d.duration > 0) {
                     const bar = document.getElementById('progressBar');
                     bar.max = d.duration;
@@ -429,30 +187,16 @@
                     document.getElementById('timeTotal').innerText = formatTime(d.duration);
                 }
 
-                // Queue List with Handle
-                const qDiv = document.getElementById('queueList'); 
-                let html = "";
-                if(d.queue && d.queue.length > 0) {
-                    d.queue.forEach((s, i) => {
-                        html += `
-                        <div class="queue-item">
-                            <div class="d-flex align-items-center gap-3" style="flex:1; min-width:0;">
-                                <span class="queue-index">${i+1}</span>
-                                <div class="queue-title">${s.title}</div>
-                            </div>
-                            <i class="fas fa-bars drag-handle"></i>
-                        </div>`;
-                    });
-                } else {
-                    html = '<div class="text-center py-5 text-muted">Hàng đợi trống<br><small>Thêm bài hát để bắt đầu</small></div>';
-                }
+                const qDiv = document.getElementById('queueList'); let html = "";
+                // [MỚI] Thêm class 'drag-handle' vào icon để chỉ định vùng kéo thả
+                if(d.queue && d.queue.length > 0) d.queue.forEach((s, i) => html += `<div class="queue-item"><span><span class="queue-index">${i+1}.</span> ${s.title}</span> <i class="fas fa-bars drag-handle"></i></div>`);
+                else html = '<div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div>';
                 if(qDiv.innerHTML !== html) qDiv.innerHTML = html; 
-                
                 isFetching = false;
             }).catch(() => isFetching = false);
         }
 
-        // --- CORE FUNCTIONS ---
+        // --- CÁC HÀM XỬ LÝ KHÁC (GIỮ NGUYÊN) ---
         function moveQueueItem(fromIdx, toIdx) { if(currentGuildId) fetch(`${BASE_URL}/api/queue/move?guild_id=${currentGuildId}&from=${fromIdx}&to=${toIdx}`, {method: 'POST'}); }
         
         function openPlaylists() {
@@ -460,25 +204,10 @@
             fetch(`${BASE_URL}/api/playlists`).then(r=>r.json()).then(d => {
                 cachedPlaylists = d; 
                 const cont = document.getElementById('playlistContainer');
-                if(d.length === 0) { cont.innerHTML = '<div class="text-center py-3">Chưa có playlist nào.</div>'; return; }
+                if(d.length === 0) { cont.innerHTML = '<div class="text-center py-3">Chưa có playlist nào được lưu.</div>'; return; }
                 let html = '';
                 d.forEach((pl, idx) => {
-                    html += `
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-0 fw-bold text-white">${pl.name}</h6>
-                                <small class="text-muted">${pl.count} bài • Bởi ${pl.owner}</small>
-                            </div>
-                            <div>
-                                <button onclick="toggleTracks(${idx})" class="btn btn-sm btn-dark"><i class="fas fa-list"></i></button>
-                                <button onclick="playFullPlaylist('${pl.owner_id}', '${pl.name}')" class="btn btn-sm btn-success rounded-circle"><i class="fas fa-play"></i></button>
-                            </div>
-                        </div>
-                        <div id="tracks-${idx}" class="track-list-container" style="display:none; margin-top:10px;">
-                            ${pl.tracks.map(t => `<div class="track-item text-white-50 p-2 border-bottom border-secondary d-flex justify-content-between"><span class="text-truncate" style="max-width:80%">${t.title}</span><button onclick="playSingleTrack('${t.webpage_url || t.url}')" class="btn btn-link btn-sm text-white p-0"><i class="fas fa-play"></i></button></div>`).join('')}
-                        </div>
-                    </div>`;
+                    html += `<div class="list-group-item bg-dark text-white border-secondary mb-2 rounded"><div class="d-flex justify-content-between align-items-center"><div><h6 class="mb-0 fw-bold">${pl.name} <span class="playlist-badge">${pl.count} bài</span></h6><small class="text-muted">Tạo bởi: ${pl.owner}</small></div><div class="btn-group"><button onclick="toggleTracks(${idx})" class="btn btn-sm btn-outline-secondary">Xem bài</button><button onclick="playFullPlaylist('${pl.owner_id}', '${pl.name}')" class="btn btn-sm btn-success"><i class="fas fa-play"></i> Phát tất cả</button></div></div><div id="tracks-${idx}" class="track-list-container">${pl.tracks.map(t => `<div class="track-item"><div class="text-truncate me-2">${t.title}</div><button onclick="playSingleTrack('${t.webpage_url || t.url}')" class="btn btn-xs btn-outline-primary"><i class="fas fa-play"></i></button></div>`).join('')}</div></div>`;
                 });
                 cont.innerHTML = html;
             });
@@ -511,11 +240,11 @@
         function handleEnter(e) { if(e.key === 'Enter') handleSearchOrPlay(); }
         function handleSearchOrPlay() {
             const q = document.getElementById('searchQuery').value.trim(); if(!currentGuildId) return alert("⚠️ Bạn chưa chọn Server!"); if(!q) return alert("⚠️ Vui lòng nhập thông tin!");
-            
-            if (q.startsWith("http")) { playDirect(q); } 
+            const btn = document.querySelector('.input-group .btn'); const originalIcon = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            if (q.startsWith("http")) { playDirect(q); btn.innerHTML = originalIcon; } 
             else {
                 fetch(`${BASE_URL}/api/search?query=${encodeURIComponent(q)}`).then(r => r.json()).then(data => {
-                    if(data.length === 0) return alert("Không tìm thấy!");
+                    btn.innerHTML = originalIcon; if(data.length === 0) return alert("Không tìm thấy!");
                     const list = document.getElementById('searchResults'); list.innerHTML = "";
                     data.forEach(s => {
                         const item = document.createElement('div'); item.className = "list-group-item d-flex align-items-center";
@@ -523,7 +252,7 @@
                         item.innerHTML = `<img src="${s.thumbnail||'https://i.imgur.com/t2107W6.png'}" class="search-thumb"><div><div class="fw-bold text-truncate" style="max-width:300px;">${s.title}</div><small class="text-muted">${s.uploader} • ${s.duration}</small></div>`;
                         list.appendChild(item);
                     }); searchModal.show();
-                }).catch(() => { alert("Lỗi tìm kiếm."); });
+                }).catch(() => { btn.innerHTML = originalIcon; alert("Lỗi tìm kiếm."); });
             }
         }
         function playDirect(url) { fetch(`${BASE_URL}/api/play?guild_id=${currentGuildId}&query=${encodeURIComponent(url)}`, {method:'POST'}).then(() => document.getElementById('searchQuery').value = ''); }
