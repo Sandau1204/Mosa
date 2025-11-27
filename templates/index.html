@@ -43,11 +43,16 @@
         .status-badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 15px; background: #334155; color: #94a3b8; }
         .status-connected { background: rgba(74, 222, 128, 0.2); color: #4ade80; border: 1px solid #4ade80; }
 
-        /* Style cho phần Playlist */
         .playlist-badge { font-size: 0.7rem; background: var(--primary); border-radius: 4px; padding: 2px 5px; margin-left: 5px; }
         .track-list-container { max-height: 300px; overflow-y: auto; display: none; margin-top: 10px; border-top: 1px solid #334155; }
         .track-item { padding: 8px; border-bottom: 1px solid #334155; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
         .track-item:hover { background: #334155; }
+
+        /* Progress Bar Style */
+        .progress-container { display: flex; align-items: center; font-size: 0.8rem; color: #94a3b8; margin-bottom: 15px; width: 100%; }
+        .progress-bar-slider { flex-grow: 1; margin: 0 10px; -webkit-appearance: none; height: 4px; background: #334155; border-radius: 2px; outline: none; cursor: pointer; }
+        .progress-bar-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: var(--primary); border-radius: 50%; cursor: pointer; transition: 0.2s; }
+        .progress-bar-slider::-webkit-slider-thumb:hover { transform: scale(1.3); }
     </style>
 </head>
 <body>
@@ -68,8 +73,15 @@
         <div class="mb-3"><span id="trackChannel" class="status-badge">Chưa kết nối</span></div>
         
         <div class="art-box"><img id="trackArt" src="" class="art-img"><div id="noMusicPlaceholder" class="no-music-placeholder"><div class="pulse-ring"></div><i class="fas fa-music" style="position: relative; z-index: 2;"></i></div></div>
-        <div class="track-info mb-4"><h5 id="trackTitle">Sẵn sàng</h5><small id="trackArtist" style="color: #94a3b8;">Vui lòng chọn bài hát</small></div>
         
+        <div class="track-info mb-2"><h5 id="trackTitle">Sẵn sàng</h5><small id="trackArtist" style="color: #94a3b8;">Vui lòng chọn bài hát</small></div>
+        
+        <div class="progress-container">
+            <span id="timeCurrent">00:00</span>
+            <input type="range" id="progressBar" class="progress-bar-slider" value="0" min="0" max="100" onchange="seekAudio(this.value)" oninput="isSeeking=true">
+            <span id="timeTotal">00:00</span>
+        </div>
+
         <div class="controls d-flex justify-content-center align-items-center gap-3 mb-4">
             <button onclick="cmd('loop')" id="btnLoop"><i class="fas fa-repeat"></i></button>
             <button onclick="cmd('vol_down')"><i class="fas fa-volume-low"></i></button>
@@ -97,14 +109,7 @@
     </div>
 
     <div class="modal fade" id="playlistModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Playlist Đã Lưu</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <div id="playlistContainer" class="list-group">Đang tải...</div>
-                </div>
-            </div>
-        </div>
+        <div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Playlist Đã Lưu</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body"><div id="playlistContainer" class="list-group">Đang tải...</div></div></div></div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -113,167 +118,137 @@
         let currentGuildId = localStorage.getItem('lastGuild') || "";
         let isFetching = false;
         let isDragging = false; 
+        let isSeeking = false; // Cờ kiểm tra đang kéo thanh tua
+        
         const searchModal = new bootstrap.Modal(document.getElementById('searchModal'));
         const playlistModal = new bootstrap.Modal(document.getElementById('playlistModal'));
-        let cachedPlaylists = []; // Lưu tạm playlist
+        let cachedPlaylists = [];
 
+        // Kéo thả hàng đợi
         let queueSortable = new Sortable(document.getElementById('queueList'), {
-            animation: 150,
-            draggable: ".queue-item",
+            animation: 150, draggable: ".queue-item",
             onStart: function() { isDragging = true; },
-            onEnd: function(evt) {
-                isDragging = false; 
-                if(evt.oldIndex === evt.newIndex) return;
-                moveQueueItem(evt.oldIndex, evt.newIndex);
-            }
+            onEnd: function(evt) { isDragging = false; if(evt.oldIndex !== evt.newIndex) moveQueueItem(evt.oldIndex, evt.newIndex); }
         });
 
         window.onload = () => { loadGuilds(); setInterval(updateState, 1000); }
 
-        function moveQueueItem(fromIdx, toIdx) {
-            if(!currentGuildId) return;
-            fetch(`${BASE_URL}/api/queue/move?guild_id=${currentGuildId}&from=${fromIdx}&to=${toIdx}`, {method: 'POST'});
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds)) return "00:00";
+            const min = Math.floor(seconds / 60);
+            const sec = Math.floor(seconds % 60);
+            return `${min < 10 ? '0' : ''}${min}:${sec < 10 ? '0' : ''}${sec}`;
         }
 
-        // --- PLAYLIST LOGIC ---
-        function openPlaylists() {
-            playlistModal.show();
-            fetch(`${BASE_URL}/api/playlists`).then(r=>r.json()).then(d => {
-                cachedPlaylists = d; // Lưu lại để dùng khi chọn bài lẻ
-                const cont = document.getElementById('playlistContainer');
-                if(d.length === 0) { cont.innerHTML = '<div class="text-center py-3">Chưa có playlist nào được lưu.</div>'; return; }
-                
-                let html = '';
-                d.forEach((pl, idx) => {
-                    html += `
-                    <div class="list-group-item bg-dark text-white border-secondary mb-2 rounded">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-0 fw-bold">${pl.name} <span class="playlist-badge">${pl.count} bài</span></h6>
-                                <small class="text-muted">Tạo bởi: ${pl.owner}</small>
-                            </div>
-                            <div class="btn-group">
-                                <button onclick="toggleTracks(${idx})" class="btn btn-sm btn-outline-secondary">Xem bài</button>
-                                <button onclick="playFullPlaylist('${pl.owner_id}', '${pl.name}')" class="btn btn-sm btn-success"><i class="fas fa-play"></i> Phát tất cả</button>
-                            </div>
-                        </div>
-                        <div id="tracks-${idx}" class="track-list-container">
-                            ${pl.tracks.map(t => `
-                                <div class="track-item">
-                                    <div class="text-truncate me-2">${t.title}</div>
-                                    <button onclick="playSingleTrack('${t.webpage_url || t.url}')" class="btn btn-xs btn-outline-primary"><i class="fas fa-play"></i></button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>`;
-                });
-                cont.innerHTML = html;
-            });
+        // Hàm gọi API Tua nhạc
+        function seekAudio(val) {
+            isSeeking = false; 
+            if(currentGuildId) fetch(`${BASE_URL}/api/control/seek?guild_id=${currentGuildId}&seconds=${val}`, {method: 'POST'});
         }
 
-        function toggleTracks(idx) {
-            const el = document.getElementById(`tracks-${idx}`);
-            el.style.display = el.style.display === 'block' ? 'none' : 'block';
-        }
-
-        function playFullPlaylist(uid, name) {
-            if(!currentGuildId) return alert("Chưa chọn server!");
-            fetch(`${BASE_URL}/api/playlist/play_all?guild_id=${currentGuildId}&user_id=${uid}&name=${encodeURIComponent(name)}`, {method:'POST'})
-            .then(r=>r.json()).then(d => {
-                if(d.status === 'ok') { alert("Đã thêm playlist vào hàng đợi!"); playlistModal.hide(); }
-                else alert("Lỗi: " + d.message);
-            });
-        }
-
-        function playSingleTrack(url) {
-            playDirect(url);
-            // Không đóng modal để user có thể chọn bài khác tiếp
-        }
-        // ----------------------
-
-        function loadGuilds() {
-            fetch(`${BASE_URL}/api/guilds`).then(r=>r.json()).then(d => {
-                const sel = document.getElementById('guildSelect');
-                sel.innerHTML = '<option value="" disabled selected>Chọn Server...</option>';
-                if(d.length === 0) return;
-                d.forEach(g => sel.add(new Option(g.name, g.id)));
-                if(currentGuildId && d.some(g => g.id === currentGuildId)) { sel.value = currentGuildId; loadChannels(); } 
-                else if (d.length === 1) { sel.value = d[0].id; loadChannels(); }
-            }).catch(e => console.log("API Error"));
-        }
-        function loadChannels() {
-            const gid = document.getElementById('guildSelect').value;
-            localStorage.setItem('lastGuild', gid); currentGuildId = gid;
-            const chSel = document.getElementById('channelSelect');
-            if (chSel.options.length <= 1) chSel.innerHTML = '<option disabled selected>Đang tải...</option>';
-            fetch(`${BASE_URL}/api/channels?guild_id=${gid}`).then(r=>r.json()).then(d => {
-                const currentVal = chSel.value; 
-                chSel.innerHTML = '<option disabled selected>Chọn Kênh...</option>';
-                d.forEach(c => chSel.add(new Option(c.name, c.id)));
-                if (currentVal && Array.from(chSel.options).some(o => o.value === currentVal)) chSel.value = currentVal;
-            });
-        }
-        function joinChannel() {
-            const gid = currentGuildId; const cid = document.getElementById('channelSelect').value;
-            if(!gid || !cid || cid === "Chọn Kênh...") return alert("Chọn Server và Kênh!");
-            fetch(`${BASE_URL}/api/join?guild_id=${gid}&channel_id=${cid}`, {method:'POST'}).then(r=>r.json()).then(d => { if(d.status === 'ok') alert("Bot đang vào..."); });
-        }
-        function leaveChannel() { if(currentGuildId) fetch(`${BASE_URL}/api/control/leave?guild_id=${currentGuildId}`, {method:'POST'}); }
-        function cmd(a) { if(currentGuildId) fetch(`${BASE_URL}/api/control/${a}?guild_id=${currentGuildId}`, {method:'POST'}); }
-        function handleEnter(e) { if(e.key === 'Enter') handleSearchOrPlay(); }
-        function handleSearchOrPlay() {
-            const q = document.getElementById('searchQuery').value.trim(); 
-            if(!currentGuildId) return alert("⚠️ Bạn chưa chọn Server!");
-            if(!q) return alert("⚠️ Vui lòng nhập thông tin!");
-            const btn = document.querySelector('.input-group .btn'); const originalIcon = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            if (q.startsWith("http")) { playDirect(q); btn.innerHTML = originalIcon; } 
-            else {
-                fetch(`${BASE_URL}/api/search?query=${encodeURIComponent(q)}`).then(r => r.json()).then(data => {
-                    btn.innerHTML = originalIcon;
-                    if(data.length === 0) return alert("Không tìm thấy!");
-                    const list = document.getElementById('searchResults'); list.innerHTML = "";
-                    data.forEach(s => {
-                        const item = document.createElement('div'); item.className = "list-group-item d-flex align-items-center";
-                        item.onclick = () => { playDirect(s.url); searchModal.hide(); };
-                        item.innerHTML = `<img src="${s.thumbnail||'https://i.imgur.com/t2107W6.png'}" class="search-thumb"><div><div class="fw-bold text-truncate" style="max-width:300px;">${s.title}</div><small class="text-muted">${s.uploader} • ${s.duration}</small></div>`;
-                        list.appendChild(item);
-                    });
-                    searchModal.show();
-                }).catch(() => { btn.innerHTML = originalIcon; alert("Lỗi tìm kiếm."); });
-            }
-        }
-        function playDirect(url) { fetch(`${BASE_URL}/api/play?guild_id=${currentGuildId}&query=${encodeURIComponent(url)}`, {method:'POST'}).then(() => document.getElementById('searchQuery').value = ''); }
-        
         function updateState() {
             if(!currentGuildId || isFetching || isDragging) return; 
             isFetching = true;
             fetch(`${BASE_URL}/api/status?guild_id=${currentGuildId}`).then(r=>r.json()).then(d => {
+                // Cập nhật Album Art, Tên bài, Nghệ sĩ
                 const art = document.getElementById('trackArt'), ph = document.getElementById('noMusicPlaceholder');
                 if(d.thumbnail && d.title) { art.src = d.thumbnail; art.style.display = 'block'; ph.style.display = 'none'; document.getElementById('trackTitle').innerText = d.title; document.getElementById('trackArtist').innerText = d.channel || "Đang phát"; }
                 else { art.style.display = 'none'; art.src = ""; ph.style.display = 'flex'; document.getElementById('trackTitle').innerText = "Sẵn sàng"; document.getElementById('trackArtist').innerText = "Vui lòng chọn bài hát"; }
                 
+                // Cập nhật trạng thái kênh
                 const st = document.getElementById('trackChannel');
                 if(d.connected_channel) { st.innerHTML = `<i class="fas fa-wifi"></i> ${d.connected_channel}`; st.className = "status-badge status-connected"; } 
                 else { st.innerHTML = "Chưa kết nối"; st.className = "status-badge"; }
                 
+                // Đồng bộ Dropdown Kênh
                 const chSel = document.getElementById('channelSelect');
                 if (d.connected_channel_id && chSel.options.length > 1) {
                      let options = Array.from(chSel.options);
-                     let optionExists = options.some(o => o.value === d.connected_channel_id);
-                     if (optionExists && chSel.value !== d.connected_channel_id) chSel.value = d.connected_channel_id;
+                     if (options.some(o => o.value === d.connected_channel_id) && chSel.value !== d.connected_channel_id) chSel.value = d.connected_channel_id;
                 }
 
                 document.getElementById('iconPlay').className = d.is_playing ? "fas fa-pause" : "fas fa-play";
                 document.getElementById('btnLoop').className = d.loop ? "btn-active" : "";
                 
-                const qDiv = document.getElementById('queueList'); 
-                let html = "";
+                // Cập nhật Thanh Tua (Progress Bar)
+                if (!isSeeking && d.duration > 0) {
+                    const bar = document.getElementById('progressBar');
+                    bar.max = d.duration;
+                    bar.value = d.position;
+                    document.getElementById('timeCurrent').innerText = formatTime(d.position);
+                    document.getElementById('timeTotal').innerText = formatTime(d.duration);
+                }
+
+                // Cập nhật Hàng đợi
+                const qDiv = document.getElementById('queueList'); let html = "";
                 if(d.queue && d.queue.length > 0) d.queue.forEach((s, i) => html += `<div class="queue-item"><span><span class="queue-index">${i+1}.</span> ${s.title}</span> <i class="fas fa-grip-lines text-muted"></i></div>`);
                 else html = '<div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div>';
                 if(qDiv.innerHTML !== html) qDiv.innerHTML = html; 
                 isFetching = false;
             }).catch(() => isFetching = false);
         }
+
+        // --- CÁC HÀM XỬ LÝ KHÁC ---
+        function moveQueueItem(fromIdx, toIdx) { if(currentGuildId) fetch(`${BASE_URL}/api/queue/move?guild_id=${currentGuildId}&from=${fromIdx}&to=${toIdx}`, {method: 'POST'}); }
+        
+        function openPlaylists() {
+            playlistModal.show();
+            fetch(`${BASE_URL}/api/playlists`).then(r=>r.json()).then(d => {
+                cachedPlaylists = d; 
+                const cont = document.getElementById('playlistContainer');
+                if(d.length === 0) { cont.innerHTML = '<div class="text-center py-3">Chưa có playlist nào được lưu.</div>'; return; }
+                let html = '';
+                d.forEach((pl, idx) => {
+                    html += `<div class="list-group-item bg-dark text-white border-secondary mb-2 rounded"><div class="d-flex justify-content-between align-items-center"><div><h6 class="mb-0 fw-bold">${pl.name} <span class="playlist-badge">${pl.count} bài</span></h6><small class="text-muted">Tạo bởi: ${pl.owner}</small></div><div class="btn-group"><button onclick="toggleTracks(${idx})" class="btn btn-sm btn-outline-secondary">Xem bài</button><button onclick="playFullPlaylist('${pl.owner_id}', '${pl.name}')" class="btn btn-sm btn-success"><i class="fas fa-play"></i> Phát tất cả</button></div></div><div id="tracks-${idx}" class="track-list-container">${pl.tracks.map(t => `<div class="track-item"><div class="text-truncate me-2">${t.title}</div><button onclick="playSingleTrack('${t.webpage_url || t.url}')" class="btn btn-xs btn-outline-primary"><i class="fas fa-play"></i></button></div>`).join('')}</div></div>`;
+                });
+                cont.innerHTML = html;
+            });
+        }
+        
+        function toggleTracks(idx) { const el = document.getElementById(`tracks-${idx}`); el.style.display = el.style.display === 'block' ? 'none' : 'block'; }
+        function playFullPlaylist(uid, name) { if(!currentGuildId) return alert("Chưa chọn server!"); fetch(`${BASE_URL}/api/playlist/play_all?guild_id=${currentGuildId}&user_id=${uid}&name=${encodeURIComponent(name)}`, {method:'POST'}).then(r=>r.json()).then(d => { if(d.status === 'ok') { alert("Đã thêm playlist!"); playlistModal.hide(); } else alert("Lỗi: " + d.message); }); }
+        function playSingleTrack(url) { playDirect(url); }
+        
+        function loadGuilds() {
+            fetch(`${BASE_URL}/api/guilds`).then(r=>r.json()).then(d => {
+                const sel = document.getElementById('guildSelect'); sel.innerHTML = '<option value="" disabled selected>Chọn Server...</option>';
+                if(d.length === 0) return; d.forEach(g => sel.add(new Option(g.name, g.id)));
+                // Tự động chọn Server nếu có history hoặc chỉ có 1 server
+                if(currentGuildId && d.some(g => g.id === currentGuildId)) { sel.value = currentGuildId; loadChannels(); } 
+                else if (d.length === 1) { sel.value = d[0].id; loadChannels(); }
+            }).catch(e => console.log("API Error"));
+        }
+        function loadChannels() {
+            const gid = document.getElementById('guildSelect').value; localStorage.setItem('lastGuild', gid); currentGuildId = gid;
+            const chSel = document.getElementById('channelSelect'); if (chSel.options.length <= 1) chSel.innerHTML = '<option disabled selected>Đang tải...</option>';
+            fetch(`${BASE_URL}/api/channels?guild_id=${gid}`).then(r=>r.json()).then(d => {
+                const currentVal = chSel.value; chSel.innerHTML = '<option disabled selected>Chọn Kênh...</option>';
+                d.forEach(c => chSel.add(new Option(c.name, c.id)));
+                if (currentVal && Array.from(chSel.options).some(o => o.value === currentVal)) chSel.value = currentVal;
+            });
+        }
+        function joinChannel() { const gid = currentGuildId; const cid = document.getElementById('channelSelect').value; if(!gid || !cid || cid === "Chọn Kênh...") return alert("Chọn Server và Kênh!"); fetch(`${BASE_URL}/api/join?guild_id=${gid}&channel_id=${cid}`, {method:'POST'}).then(r=>r.json()).then(d => { if(d.status === 'ok') alert("Bot đang vào..."); }); }
+        function leaveChannel() { if(currentGuildId) fetch(`${BASE_URL}/api/control/leave?guild_id=${currentGuildId}`, {method:'POST'}); }
+        function cmd(a) { if(currentGuildId) fetch(`${BASE_URL}/api/control/${a}?guild_id=${currentGuildId}`, {method:'POST'}); }
+        function handleEnter(e) { if(e.key === 'Enter') handleSearchOrPlay(); }
+        function handleSearchOrPlay() {
+            const q = document.getElementById('searchQuery').value.trim(); if(!currentGuildId) return alert("⚠️ Bạn chưa chọn Server!"); if(!q) return alert("⚠️ Vui lòng nhập thông tin!");
+            const btn = document.querySelector('.input-group .btn'); const originalIcon = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            if (q.startsWith("http")) { playDirect(q); btn.innerHTML = originalIcon; } 
+            else {
+                fetch(`${BASE_URL}/api/search?query=${encodeURIComponent(q)}`).then(r => r.json()).then(data => {
+                    btn.innerHTML = originalIcon; if(data.length === 0) return alert("Không tìm thấy!");
+                    const list = document.getElementById('searchResults'); list.innerHTML = "";
+                    data.forEach(s => {
+                        const item = document.createElement('div'); item.className = "list-group-item d-flex align-items-center";
+                        item.onclick = () => { playDirect(s.url); searchModal.hide(); };
+                        item.innerHTML = `<img src="${s.thumbnail||'https://i.imgur.com/t2107W6.png'}" class="search-thumb"><div><div class="fw-bold text-truncate" style="max-width:300px;">${s.title}</div><small class="text-muted">${s.uploader} • ${s.duration}</small></div>`;
+                        list.appendChild(item);
+                    }); searchModal.show();
+                }).catch(() => { btn.innerHTML = originalIcon; alert("Lỗi tìm kiếm."); });
+            }
+        }
+        function playDirect(url) { fetch(`${BASE_URL}/api/play?guild_id=${currentGuildId}&query=${encodeURIComponent(url)}`, {method:'POST'}).then(() => document.getElementById('searchQuery').value = ''); }
     </script>
 </body>
 </html>
