@@ -48,6 +48,6 @@ jobs:
             # iisreset /stop
             # iisreset /start
             # Restart bot để nhận code mới
-            pm2 restart "my-bot"
+            pm2 restart "mosa"
             
             Write-Host "--- DEPLOY THANH CONG ---"
