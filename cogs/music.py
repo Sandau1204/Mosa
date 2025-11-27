@@ -17,11 +17,22 @@ PLAYLIST_FILE = os.path.join(DATA_FOLDER, "playlists.json")
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 SEARCH_LIMIT = 5
 
-# --- CẤU HÌNH YT-DLP ---
+# --- BỘ LỌC ÂM THANH (FFMPEG AUDIO FILTERS) ---
+FFMPEG_FILTERS = {
+    "Off": None,
+    "Bassboost": "bass=g=20,dynaudnorm:f=200",
+    "Nightcore": "asetrate=48000*1.25,aresample=48000,bass=g=5",
+    "Vaporwave": "aresample=48000,asetrate=48000*0.8",
+    "8D": "apulsator=hz=0.125",
+    "Pop": "equalizer=f=1000:t=q:w=1:g=2,equalizer=f=100:t=q:w=2:g=-5",
+    "Soft": "lowpass=f=500",
+    "Treble": "treble=g=5"
+}
+
 YDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': False,
-    'extract_flat': 'in_playlist', # Giữ cái này để add playlist nhanh
+    'extract_flat': 'in_playlist',
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
@@ -40,7 +51,7 @@ def is_url(string):
     return re.match(regex, string) is not None
 
 # ====================================================
-# UI COMPONENTS (GIỮ NGUYÊN)
+# UI COMPONENTS
 # ====================================================
 class SongSelect(discord.ui.Select):
     def __init__(self, cog, interaction, songs_list):
@@ -67,9 +78,15 @@ class MusicController(discord.ui.View):
     def create_embed(self):
         loop_status = self.cog.loops.get(self.guild_id, False)
         volume = self.cog.volumes.get(self.guild_id, 0.5)
+        # Hiển thị Filter đang dùng
+        current_filter_name = "Off"
+        current_filter_val = self.cog.current_filters.get(self.guild_id)
+        for name, val in FFMPEG_FILTERS.items():
+            if val == current_filter_val: current_filter_name = name; break
+            
         embed = discord.Embed(title="🎶 Đang phát nhạc", description=f"**{self.song_info['title']}**", color=discord.Color.purple())
         if self.song_info.get('thumbnail'): embed.set_thumbnail(url=self.song_info['thumbnail'])
-        embed.set_footer(text=f"Vol: {int(volume*100)}% | Loop: {'Bật' if loop_status else 'Tắt'}")
+        embed.set_footer(text=f"Vol: {int(volume*100)}% | Loop: {'Bật' if loop_status else 'Tắt'} | Tune: {current_filter_name}")
         return embed
     
     @discord.ui.button(emoji="⏸️", style=discord.ButtonStyle.secondary, row=0, custom_id="btn_pause")
@@ -133,7 +150,7 @@ class PrioritizeView(discord.ui.View):
         super().__init__(timeout=60); self.add_item(PrioritizeSelect(cog, interaction, queue_list))
 
 # ====================================================
-# 3. CORE LOGIC (MUSIC COG) - ĐÃ CẬP NHẬT
+# CORE LOGIC
 # ====================================================
 class Music(commands.Cog):
     def __init__(self, bot):
@@ -144,7 +161,10 @@ class Music(commands.Cog):
         self.start_times = {}      
         self.current_offsets = {}  
         self.seek_flags = {}       
-        self.seek_pos = {}         
+        self.seek_pos = {}
+        
+        # [MỚI] Lưu filter hiện tại của từng server
+        self.current_filters = {} 
 
         if not os.path.exists(DATA_FOLDER): os.makedirs(DATA_FOLDER)
         self.playlists = self.load_json(PLAYLIST_FILE)
@@ -178,10 +198,8 @@ class Music(commands.Cog):
                 return {'stream_url': info['url'], 'webpage_url': info.get('webpage_url', info.get('url')), 'title': info['title'], 'thumbnail': info.get('thumbnail'), 'channel': info.get('uploader', 'Unknown'), 'duration': info.get('duration', 0)}
             except: return None
 
-    # [MỚI] Hàm lấy thông tin stream đầy đủ (có Metadata)
     def get_stream_info(self, url):
         try:
-            # Tạo options riêng không dùng extract_flat để lấy full info
             opts = YDL_OPTIONS.copy()
             opts['extract_flat'] = False 
             return yt_dlp.YoutubeDL(opts).extract_info(url, download=False)
@@ -198,7 +216,6 @@ class Music(commands.Cog):
         try: await msg.edit(embed=view.create_embed(), view=view)
         except: pass
 
-    # --- PLAYER LOOP (ĐÃ SỬA LỖI MẤT ẢNH/TÊN) ---
     async def player_loop(self, guild_id, channel):
         while True:
             is_seeking = self.seek_flags.get(guild_id, False)
@@ -230,18 +247,14 @@ class Music(commands.Cog):
 
             try:
                 loop = asyncio.get_event_loop()
-                
-                # [QUAN TRỌNG] Lấy thông tin FULL (gồm ảnh, tên) ngay trước khi phát
-                # Điều này sửa lỗi playlist hiện "Unknown"
                 full_info = await loop.run_in_executor(None, lambda: self.get_stream_info(song_data['webpage_url']))
                 
                 if full_info:
                     play_url = full_info['url']
-                    # Cập nhật ngược lại vào biến song_data
                     song_data['title'] = full_info.get('title', song_data['title'])
                     song_data['thumbnail'] = full_info.get('thumbnail', song_data['thumbnail'])
                     song_data['duration'] = full_info.get('duration', song_data['duration'])
-                    self.current_songs[guild_id] = song_data # Cập nhật cho Webserver thấy
+                    self.current_songs[guild_id] = song_data 
                 else:
                     play_url = song_data.get('stream_url')
 
@@ -249,6 +262,13 @@ class Music(commands.Cog):
                 exe = ffmpeg_local if os.path.exists(ffmpeg_local) else "ffmpeg"
                 
                 current_opts = FFMPEG_OPTIONS.copy()
+                
+                # --- APPLY TUNE (AUDIO FILTER) ---
+                active_filter = self.current_filters.get(guild_id)
+                if active_filter:
+                    current_opts['options'] = f'-af "{active_filter}" ' + current_opts.get('options', '')
+                # ---------------------------------
+
                 if start_offset > 0:
                     current_opts['before_options'] = f"-ss {start_offset} " + current_opts.get('before_options', '')
 
@@ -322,7 +342,6 @@ class Music(commands.Cog):
             for item in song_data:
                 web_url = item.get('webpage_url') or item.get('url')
                 if web_url and "http" not in web_url: web_url = f"https://www.youtube.com/watch?v={web_url}"
-                # Lưu thông tin cơ bản trước, khi nào phát sẽ load lại full
                 final_data = {'stream_url': None, 'webpage_url': web_url, 'title': item.get('title', 'Unknown'), 'thumbnail': item.get('thumbnail'), 'channel': item.get('uploader', 'Unknown'), 'duration': item.get('duration', 0)}
                 self.queues[gid].append(final_data); count += 1
             await interaction.followup.send(f"✅ Đã thêm Playlist: **{count} bài**!")
@@ -348,6 +367,35 @@ class Music(commands.Cog):
         self.settings[gid]["music_channel_id"] = interaction.channel.id
         self.save_json(SETTINGS_FILE, self.settings)
         await interaction.followup.send(f"✅ Channel: {interaction.channel.mention}")
+
+    # --- LỆNH TUNE (MỚI) ---
+    @app_commands.command(name="tune", description="Chỉnh hiệu ứng âm thanh (Bassboost, Nightcore...)")
+    @app_commands.choices(effect=[
+        app_commands.Choice(name="Off (Tắt)", value="Off"),
+        app_commands.Choice(name="Bassboost", value="Bassboost"),
+        app_commands.Choice(name="Nightcore", value="Nightcore"),
+        app_commands.Choice(name="Vaporwave", value="Vaporwave"),
+        app_commands.Choice(name="8D Audio", value="8D"),
+        app_commands.Choice(name="Pop", value="Pop"),
+        app_commands.Choice(name="Soft", value="Soft"),
+        app_commands.Choice(name="Treble", value="Treble"),
+    ])
+    async def tune(self, interaction: discord.Interaction, effect: app_commands.Choice[str]):
+        if not await self.check_music_channel(interaction): return
+        await interaction.response.defer()
+        
+        gid = interaction.guild_id
+        filter_str = FFMPEG_FILTERS.get(effect.value)
+        self.current_filters[gid] = filter_str
+        
+        # Nếu đang phát nhạc thì TUA LẠI NGAY LẬP TỨC để áp dụng filter
+        vc = interaction.guild.voice_client
+        if vc and vc.is_playing() and gid in self.start_times:
+            # Tính thời gian hiện tại
+            current_pos = (time.time() - self.start_times[gid]) + self.current_offsets.get(gid, 0)
+            self.seek_song(gid, current_pos) # Trigger seek để reload player với filter mới
+            
+        await interaction.followup.send(f"🎛️ Đã chỉnh hiệu ứng: **{effect.name}**")
 
     @app_commands.command(name="prioritize", description="Ưu tiên bài hát")
     async def prioritize(self, interaction: discord.Interaction):
