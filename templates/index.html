@@ -30,8 +30,19 @@
         @keyframes pulseAnimation { 0% { transform: scale(0.5); opacity: 0.2; } 100% { transform: scale(2.5); opacity: 0; } }
         
         .queue-box { background: #0f172a; border-radius: 10px; padding: 10px; max-height: 180px; overflow-y: auto; margin-top: 15px; border: 1px solid #334155; }
-        .queue-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #1e293b; font-size: 0.95rem; color: #ffffff !important; cursor: grab; background: #0f172a; }
-        .queue-item:active { cursor: grabbing; background: #1e293b; }
+        
+        /* Cập nhật style cho item hàng đợi */
+        .queue-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #1e293b; font-size: 0.95rem; color: #ffffff !important; background: #0f172a; }
+        
+        /* Style cho nút kéo thả (Handle) */
+        .drag-handle { 
+            cursor: grab; 
+            padding: 10px; /* Tăng diện tích chạm cho điện thoại */
+            color: #64748b; 
+            touch-action: none; /* Ngăn chặn cuộn trang khi chạm vào icon này */
+        }
+        .drag-handle:active { cursor: grabbing; color: var(--primary); }
+        
         .queue-index { color: var(--primary) !important; font-weight: bold; margin-right: 10px; pointer-events: none; }
         
         .controls button { background: none; border: none; color: #e2e8f0; font-size: 1.2rem; transition: 0.2s; width: 45px; height: 45px; border-radius: 50%; }
@@ -99,7 +110,7 @@
         <button onclick="cmd('stop')" class="btn btn-sm btn-outline-danger w-100">Dừng Nhạc & Xóa Hàng Đợi</button>
         
         <div class="queue-box text-start">
-            <div class="text-muted small mb-2" style="color: #94a3b8 !important;"><i class="fas fa-list"></i> Hàng đợi (Kéo thả để xếp):</div>
+            <div class="text-muted small mb-2" style="color: #94a3b8 !important;"><i class="fas fa-list"></i> Hàng đợi (Giữ icon ☰ để xếp):</div>
             <div id="queueList"><div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div></div>
         </div>
     </div>
@@ -118,15 +129,17 @@
         let currentGuildId = localStorage.getItem('lastGuild') || "";
         let isFetching = false;
         let isDragging = false; 
-        let isSeeking = false; // Cờ kiểm tra đang kéo thanh tua
+        let isSeeking = false; 
         
         const searchModal = new bootstrap.Modal(document.getElementById('searchModal'));
         const playlistModal = new bootstrap.Modal(document.getElementById('playlistModal'));
         let cachedPlaylists = [];
 
-        // Kéo thả hàng đợi
+        // --- CẤU HÌNH SORTABLE VỚI HANDLE ---
         let queueSortable = new Sortable(document.getElementById('queueList'), {
-            animation: 150, draggable: ".queue-item",
+            animation: 150, 
+            draggable: ".queue-item",
+            handle: ".drag-handle", // [QUAN TRỌNG] Chỉ cho phép kéo khi chạm vào class này
             onStart: function() { isDragging = true; },
             onEnd: function(evt) { isDragging = false; if(evt.oldIndex !== evt.newIndex) moveQueueItem(evt.oldIndex, evt.newIndex); }
         });
@@ -140,7 +153,6 @@
             return `${min < 10 ? '0' : ''}${min}:${sec < 10 ? '0' : ''}${sec}`;
         }
 
-        // Hàm gọi API Tua nhạc
         function seekAudio(val) {
             isSeeking = false; 
             if(currentGuildId) fetch(`${BASE_URL}/api/control/seek?guild_id=${currentGuildId}&seconds=${val}`, {method: 'POST'});
@@ -150,17 +162,14 @@
             if(!currentGuildId || isFetching || isDragging) return; 
             isFetching = true;
             fetch(`${BASE_URL}/api/status?guild_id=${currentGuildId}`).then(r=>r.json()).then(d => {
-                // Cập nhật Album Art, Tên bài, Nghệ sĩ
                 const art = document.getElementById('trackArt'), ph = document.getElementById('noMusicPlaceholder');
                 if(d.thumbnail && d.title) { art.src = d.thumbnail; art.style.display = 'block'; ph.style.display = 'none'; document.getElementById('trackTitle').innerText = d.title; document.getElementById('trackArtist').innerText = d.channel || "Đang phát"; }
                 else { art.style.display = 'none'; art.src = ""; ph.style.display = 'flex'; document.getElementById('trackTitle').innerText = "Sẵn sàng"; document.getElementById('trackArtist').innerText = "Vui lòng chọn bài hát"; }
                 
-                // Cập nhật trạng thái kênh
                 const st = document.getElementById('trackChannel');
                 if(d.connected_channel) { st.innerHTML = `<i class="fas fa-wifi"></i> ${d.connected_channel}`; st.className = "status-badge status-connected"; } 
                 else { st.innerHTML = "Chưa kết nối"; st.className = "status-badge"; }
                 
-                // Đồng bộ Dropdown Kênh
                 const chSel = document.getElementById('channelSelect');
                 if (d.connected_channel_id && chSel.options.length > 1) {
                      let options = Array.from(chSel.options);
@@ -170,7 +179,6 @@
                 document.getElementById('iconPlay').className = d.is_playing ? "fas fa-pause" : "fas fa-play";
                 document.getElementById('btnLoop').className = d.loop ? "btn-active" : "";
                 
-                // Cập nhật Thanh Tua (Progress Bar)
                 if (!isSeeking && d.duration > 0) {
                     const bar = document.getElementById('progressBar');
                     bar.max = d.duration;
@@ -179,16 +187,16 @@
                     document.getElementById('timeTotal').innerText = formatTime(d.duration);
                 }
 
-                // Cập nhật Hàng đợi
                 const qDiv = document.getElementById('queueList'); let html = "";
-                if(d.queue && d.queue.length > 0) d.queue.forEach((s, i) => html += `<div class="queue-item"><span><span class="queue-index">${i+1}.</span> ${s.title}</span> <i class="fas fa-grip-lines text-muted"></i></div>`);
+                // [MỚI] Thêm class 'drag-handle' vào icon để chỉ định vùng kéo thả
+                if(d.queue && d.queue.length > 0) d.queue.forEach((s, i) => html += `<div class="queue-item"><span><span class="queue-index">${i+1}.</span> ${s.title}</span> <i class="fas fa-bars drag-handle"></i></div>`);
                 else html = '<div class="text-center text-muted py-2" style="color: #94a3b8 !important;">Trống</div>';
                 if(qDiv.innerHTML !== html) qDiv.innerHTML = html; 
                 isFetching = false;
             }).catch(() => isFetching = false);
         }
 
-        // --- CÁC HÀM XỬ LÝ KHÁC ---
+        // --- CÁC HÀM XỬ LÝ KHÁC (GIỮ NGUYÊN) ---
         function moveQueueItem(fromIdx, toIdx) { if(currentGuildId) fetch(`${BASE_URL}/api/queue/move?guild_id=${currentGuildId}&from=${fromIdx}&to=${toIdx}`, {method: 'POST'}); }
         
         function openPlaylists() {
@@ -213,7 +221,6 @@
             fetch(`${BASE_URL}/api/guilds`).then(r=>r.json()).then(d => {
                 const sel = document.getElementById('guildSelect'); sel.innerHTML = '<option value="" disabled selected>Chọn Server...</option>';
                 if(d.length === 0) return; d.forEach(g => sel.add(new Option(g.name, g.id)));
-                // Tự động chọn Server nếu có history hoặc chỉ có 1 server
                 if(currentGuildId && d.some(g => g.id === currentGuildId)) { sel.value = currentGuildId; loadChannels(); } 
                 else if (d.length === 1) { sel.value = d[0].id; loadChannels(); }
             }).catch(e => console.log("API Error"));
