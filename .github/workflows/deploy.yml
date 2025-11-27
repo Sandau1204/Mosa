@@ -45,8 +45,7 @@ jobs:
             # npm install
             
             pip install -r requirements.txt
-
-            py ./main.py
+            
             # Restart bot để nhận code mới
             pm2 restart "mosa"
             
