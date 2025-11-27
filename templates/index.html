@@ -11,25 +11,31 @@
     
     <style>
         :root {
+            /* Màu nền dự phòng */
             --bg-color: #121212;
-            --card-bg: #1e1e1e;
+            /* Chỉnh nền thẻ thành bán trong suốt để lộ hình nền */
+            --card-bg: rgba(30, 30, 30, 0.85); 
             --sidebar-bg: #000000;
-            --accent: #1db954; /* Màu xanh lá nổi bật */
+            --accent: #1db954;
             --accent-hover: #1ed760;
             --text-main: #ffffff;
             --text-sub: #b3b3b3;
-            --border: #333333;
+            --border: rgba(255, 255, 255, 0.1);
         }
 
         body {
+            /* QUAN TRỌNG: Dòng này để nạp hình nền từ thư mục static */
+            background: url("{{ url_for('static', filename='background.jpg') }}") no-repeat center center fixed;
+            background-size: cover;
             background-color: var(--bg-color);
+            
             color: var(--text-main);
             font-family: 'Lexend', sans-serif;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px 0;
+            padding: 20px;
         }
 
         /* --- Main Layout --- */
@@ -37,6 +43,10 @@
             width: 100%;
             max-width: 1200px;
             background-color: var(--card-bg);
+            /* Hiệu ứng kính mờ (Glassmorphism) */
+            backdrop-filter: blur(15px); 
+            -webkit-backdrop-filter: blur(15px);
+            
             border-radius: 16px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
             overflow: hidden;
@@ -60,11 +70,12 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            text-shadow: 0 0 10px rgba(29, 185, 84, 0.4);
         }
 
         /* --- Form Elements (Dark Theme) --- */
         .form-select, .form-control {
-            background-color: #2a2a2a !important;
+            background-color: rgba(0, 0, 0, 0.5) !important;
             border: 1px solid #404040;
             color: #fff !important;
             border-radius: 8px;
@@ -82,11 +93,12 @@
 
         /* --- Player Section (Left) --- */
         .player-section {
-            background: rgba(255,255,255,0.02);
+            background: rgba(255,255,255,0.03);
             border-radius: 12px;
             padding: 20px;
             text-align: center;
             height: 100%;
+            border: 1px solid rgba(255,255,255,0.05);
         }
 
         .art-box {
@@ -117,7 +129,7 @@
         .progress-container { display: flex; align-items: center; font-size: 0.8rem; color: var(--text-sub); margin-bottom: 20px; }
         .progress-bar-slider {
             flex-grow: 1; margin: 0 10px; -webkit-appearance: none; height: 4px;
-            background: #404040; border-radius: 2px; outline: none; cursor: pointer;
+            background: rgba(255,255,255,0.1); border-radius: 2px; outline: none; cursor: pointer;
         }
         .progress-bar-slider::-webkit-slider-thumb {
             -webkit-appearance: none; width: 12px; height: 12px;
@@ -158,8 +170,8 @@
         }
         /* Custom Scrollbar */
         .queue-box::-webkit-scrollbar { width: 6px; }
-        .queue-box::-webkit-scrollbar-track { background: #121212; }
-        .queue-box::-webkit-scrollbar-thumb { background: #404040; border-radius: 3px; }
+        .queue-box::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+        .queue-box::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
 
         .queue-item {
             display: flex; align-items: center;
@@ -182,8 +194,8 @@
         /* --- Search & Bottom Area --- */
         .bottom-actions { margin-top: 20px; }
         .search-group { position: relative; }
-        .search-group input { padding-right: 50px; background: #121212 !important; border: 1px solid transparent; }
-        .search-group input:focus { border-color: var(--accent); background: #2a2a2a !important; }
+        .search-group input { padding-right: 50px; }
+        
         .search-btn {
             position: absolute; right: 5px; top: 4px;
             border: none; background: none; color: var(--text-sub);
@@ -194,23 +206,24 @@
         /* --- Modals (Dark) --- */
         .modal-content { background-color: #282828; color: var(--text-main); border: 1px solid var(--border); }
         .modal-header { border-bottom: 1px solid var(--border); }
-        .list-group-item { background-color: #121212; color: white; border: 1px solid var(--border); }
-        .list-group-item:hover { background-color: #333; }
+        .list-group-item { background-color: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border); }
+        .list-group-item:hover { background-color: rgba(255,255,255,0.1); }
         .btn-close { filter: invert(1); }
 
         /* --- Responsive Tweaks --- */
         @media (max-width: 768px) {
-            .dashboard-container { border-radius: 0; border: none; }
+            .dashboard-container { border-radius: 0; border: none; height: 100vh; backdrop-filter: none; background-color: #121212; }
             .player-section { margin-bottom: 20px; }
             .queue-box { height: auto; max-height: 300px; }
             .controls button { width: 50px; height: 50px; font-size: 1.4rem; }
             .controls .btn-play { width: 70px; height: 70px; }
             .top-bar { flex-direction: column; gap: 10px; align-items: stretch; }
             .top-actions { display: flex; gap: 10px; }
+            body { padding: 0; display: block; }
         }
         
         /* Status Badge */
-        .status-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 10px; background: #333; color: #999; margin-left: 10px; display: inline-block;}
+        .status-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 10px; background: rgba(255,255,255,0.1); color: #999; margin-left: 10px; display: inline-block;}
         .status-connected { background: rgba(29, 185, 84, 0.2); color: var(--accent); border: 1px solid var(--accent); }
     </style>
 </head>
@@ -288,7 +301,7 @@
                                 </div>
                             </div>
                             <div class="col-4">
-                                <button onclick="openPlaylists()" class="btn btn-outline-light w-100 h-100" style="background: #2a2a2a; border:none; color: #fff;">
+                                <button onclick="openPlaylists()" class="btn btn-outline-light w-100 h-100" style="background: rgba(255,255,255,0.1); border:none; color: #fff;">
                                     <i class="fas fa-bookmark text-success"></i> Playlist
                                 </button>
                             </div>
@@ -339,9 +352,8 @@
         const playlistModal = new bootstrap.Modal(document.getElementById('playlistModal'));
         let cachedPlaylists = [];
 
-        // Kéo thả hàng đợi
         let queueSortable = new Sortable(document.getElementById('queueList'), {
-            animation: 150, draggable: ".queue-item", handle: ".queue-item", // Kéo thả toàn bộ item
+            animation: 150, draggable: ".queue-item", handle: ".queue-item", 
             onStart: function() { isDragging = true; },
             onEnd: function(evt) { isDragging = false; if(evt.oldIndex !== evt.newIndex) moveQueueItem(evt.oldIndex, evt.newIndex); }
         });
@@ -364,7 +376,6 @@
             if(!currentGuildId || isFetching || isDragging) return; 
             isFetching = true;
             fetch(`${BASE_URL}/api/status?guild_id=${currentGuildId}`).then(r=>r.json()).then(d => {
-                // UI: Album Art & Info
                 const art = document.getElementById('trackArt'), ph = document.getElementById('noMusicPlaceholder');
                 if(d.thumbnail && d.title) { 
                     art.src = d.thumbnail; art.style.display = 'block'; ph.style.display = 'none'; 
@@ -376,23 +387,19 @@
                     document.getElementById('trackArtist').innerText = "Vui lòng chọn bài hát"; 
                 }
                 
-                // UI: Status
                 const st = document.getElementById('trackChannel');
                 if(d.connected_channel) { st.innerHTML = `<i class="fas fa-wifi"></i> ${d.connected_channel}`; st.className = "status-badge status-connected"; } 
                 else { st.innerHTML = "Chưa kết nối"; st.className = "status-badge"; }
                 
-                // Sync Dropdown
                 const chSel = document.getElementById('channelSelect');
                 if (d.connected_channel_id && chSel.options.length > 1) {
                      let options = Array.from(chSel.options);
                      if (options.some(o => o.value === d.connected_channel_id) && chSel.value !== d.connected_channel_id) chSel.value = d.connected_channel_id;
                 }
 
-                // UI: Controls
                 document.getElementById('iconPlay').className = d.is_playing ? "fas fa-pause" : "fas fa-play";
                 document.getElementById('btnLoop').className = d.loop ? "btn-active" : "";
                 
-                // UI: Progress
                 if (!isSeeking && d.duration > 0) {
                     const bar = document.getElementById('progressBar');
                     bar.max = d.duration;
@@ -401,7 +408,6 @@
                     document.getElementById('timeTotal').innerText = formatTime(d.duration);
                 }
 
-                // UI: Queue
                 const qDiv = document.getElementById('queueList'); let html = "";
                 if(d.queue && d.queue.length > 0) {
                     d.queue.forEach((s, i) => {
@@ -423,7 +429,6 @@
             }).catch(() => isFetching = false);
         }
 
-        // Logic functions (giữ nguyên logic)
         function moveQueueItem(fromIdx, toIdx) { if(currentGuildId) fetch(`${BASE_URL}/api/queue/move?guild_id=${currentGuildId}&from=${fromIdx}&to=${toIdx}`, {method: 'POST'}); }
         
         function openPlaylists() {
