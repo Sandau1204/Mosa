@@ -534,7 +534,29 @@
                 }).catch(() => { btn.innerHTML = originalIcon; alert("Lỗi tìm kiếm."); });
             }
         }
-        function playDirect(url) { fetch(`${BASE_URL}/api/play?guild_id=${currentGuildId}&query=${encodeURIComponent(url)}`, {method:'POST'}).then(() => document.getElementById('searchQuery').value = ''); }
+        function playDirect(url) { 
+            // Gửi request đến API phát nhạc
+            fetch(`${BASE_URL}/api/play?guild_id=${currentGuildId}&query=${encodeURIComponent(url)}`, {method:'POST'})
+                .then(r => r.json())
+                .then(d => {
+                    // Xóa ô nhập liệu sau khi gửi
+                    document.getElementById('searchQuery').value = '';
+                    
+                    // --- THÊM PHẦN THÔNG BÁO NÀY ---
+                    if (d.status === 'ok') {
+                        // Hiện thông báo thành công (dùng Alert của trình duyệt cho đơn giản)
+                        alert("✅ Đã gửi lệnh phát nhạc thành công!");
+                    } else {
+                        // Hiện thông báo lỗi nếu có
+                        alert("⚠️ Lỗi: " + (d.status || "Không thể gửi lệnh"));
+                    }
+                    // -------------------------------
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("❌ Lỗi kết nối đến Webserver!");
+                });
+        }
     </script>
 </body>
 </html>
