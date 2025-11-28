@@ -40,16 +40,7 @@ YDL_OPTIONS = {
     'source_address': '0.0.0.0',
     'nocheckcertificate': True,
     'cookiefile': 'cookies.txt',
-    # --- THÊM PHẦN NÀY ---
-    #'http_headers': {
-    #    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    #},
     'cachedir': False,
-    #'extractor_args': {
-    #    'youtube': {
-    #        'player_client': ['android', 'web']
-    #    }
-    #}
 }
 
 FFMPEG_OPTIONS = {
@@ -89,7 +80,6 @@ class MusicController(discord.ui.View):
     def create_embed(self):
         loop_status = self.cog.loops.get(self.guild_id, False)
         volume = self.cog.volumes.get(self.guild_id, 0.5)
-        # Hiển thị Filter đang dùng
         current_filter_name = "Off"
         current_filter_val = self.cog.current_filters.get(self.guild_id)
         for name, val in FFMPEG_FILTERS.items():
@@ -180,15 +170,16 @@ class Music(commands.Cog):
         self.bot = bot
         self.queues = {}; self.loops = {}; self.volumes = {}; self.current_songs = {}
         self.ui_messages = {}; self.active_tasks = {}; self.manual_stops = {}; self.force_skips = {}
-        self.idle_timers = {}
         
         self.start_times = {}      
         self.current_offsets = {}  
         self.seek_flags = {}       
         self.seek_pos = {}
         
-        # [MỚI] Lưu filter hiện tại của từng server
-        self.current_filters = {} 
+        self.current_filters = {}
+        
+        # [MỚI] Biến lưu các bộ đếm giờ thoát kênh
+        self.idle_timers = {} 
 
         if not os.path.exists(DATA_FOLDER): os.makedirs(DATA_FOLDER)
         self.playlists = self.load_json(PLAYLIST_FILE)
@@ -245,6 +236,64 @@ class Music(commands.Cog):
         try: await msg.edit(embed=view.create_embed(), view=view)
         except: pass
 
+    # [MỚI] Hàm đếm ngược 15 phút rồi thoát
+    async def idle_disconnect(self, guild_id, channel):
+        try:
+            print(f"⏳ Bắt đầu đếm 15 phút rời kênh {guild_id}")
+            await asyncio.sleep(900) # 900 giây = 15 phút
+            
+            guild = self.bot.get_guild(guild_id)
+            if guild and guild.voice_client:
+                await guild.voice_client.disconnect()
+                await channel.send("💤 **Phòng trống quá lâu (15p), mình đi ngủ đây!**")
+                
+                # Dọn dẹp dữ liệu
+                if guild_id in self.queues: del self.queues[guild_id]
+                if guild_id in self.current_songs: del self.current_songs[guild_id]
+                if guild_id in self.ui_messages:
+                    try: await self.ui_messages[guild_id].delete()
+                    except: pass
+                    
+        except asyncio.CancelledError:
+            print(f"❌ Hủy đếm giờ kênh {guild_id} (Có hoạt động mới)")
+        finally:
+            if guild_id in self.idle_timers:
+                del self.idle_timers[guild_id]
+
+    # [MỚI] Tự động xử lý khi người dùng ra/vào kênh
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        if member.bot: return # Bỏ qua bot khác
+        
+        # Lấy voice client của bot trong server này
+        vc = member.guild.voice_client
+        if not vc or not vc.channel: return
+
+        # Chỉ xử lý nếu sự kiện xảy ra trong kênh bot đang ngồi
+        if (before.channel != vc.channel) and (after.channel != vc.channel): return
+
+        guild_id = member.guild.id
+        
+        # 1. Nếu có người vào phòng (Số người > 1) -> Hủy đếm giờ
+        if len(vc.channel.members) > 1:
+            if guild_id in self.idle_timers:
+                self.idle_timers[guild_id].cancel()
+                del self.idle_timers[guild_id]
+
+        # 2. Nếu phòng trống (Chỉ còn 1 mình bot)
+        elif len(vc.channel.members) == 1:
+            # Xóa hàng chờ và tắt loop để bot không phát bài tiếp theo
+            self.queues[guild_id] = []
+            self.loops[guild_id] = False
+            
+            # Nếu bot ĐANG RẢNH (không phát nhạc) -> Đếm giờ ngay
+            if not vc.is_playing():
+                if guild_id not in self.idle_timers:
+                    setup_id = self.settings.get(str(guild_id), {}).get("music_channel_id")
+                    target_channel = self.bot.get_channel(int(setup_id)) if setup_id else vc.channel
+                    if target_channel:
+                        self.idle_timers[guild_id] = asyncio.create_task(self.idle_disconnect(guild_id, target_channel))
+
     async def player_loop(self, guild_id, channel):
         while True:
             is_seeking = self.seek_flags.get(guild_id, False)
@@ -255,20 +304,34 @@ class Music(commands.Cog):
                 self.seek_flags[guild_id] = False 
             else:
                 self.force_skips[guild_id] = False
+                
+                # --- LOGIC MỚI: Xử lý khi hết nhạc (Queue empty) ---
                 if guild_id not in self.queues or not self.queues[guild_id]:
-                    if guild_id in self.current_songs: 
-                        del self.current_songs[guild_id]
+                    if guild_id in self.current_songs: del self.current_songs[guild_id]
                     if guild_id in self.ui_messages: 
                         try: await self.ui_messages[guild_id].delete()
                         except: pass
-                    if guild_id in self.active_tasks: 
-                        del self.active_tasks[guild_id]
+                    if guild_id in self.active_tasks: del self.active_tasks[guild_id]
+                    
                     if not self.manual_stops.get(guild_id, False): 
-                        await channel.send("✅ **Hết nhạc.**")
-                        self.idle_timers[guild_id] = asyncio.create_task(self.idle_disconnect(guild_id, channel))
-                    if guild_id in self.manual_stops: 
-                        del self.manual_stops[guild_id]
+                        # Xác định kênh gửi thông báo Hết Nhạc (ưu tiên Music Channel)
+                        target_channel = channel
+                        setup_id = self.settings.get(str(guild_id), {}).get("music_channel_id")
+                        if setup_id:
+                            try:
+                                found = self.bot.get_channel(int(setup_id))
+                                if found: target_channel = found
+                            except: pass
+                        
+                        await target_channel.send("✅ **Hết nhạc.**")
+                        
+                        # [MỚI] Luôn kích hoạt đếm giờ 15p khi hết nhạc
+                        if guild_id not in self.idle_timers:
+                            self.idle_timers[guild_id] = asyncio.create_task(self.idle_disconnect(guild_id, target_channel))
+
+                    if guild_id in self.manual_stops: del self.manual_stops[guild_id]
                     break 
+                # -----------------------------------------------------
 
                 song_data = self.queues[guild_id].pop(0)
                 self.current_songs[guild_id] = song_data
@@ -297,11 +360,9 @@ class Music(commands.Cog):
                 
                 current_opts = FFMPEG_OPTIONS.copy()
                 
-                # --- APPLY TUNE (AUDIO FILTER) ---
                 active_filter = self.current_filters.get(guild_id)
                 if active_filter:
                     current_opts['options'] = f'-af "{active_filter}" ' + current_opts.get('options', '')
-                # ---------------------------------
 
                 if start_offset > 0:
                     current_opts['before_options'] = f"-ss {start_offset} " + current_opts.get('before_options', '')
@@ -315,15 +376,20 @@ class Music(commands.Cog):
                     except: pass
                 
                 view = MusicController(self, guild_id, song_data)
-                target_channel = channel # Mặc định dùng kênh hiện tại
-                setup_id = self.settings.get(str(guild_id), {}).get("music_channel_id")
-                if setup_id:
-                    found_channel = self.bot.get_channel(int(setup_id))
-                    if found_channel:
-                        target_channel = found_channel
-            
-                # Gửi bảng điều khiển vào kênh đã tìm được
+                
+                # --- LOGIC MỚI: Tự động tìm kênh đã set để gửi bảng điều khiển ---
+                target_channel = channel 
+                saved_settings = self.settings.get(str(guild_id), {})
+                music_channel_id = saved_settings.get("music_channel_id")
+                
+                if music_channel_id:
+                    try:
+                        found_channel = self.bot.get_channel(int(music_channel_id))
+                        if found_channel: target_channel = found_channel
+                    except: pass
+                
                 self.ui_messages[guild_id] = await target_channel.send(embed=view.create_embed(), view=view)
+                # ----------------------------------------------------------------
 
                 next_song = asyncio.Event()
                 def after(e): self.bot.loop.call_soon_threadsafe(next_song.set)
@@ -335,12 +401,6 @@ class Music(commands.Cog):
                 
                 guild.voice_client.play(discord.PCMVolumeTransformer(source, volume=vol), after=after)
                 await next_song.wait()
-                
-                if guild.voice_client and len(guild.voice_client.channel.members) == 1:
-                    # Nếu chỉ còn 1 thành viên (là bot)
-                    self.queues[guild_id] = [] # Xóa sạch hàng chờ
-                    await channel.send("👋 **Phòng trống, dừng phát nhạc.**")
-                    # Vòng lặp tiếp theo sẽ rơi vào điều kiện "if not queue" ở trên và kích hoạt timer 15p
 
                 if self.seek_flags.get(guild_id, False): continue
                 if self.loops.get(guild_id, False) and not self.force_skips.get(guild_id, False):
@@ -350,9 +410,11 @@ class Music(commands.Cog):
                 print(f"Err: {e}"); await channel.send(f"⚠️ Lỗi bài **{song_data['title']}**.", delete_after=5); await asyncio.sleep(1) 
 
     async def start_playing(self, channel, guild_id):
+        # [MỚI] Hủy hẹn giờ thoát nếu có lệnh phát nhạc mới
         if guild_id in self.idle_timers:
-            self.idle_timers[guild_id].cancel() # Hủy đếm ngược nếu có lệnh phát nhạc mới
+            self.idle_timers[guild_id].cancel()
             del self.idle_timers[guild_id]
+
         self.manual_stops[guild_id] = False
         if guild_id not in self.active_tasks or self.active_tasks[guild_id].done():
             self.active_tasks[guild_id] = asyncio.create_task(self.player_loop(guild_id, channel))
@@ -378,28 +440,6 @@ class Music(commands.Cog):
         if guild_id not in self.queues: return False
         try: s = self.queues[guild_id].pop(from_idx); self.queues[guild_id].insert(to_idx, s); return True
         except: return False
-        
-    async def idle_disconnect(self, guild_id, channel):
-        try:
-            await asyncio.sleep(900) # Chờ 15 phút (900 giây)
-            
-            guild = self.bot.get_guild(guild_id)
-            if guild and guild.voice_client:
-                # Dọn dẹp dữ liệu
-                if guild_id in self.ui_messages:
-                    try: await self.ui_messages[guild_id].delete()
-                    except: pass
-                if guild_id in self.current_songs: del self.current_songs[guild_id]
-                
-                # Ngắt kết nối
-                await guild.voice_client.disconnect()
-                await channel.send("💤 **Đã tự động ngắt kết nối do không hoạt động (15p).**")
-        except asyncio.CancelledError:
-            pass # Hủy task nếu có nhạc phát lại
-        finally:
-            if guild_id in self.idle_timers:
-                del self.idle_timers[guild_id]
-    
 
     async def process_song_request(self, interaction, song_data, from_selection=False):
         if not await self.check_music_channel(interaction): return
@@ -441,7 +481,6 @@ class Music(commands.Cog):
         self.save_json(SETTINGS_FILE, self.settings)
         await interaction.followup.send(f"✅ Channel: {interaction.channel.mention}")
 
-    # --- LỆNH TUNE (MỚI) ---
     @app_commands.command(name="tune", description="Chỉnh hiệu ứng âm thanh (Bassboost, Nightcore...)")
     @app_commands.choices(effect=[
         app_commands.Choice(name="Off (Tắt)", value="Off"),
@@ -461,12 +500,10 @@ class Music(commands.Cog):
         filter_str = FFMPEG_FILTERS.get(effect.value)
         self.current_filters[gid] = filter_str
         
-        # Nếu đang phát nhạc thì TUA LẠI NGAY LẬP TỨC để áp dụng filter
         vc = interaction.guild.voice_client
         if vc and vc.is_playing() and gid in self.start_times:
-            # Tính thời gian hiện tại
             current_pos = (time.time() - self.start_times[gid]) + self.current_offsets.get(gid, 0)
-            self.seek_song(gid, current_pos) # Trigger seek để reload player với filter mới
+            self.seek_song(gid, current_pos)
             
         await interaction.followup.send(f"🎛️ Đã chỉnh hiệu ứng: **{effect.name}**")
 
