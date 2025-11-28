@@ -244,8 +244,10 @@ def _get_text_channel(g, mc):
         setup_id = get_music_channel_id(g.id)
 
     if setup_id: 
-        c = g.get_channel(setup_id)
-        if c: return c
+        try:
+            c = g.get_channel(int(setup_id)) # Thêm int() để chắc chắn là số
+            if c: return c
+        except: pass
         # Nếu setup_id có nhưng kênh không tìm thấy (đã xóa) -> Fallback xuống dưới
     
     # 2. Nếu không set (hoặc kênh set bị xóa), ưu tiên kênh đang có bảng điều khiển

@@ -309,7 +309,15 @@ class Music(commands.Cog):
                     except: pass
                 
                 view = MusicController(self, guild_id, song_data)
-                self.ui_messages[guild_id] = await channel.send(embed=view.create_embed(), view=view)
+                target_channel = channel # Mặc định dùng kênh hiện tại
+                setup_id = self.settings.get(str(guild_id), {}).get("music_channel_id")
+                if setup_id:
+                    found_channel = self.bot.get_channel(int(setup_id))
+                    if found_channel:
+                        target_channel = found_channel
+            
+                # Gửi bảng điều khiển vào kênh đã tìm được
+                self.ui_messages[guild_id] = await target_channel.send(embed=view.create_embed(), view=view)
 
                 next_song = asyncio.Event()
                 def after(e): self.bot.loop.call_soon_threadsafe(next_song.set)
