@@ -128,29 +128,31 @@ def control(action):
         run(mc.update_ui(gid_int))
     elif action == "skip": run(mc.skip_song(gid_int))
     elif action == "stop": run(mc.stop_player(gid_int))
+    
+    # [MỚI] Thêm xử lý shuffle
+    elif action == "shuffle":
+        if mc.shuffle_queue(gid_int):
+            run(mc.update_ui(gid_int))
+        else:
+            return jsonify({"status": "empty_queue"})
+
     elif action == "leave":
         run(mc.stop_player(gid_int))
         async def lv(): 
             await asyncio.sleep(0.1) 
             if g.voice_client: await g.voice_client.disconnect()
         run(lv())
+    
     elif action == "loop": 
         mc.loops[gid_int] = not mc.loops.get(gid_int, False); run(mc.update_ui(gid_int))
     elif action == "vol_up":
         v = min(1.0, mc.volumes.get(gid_int, 0.5) + 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
     elif action == "vol_down":
         v = max(0.0, mc.volumes.get(gid_int, 0.5) - 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
-    elif action == "seek":
-        seconds = request.args.get('seconds')
-        if seconds:
-            try:
-                sec = float(seconds)
-                success = mc.seek_song(gid_int, sec)
-                if success: return jsonify({"status": "ok"})
-            except: pass
-        return jsonify({"status": "error"})
+    # ... (Giữ nguyên phần seek) ...
         
     return jsonify({"status": "ok"})
+
 
 @app.route(f'{PREFIX}/api/queue/move', methods=['POST'])
 def move_queue_item():
@@ -230,47 +232,6 @@ def play_playlist_all_api():
              return jsonify({"status": "ok"})
         return jsonify({"status": "error"})
     except: return jsonify({"status": "error"})
-# sử hàm random
-@app.route(f'{PREFIX}/api/control/<action>', methods=['POST'])
-def control(action):
-    gid = request.args.get('guild_id')
-    if not bot_instance or not gid: return jsonify({"status": "error"})
-    gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
-    vc = g.voice_client if g else None
-    def run(coro): asyncio.run_coroutine_threadsafe(coro, bot_instance.loop)
-    
-    if not vc and action != "leave": return jsonify({"status": "no_voice"})
-
-    if action == "pause_resume":
-        if vc.is_playing(): vc.pause()
-        elif vc.is_paused(): vc.resume()
-        run(mc.update_ui(gid_int))
-    elif action == "skip": run(mc.skip_song(gid_int))
-    elif action == "stop": run(mc.stop_player(gid_int))
-    
-    # [MỚI] Thêm xử lý shuffle
-    elif action == "shuffle":
-        if mc.shuffle_queue(gid_int):
-            run(mc.update_ui(gid_int))
-        else:
-            return jsonify({"status": "empty_queue"})
-
-    elif action == "leave":
-        run(mc.stop_player(gid_int))
-        async def lv(): 
-            await asyncio.sleep(0.1) 
-            if g.voice_client: await g.voice_client.disconnect()
-        run(lv())
-    
-    elif action == "loop": 
-        mc.loops[gid_int] = not mc.loops.get(gid_int, False); run(mc.update_ui(gid_int))
-    elif action == "vol_up":
-        v = min(1.0, mc.volumes.get(gid_int, 0.5) + 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
-    elif action == "vol_down":
-        v = max(0.0, mc.volumes.get(gid_int, 0.5) - 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
-    # ... (Giữ nguyên phần seek) ...
-        
-    return jsonify({"status": "ok"})
 
 def _get_text_channel(g, mc):
     # 1. Ưu tiên kênh đã set trong cấu hình (Lấy từ Memory của Music Cog cho chuẩn)
