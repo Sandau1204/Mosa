@@ -1,4 +1,5 @@
 import discord
+import os # Cần thêm thư viện os để xử lý đường dẫn file
 from discord import app_commands
 from discord.ext import commands
 
@@ -45,14 +46,48 @@ class Admin(commands.Cog):
         except discord.Forbidden:
              await interaction.followup.send("❌ Bot không đủ quyền.")
 
+    # --- LỆNH MỚI: CẬP NHẬT COOKIES ---
+    @app_commands.command(name="cookies", description="[Admin] Cập nhật file cookies.txt cho Bot")
+    @app_commands.describe(file="Chọn file cookies.txt từ máy tính để upload")
+    @app_commands.checks.has_permissions(administrator=True) # Chỉ Administrator mới được dùng
+    async def cookies(self, interaction: discord.Interaction, file: discord.Attachment):
+        await interaction.response.defer(ephemeral=True)
+
+        # 1. Kiểm tra định dạng file
+        if not file.filename.endswith(".txt"):
+            await interaction.followup.send("❌ Vui lòng chỉ upload file có đuôi `.txt` (Ví dụ: `cookies.txt`)")
+            return
+
+        # 2. Đường dẫn file gốc (nằm cùng cấp với main.py)
+        save_path = "cookies.txt"
+
+        try:
+            # 3. Lưu file đè lên file cũ
+            await file.save(save_path)
+            
+            # 4. Thông báo thành công
+            print(f"🔄 [System] Cookies updated by {interaction.user.name}")
+            await interaction.followup.send(
+                f"✅ **Đã cập nhật `cookies.txt` thành công!**\n"
+                f"📁 Tên file gốc: `{file.filename}`\n"
+                f"ℹ️ Bot sẽ sử dụng cookies mới này cho các lệnh nhạc (yt-dlp) ngay lập tức."
+            )
+        except Exception as e:
+            await interaction.followup.send(f"❌ Có lỗi khi lưu file: {str(e)}")
+
     # Xử lý lỗi quyền hạn
     @clear.error
     @kick.error
     @ban.error
+    @cookies.error
     async def error_handler(self, interaction: discord.Interaction, error):
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send("🚫 Bạn không có quyền dùng lệnh này!")
+        
+        if isinstance(error, app_commands.MissingPermissions):
+             await interaction.followup.send("🚫 Bạn không có quyền dùng lệnh này!", ephemeral=True)
+        else:
+             await interaction.followup.send(f"⚠️ Lỗi: {str(error)}", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Admin(bot))

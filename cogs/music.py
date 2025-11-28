@@ -5,6 +5,7 @@ import json
 import os
 import re
 import time 
+import random  
 from discord import app_commands
 from discord.ext import commands
 from discord.ui import Button, View, Select
@@ -96,23 +97,35 @@ class MusicController(discord.ui.View):
             if vc.is_playing(): vc.pause(); button.emoji = "▶️"
             elif vc.is_paused(): vc.resume(); button.emoji = "⏸️"
             await self.cog.update_ui(self.guild_id); await interaction.response.defer()
+            
     @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.secondary, row=0)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.skip_song(interaction.guild_id); await interaction.response.send_message("⏭️ Skip", ephemeral=True)
+        
+    @discord.ui.button(emoji="🔀", style=discord.ButtonStyle.secondary, row=0)
+    async def shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.cog.shuffle_queue(self.guild_id)
+        await interaction.response.send_message("🔀 Đã trộn hàng đợi.", ephemeral=True)
+        await self.cog.update_ui(self.guild_id)
+        
     @discord.ui.button(emoji="🔂", style=discord.ButtonStyle.secondary, row=0) 
     async def loop(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.cog.loops[self.guild_id] = not self.cog.loops.get(self.guild_id, False)
         await self.cog.update_ui(self.guild_id); await interaction.response.defer()
+        
     @discord.ui.button(emoji="📜", style=discord.ButtonStyle.secondary, row=0)
     async def queue_list(self, interaction: discord.Interaction, button: discord.ui.Button):
         msg = "\n".join([f"{i+1}. {s['title']}" for i, s in enumerate(self.cog.queues.get(self.guild_id, [])[:10])]) or "Trống"
         await interaction.response.send_message(f"**Queue:**\n{msg}", ephemeral=True)
+        
     @discord.ui.button(emoji="🔉", style=discord.ButtonStyle.gray, row=1)
     async def vol_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.change_vol(interaction, -0.1)
+        
     @discord.ui.button(emoji="🔊", style=discord.ButtonStyle.gray, row=1)
     async def vol_up(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.change_vol(interaction, 0.1)
+        
     @discord.ui.button(emoji="🛑", style=discord.ButtonStyle.danger, row=1)
     async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.stop_player(interaction.guild_id); await interaction.response.send_message("🛑 Stopped", ephemeral=True)
@@ -182,6 +195,12 @@ class Music(commands.Cog):
         if setup_id and interaction.channel_id != setup_id:
             await interaction.response.send_message(f"🚫 Bot chỉ nhận lệnh nhạc tại kênh <#{setup_id}>", ephemeral=True); return False
         return True
+    # --- QUẢN LÝ HÀNG ĐỢI ---
+    def shuffle_queue(self, guild_id):
+        if guild_id in self.queues and self.queues[guild_id]:
+            random.shuffle(self.queues[guild_id])
+            return True
+        return False
 
     async def search_youtube(self, q):
         loop = asyncio.get_event_loop()
