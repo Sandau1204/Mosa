@@ -39,7 +39,12 @@ YDL_OPTIONS = {
     'default_search': 'auto',
     'source_address': '0.0.0.0',
     'nocheckcertificate': True,
-    'cookiefile': 'cookies.txt', 
+    'cookiefile': 'cookies.txt',
+    # --- THÊM PHẦN NÀY ---
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    },
+    'cachedir': False,
 }
 
 FFMPEG_OPTIONS = {
@@ -195,7 +200,6 @@ class Music(commands.Cog):
         if setup_id and interaction.channel_id != setup_id:
             await interaction.response.send_message(f"🚫 Bot chỉ nhận lệnh nhạc tại kênh <#{setup_id}>", ephemeral=True); return False
         return True
-    # --- QUẢN LÝ HÀNG ĐỢI ---
     def shuffle_queue(self, guild_id):
         if guild_id in self.queues and self.queues[guild_id]:
             random.shuffle(self.queues[guild_id])

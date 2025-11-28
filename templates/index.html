@@ -212,14 +212,54 @@
 
         /* --- Responsive Tweaks --- */
         @media (max-width: 768px) {
-            .dashboard-container { border-radius: 0; border: none; height: 100vh; backdrop-filter: none; background-color: rgba(18, 18, 18, 0.85) }
-            .player-section { margin-bottom: 20px; }
-            .queue-box { height: auto; max-height: 300px; }
+            .dashboard-container { 
+                border-radius: 0; 
+                border: none; 
+                min-height: 100vh; /* Đổi thành min-height để nội dung dài có thể cuộn trang */
+                height: auto;      /* Cho phép chiều cao tự động giãn */
+                backdrop-filter: none; 
+                background-color: rgba(18, 18, 18, 0.95); /* Tăng độ tối nền để dễ đọc hơn */
+                padding-bottom: 20px;
+            }
+            
+            .player-section { 
+                margin-bottom: 15px; 
+                padding: 15px; /* Giảm padding một chút để tiết kiệm diện tích */
+            }
+
+            /* --- TỐI ƯU HÀNG CHỜ --- */
+            .queue-box { 
+                height: auto; 
+                /* Tăng kích thước danh sách: chiếm 60% chiều cao màn hình hoặc ít nhất 400px */
+                max-height: 65vh; 
+                min-height: 400px; 
+            }
+
+            /* Tăng kích thước nút điều khiển để dễ bấm */
             .controls button { width: 50px; height: 50px; font-size: 1.4rem; }
             .controls .btn-play { width: 70px; height: 70px; }
+
             .top-bar { flex-direction: column; gap: 10px; align-items: stretch; }
-            .top-actions { display: flex; gap: 10px; }
+            .top-actions { display: flex; gap: 10px; justify-content: space-between; }
+            .top-actions select { flex-grow: 1; max-width: none !important; } /* Select box to hơn */
+
             body { padding: 0; display: block; }
+
+            /* --- TỐI ƯU NÚT TRỘN & HEADER HÀNG CHỜ --- */
+            .queue-header {
+                position: sticky; /* Giữ header dính trên cùng khi cuộn danh sách */
+                top: 0;
+                background-color: inherit; /* Giữ màu nền */
+                z-index: 10;
+                padding-top: 5px;
+            }
+            
+            /* Làm nút Trộn và Xóa to hơn, dễ bấm hơn trên màn hình cảm ứng */
+            .queue-header button {
+                padding: 8px 12px;
+                font-size: 0.9rem !important;
+                margin-left: 5px;
+            }
         }
         
         /* Status Badge */
