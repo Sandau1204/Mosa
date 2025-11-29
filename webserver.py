@@ -8,7 +8,7 @@ import json
 import time 
 
 
-app = Flask(__name__, static_url_path='/mosa/static')
+app = Flask(__name__, static_url_path='/static')
 bot_instance = None 
 
 # Tắt log gây nhiễu
@@ -16,7 +16,7 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 # Cấu hình đường dẫn
-PREFIX = "/mosa" 
+PREFIX = "" 
 DATA_FOLDER = "data"
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 
