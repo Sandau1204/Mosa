@@ -443,10 +443,7 @@ class Music(commands.Cog):
                 
                 self.start_times[guild_id] = time.time()
                 self.current_offsets[guild_id] = start_offset
-                if guild_id in self.pause_times: del self.pause_times[guild_id] # <--- THÊM DÒNG NÀY
-                
-                await next_song.wait()
-                
+                if guild_id in self.pause_times: del self.pause_times[guild_id] 
                 guild.voice_client.play(discord.PCMVolumeTransformer(source, volume=vol), after=after)
                 await next_song.wait()
 
