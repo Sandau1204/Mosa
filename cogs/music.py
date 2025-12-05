@@ -476,9 +476,16 @@ class Music(commands.Cog):
 
     def seek_song(self, guild_id, seconds):
         guild = self.bot.get_guild(guild_id)
-        if not guild or not guild.voice_client or not guild.voice_client.is_playing(): return False
-        self.seek_flags[guild_id] = True; self.seek_pos[guild_id] = seconds
-        guild.voice_client.stop()
+    # Chỉ cần có voice_client và đang kết nối là cho phép tua
+        if not guild or not guild.voice_client or not guild.voice_client.is_connected(): return False
+
+        self.seek_flags[guild_id] = True
+        self.seek_pos[guild_id] = seconds
+
+    # Nếu đang hát hoặc đang pause thì đều stop để tua
+        if guild.voice_client.is_playing() or guild.voice_client.is_paused():
+            guild.voice_client.stop()
+
         return True
 
     def move_song(self, guild_id, from_idx, to_idx):
