@@ -94,8 +94,12 @@ class MusicController(discord.ui.View):
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
         vc = interaction.guild.voice_client; 
         if vc: 
-            if vc.is_playing(): vc.pause(); button.emoji = "▶️"
-            elif vc.is_paused(): vc.resume(); button.emoji = "⏸️"
+            if vc.is_playing(): 
+                self.cog.pause_music(self.guild_id) # Sửa dòng này
+                button.emoji = "▶️"
+            elif vc.is_paused(): 
+                self.cog.resume_music(self.guild_id) # Sửa dòng này
+                button.emoji = "⏸️"
             await self.cog.update_ui(self.guild_id); await interaction.response.defer()
             
     @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.secondary, row=0)
@@ -175,15 +179,34 @@ class Music(commands.Cog):
         self.current_offsets = {}  
         self.seek_flags = {}       
         self.seek_pos = {}
+        self.pause_times = {}
         
         self.current_filters = {}
         
         # Biến lưu các bộ đếm giờ thoát kênh
         self.idle_timers = {} 
+        
+        
 
         if not os.path.exists(DATA_FOLDER): os.makedirs(DATA_FOLDER)
         self.playlists = self.load_json(PLAYLIST_FILE)
         self.settings = self.load_json(SETTINGS_FILE)
+        
+    def pause_music(self, guild_id):
+        guild = self.bot.get_guild(guild_id)
+        if guild and guild.voice_client and guild.voice_client.is_playing():
+            guild.voice_client.pause()
+            self.pause_times[guild_id] = time.time() # Lưu thời điểm bấm pause
+
+    def resume_music(self, guild_id):
+        guild = self.bot.get_guild(guild_id)
+        if guild and guild.voice_client and guild.voice_client.is_paused():
+            guild.voice_client.resume()
+            if guild_id in self.pause_times:
+                # Dời thời gian bắt đầu lên một đoạn bằng khoảng thời gian đã pause
+                # Để thanh seek tiếp tục chạy đúng vị trí
+                self.start_times[guild_id] += time.time() - self.pause_times[guild_id]
+                del self.pause_times[guild_id]
 
     def load_json(self, f): return json.load(open(f, "r", encoding="utf-8")) if os.path.exists(f) else {}
     def save_json(self, f, d): 
@@ -192,16 +215,24 @@ class Music(commands.Cog):
     def get_default_volume(self, gid): return self.settings.get(str(gid), {}).get("default_volume", 0.5)
     
     async def check_music_channel(self, interaction: discord.Interaction):
+        # Bỏ qua kiểm tra nếu là lệnh giả lập từ Web
         if interaction.__class__.__name__ == 'FakeInteraction': return True
+        
+        # Lấy ID kênh nhạc từ cài đặt
         setup_id = self.settings.get(str(interaction.guild_id), {}).get("music_channel_id")
+        
+        # Nếu đã set kênh nhạc VÀ người dùng đang chat sai kênh
         if setup_id and interaction.channel_id != setup_id:
             msg = f"🚫 Bạn hãy vào kênh <#{setup_id}> để yêu cầu nhạc."
             
-            # Kiểm tra xem interaction đã được phản hồi (hoặc defer) chưa
+            # KIỂM TRA THÔNG MINH:
+            # Nếu lệnh đã lỡ 'defer' (đang suy nghĩ) thì dùng followup để gửi tin nhắn tiếp theo
             if interaction.response.is_done():
                 await interaction.followup.send(msg, ephemeral=True)
+            # Nếu chưa 'defer' thì trả lời trực tiếp (sẽ ẩn hoàn toàn với người khác)
             else:
                 await interaction.response.send_message(msg, ephemeral=True)
+            
             return False
         return True
     
@@ -412,6 +443,9 @@ class Music(commands.Cog):
                 
                 self.start_times[guild_id] = time.time()
                 self.current_offsets[guild_id] = start_offset
+                if guild_id in self.pause_times: del self.pause_times[guild_id] # <--- THÊM DÒNG NÀY
+                
+                await next_song.wait()
                 
                 guild.voice_client.play(discord.PCMVolumeTransformer(source, volume=vol), after=after)
                 await next_song.wait()
@@ -531,8 +565,8 @@ class Music(commands.Cog):
 
     @app_commands.command(name="play", description="Phát nhạc")
     async def play(self, interaction: discord.Interaction, query: str):
-        await interaction.response.defer()
         if not await self.check_music_channel(interaction): return
+        await interaction.response.defer()
         if not interaction.user.voice: return await interaction.followup.send("❌ Voice?")
         if not interaction.guild.voice_client: await interaction.user.voice.channel.connect()
         

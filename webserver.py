@@ -93,10 +93,15 @@ def get_status():
         current_pos = 0
         if g and g.voice_client:
             playing = g.voice_client.is_playing()
+            paused = g.voice_client.is_paused() # Lấy trạng thái pause
             c_name = g.voice_client.channel.name
             c_id = str(g.voice_client.channel.id)
-            if playing and gid_int in mc.start_times:
-                current_pos = (time.time() - mc.start_times[gid_int]) + mc.current_offsets.get(gid_int, 0)
+            if gid_int in mc.start_times:
+                if playing:
+                    current_pos = (time.time() - mc.start_times[gid_int]) + mc.current_offsets.get(gid_int, 0)
+                elif paused and gid_int in mc.pause_times:
+                    # Nếu đang pause: Vị trí = Thời điểm pause - Thời điểm bắt đầu + Offset
+                    current_pos = (mc.pause_times[gid_int] - mc.start_times[gid_int]) + mc.current_offsets.get(gid_int, 0)
 
         return jsonify({
             "title": cur.get('title', ''), 
@@ -123,8 +128,10 @@ def control(action):
     if not vc and action != "leave": return jsonify({"status": "no_voice"})
 
     if action == "pause_resume":
-        if vc.is_playing(): vc.pause()
-        elif vc.is_paused(): vc.resume()
+        if vc.is_playing():
+            mc.pause_music(gid_int) # Gọi hàm mới từ Music Cog
+        elif vc.is_paused():
+            mc.resume_music(gid_int) # Gọi hàm mới từ Music Cog
         run(mc.update_ui(gid_int))
     elif action == "skip": run(mc.skip_song(gid_int))
     elif action == "stop": run(mc.stop_player(gid_int))
