@@ -420,9 +420,10 @@ class Music(commands.Cog):
                     try: await self.ui_messages[guild_id].delete()
                     except: pass
                 
+                # --- TẠO VIEW ---
                 view = MusicController(self, guild_id, song_data)
                 
-                # --- Tự động tìm kênh đã set để gửi bảng điều khiển ---
+                # --- TÌM KÊNH ĐỂ GỬI ---
                 target_channel = channel 
                 saved_settings = self.settings.get(str(guild_id), {})
                 music_channel_id = saved_settings.get("music_channel_id")
@@ -433,7 +434,24 @@ class Music(commands.Cog):
                         if found_channel: target_channel = found_channel
                     except: pass
                 
-                self.ui_messages[guild_id] = await target_channel.send(embed=view.create_embed(), view=view)
+                # --- XỬ LÝ GIAO DIỆN (LOGIC MỚI) ---
+                # Nếu đang tua (start_offset > 0) và đã có tin nhắn cũ -> Chỉ Edit
+                if start_offset > 0 and guild_id in self.ui_messages:
+                    try:
+                        await self.ui_messages[guild_id].edit(embed=view.create_embed(), view=view)
+                    except Exception as e:
+                        # Nếu lỗi (tin nhắn bị xóa mất) thì gửi mới
+                        if guild_id in self.ui_messages: 
+                            try: await self.ui_messages[guild_id].delete()
+                            except: pass
+                        self.ui_messages[guild_id] = await target_channel.send(embed=view.create_embed(), view=view)
+                
+                # Nếu là bài hát mới (start_offset == 0) -> Xóa cũ gửi mới
+                else:
+                    if guild_id in self.ui_messages: 
+                        try: await self.ui_messages[guild_id].delete()
+                        except: pass
+                    self.ui_messages[guild_id] = await target_channel.send(embed=view.create_embed(), view=view)
                 # ----------------------------------------------------------------
 
                 next_song = asyncio.Event()
