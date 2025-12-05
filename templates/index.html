@@ -306,7 +306,7 @@
 
                         <div class="progress-container">
                             <span id="timeCurrent">00:00</span>
-                            <input type="range" id="progressBar" class="progress-bar-slider" value="0" min="0" max="100" onchange="seekAudio(this.value)" oninput="isSeeking=true">
+                            <input type="range" id="progressBar" class="progress-bar-slider" value="0" min="0" max="100" onchange="seekAudio(this.value)" oninput="isSeeking=true; updateSliderStyle(this)">
                             <span id="timeTotal">00:00</span>
                         </div>
 
@@ -407,6 +407,13 @@
         });
 
         window.onload = () => { loadGuilds(); setInterval(updateState, 1000); }
+        
+        // màu thanh seek
+        function updateSliderStyle(el) {
+            const val = (el.value / el.max) * 100;
+            // Phần đã qua (0% -> val%) dùng màu --accent (xanh), phần còn lại dùng màu xám mờ
+            el.style.background = `linear-gradient(to right, var(--accent) ${val}%, rgba(255,255,255,0.1) ${val}%)`;
+        }
 
         function formatTime(seconds) {
             if (!seconds || isNaN(seconds)) return "00:00";
@@ -452,6 +459,7 @@
                     const bar = document.getElementById('progressBar');
                     bar.max = d.duration;
                     bar.value = d.position;
+                    updateSliderStyle(bar);
                     document.getElementById('timeCurrent').innerText = formatTime(d.position);
                     document.getElementById('timeTotal').innerText = formatTime(d.duration);
                 }

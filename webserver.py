@@ -149,8 +149,16 @@ def control(action):
         v = min(1.0, mc.volumes.get(gid_int, 0.5) + 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
     elif action == "vol_down":
         v = max(0.0, mc.volumes.get(gid_int, 0.5) - 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
-    # ... (Giữ nguyên phần seek) ...
-        
+    # seek trượt time bài hát
+    elif action == "seek":
+        seconds = request.args.get('seconds')
+        if seconds:
+            # Chạy hàm seek_song trong luồng của bot
+            async def do_seek():
+                mc.seek_song(gid_int, int(float(seconds)))
+            run(do_seek())
+            
+            
     return jsonify({"status": "ok"})
 
 

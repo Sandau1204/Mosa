@@ -195,8 +195,16 @@ class Music(commands.Cog):
         if interaction.__class__.__name__ == 'FakeInteraction': return True
         setup_id = self.settings.get(str(interaction.guild_id), {}).get("music_channel_id")
         if setup_id and interaction.channel_id != setup_id:
-            await interaction.response.send_message(f"🚫 Bot chỉ nhận lệnh nhạc tại kênh <#{setup_id}>", ephemeral=True); return False
+            msg = f"🚫 Bạn hãy vào kênh <#{setup_id}> để yêu cầu nhạc."
+            
+            # Kiểm tra xem interaction đã được phản hồi (hoặc defer) chưa
+            if interaction.response.is_done():
+                await interaction.followup.send(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message(msg, ephemeral=True)
+            return False
         return True
+    
     def shuffle_queue(self, guild_id):
         if guild_id in self.queues and self.queues[guild_id]:
             random.shuffle(self.queues[guild_id])
