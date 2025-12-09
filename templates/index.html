@@ -11,6 +11,38 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     
     <style>
+        /* --- User Dropdown (Thêm mới) --- */
+        .user-dropdown-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 5px 15px 5px 5px; /* Căn chỉnh cho đẹp với avatar bên trái */
+            border-radius: 30px; /* Bo tròn hình viên thuốc */
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.2s;
+            cursor: pointer;
+        }
+        .user-dropdown-btn:hover, .user-dropdown-btn[aria-expanded="true"] {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--accent);
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--accent);
+        }
+        /* Chỉnh menu xổ xuống cho hợp tông màu tối */
+        .dropdown-menu-dark-custom {
+            background-color: #282828;
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .dropdown-item { color: var(--text-sub); }
+        .dropdown-item:hover { background-color: rgba(255,255,255,0.1); color: white; }
         :root {
             /* Màu nền dự phòng */
             --bg-color: #121212;
@@ -276,16 +308,40 @@
                 <i class="fas fa-music"></i> MOSA DASHBOARD <span id="trackChannel" class="status-badge">Chưa kết nối</span>
             </div>
             
-            <div class="top-actions d-flex gap-2">
-                <a href="/logout" class="btn btn-sm btn-outline-warning" title="Đăng xuất"><i class="fas fa-sign-out-alt"></i></a>
+            <div class="top-actions d-flex gap-2 align-items-center">
                 <select id="guildSelect" class="form-select form-select-sm" onchange="loadChannels()" style="max-width: 150px;">
                     <option value="" disabled selected>Server...</option>
                 </select>
                 <select id="channelSelect" class="form-select form-select-sm" style="max-width: 130px;">
                     <option value="" disabled selected>Kênh...</option>
                 </select>
+                
                 <button onclick="joinChannel()" class="btn btn-sm btn-outline-success" title="Join"><i class="fas fa-link"></i></button>
-                <button onclick="leaveChannel()" class="btn btn-sm btn-outline-danger" title="Leave"><i class="fas fa-power-off"></i></button>
+                <button onclick="leaveChannel()" class="btn btn-sm btn-outline-danger me-2" title="Leave"><i class="fas fa-power-off"></i></button>
+
+                {% if user %}
+                <div class="dropdown">
+                    <button class="user-dropdown-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <img src="{% if user.avatar %}https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png{% else %}https://cdn.discordapp.com/embed/avatars/0.png{% endif %}" 
+                             class="user-avatar" alt="User">
+                        <span class="d-none d-md-inline fw-bold" style="font-size: 0.9rem;">
+                            {{ user.global_name or user.username }}
+                        </span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-dark-custom dropdown-menu-end mt-2">
+                        <li><h6 class="dropdown-header">Xin chào, {{ user.username }}!</h6></li>
+                        <li><a class="dropdown-item" href="#"><i class="fas fa-user-cog me-2"></i> Cài đặt</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item text-danger" href="/logout">
+                                <i class="fas fa-sign-out-alt me-2"></i> Đăng xuất
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                {% else %}
+                <a href="/login" class="btn btn-sm btn-primary">Đăng nhập</a>
+                {% endif %}
             </div>
         </div>
 
