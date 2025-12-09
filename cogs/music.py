@@ -487,7 +487,9 @@ class Music(commands.Cog):
                     self.queues[guild_id].insert(0, song_data)
 
             except Exception as e:
-                print(f"Err: {e}"); await channel.send(f"⚠️ Lỗi bài **{song_data['title']}**.", delete_after=5); await asyncio.sleep(1) 
+                print(f"Err: {e}"); 
+                # await channel.send(f"⚠️ Lỗi bài **{song_data['title']}**.", delete_after=5); 
+                await asyncio.sleep(1) 
 
     async def start_playing(self, channel, guild_id):
         # Hủy hẹn giờ thoát nếu có lệnh phát nhạc mới
@@ -711,7 +713,7 @@ class Music(commands.Cog):
         self.playlists[user_id][playlist_name].append({'title': song_data['title'], 'webpage_url': song_data['webpage_url'], 'duration': song_data.get('duration', 0)})
         self.save_json(PLAYLIST_FILE, self.playlists); return True
     
-    @app_commands.command(name="afk", description="Bật/Tắt chế độ tự động rời kênh khi rảnh (24/7)")
+    @app_commands.command(name="afk", description="[Admin] Bật/Tắt chế độ tự động rời kênh khi rảnh (24/7)")
     @app_commands.checks.has_permissions(administrator=True) # chỉ admin dùng được
     async def afk(self, interaction: discord.Interaction):
         await interaction.response.defer()

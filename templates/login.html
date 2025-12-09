@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập - Mosa Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: #121212;
+            color: white;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .login-card {
+            background: rgba(30, 30, 30, 0.9);
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 400px;
+            width: 100%;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .btn-discord {
+            background-color: #5865F2;
+            color: white;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+            transition: 0.2s;
+            width: 100%;
+        }
+        .btn-discord:hover {
+            background-color: #4752C4;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h3 class="mb-4"><i class="fas fa-music text-success"></i> Mosa Dashboard</h3>
+        <p class="text-muted mb-4">Vui lòng đăng nhập để điều khiển Bot</p>
+        <a href="{{ auth_url }}" class="btn-discord">
+            <i class="fab fa-discord me-2"></i> Đăng nhập bằng Discord
+        </a>
+    </div>
+</body>
+</html>

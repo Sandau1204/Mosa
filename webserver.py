@@ -1,21 +1,32 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import threading
 import asyncio
 import discord
 import logging
 import os
 import json
-import time 
+import time
+import requests
+from dotenv import load_dotenv
 
+# Load biến môi trường
+load_dotenv()
 
 app = Flask(__name__, static_url_path='/static')
+app.secret_key = os.urandom(24) # Key bảo mật cho session
+
 bot_instance = None 
+
+# Cấu hình Discord OAuth2
+CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
+CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
+REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://localhost:5000/callback")
+API_ENDPOINT = 'https://discord.com/api/v10'
 
 # Tắt log gây nhiễu
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-# Cấu hình đường dẫn
 PREFIX = "" 
 DATA_FOLDER = "data"
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
@@ -23,15 +34,18 @@ SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 def run_web(bot):
     global bot_instance
     bot_instance = bot
-    app.run(host='0.0.0.0', port=5000)
+    # Tắt chế độ debug để tránh lỗi thread
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
 def get_music_channel_id(guild_id):
     if not os.path.exists(SETTINGS_FILE): return None
     try:
-        data = json.load(open(SETTINGS_FILE, "r", encoding="utf-8"))
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
         return data.get(str(guild_id), {}).get("music_channel_id")
     except: return None
 
+# Lớp giả lập interaction cho các lệnh
 class FakeInteraction:
     def __init__(self, guild, channel, user):
         self.guild = guild; self.guild_id = guild.id; self.channel = channel; self.user = user
@@ -46,25 +60,110 @@ class FakeInteraction:
                 try: await self.c.send(content, view=view)
                 except: pass
 
+# --- ROUTES XÁC THỰC (AUTH) ---
+
+@app.route(f'{PREFIX}/login')
+def login():
+    # Tạo URL đăng nhập Discord
+    oauth_url = f"{API_ENDPOINT}/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
+    return render_template('login.html', auth_url=oauth_url)
+
+@app.route(f'{PREFIX}/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route(f'{PREFIX}/callback')
+def callback():
+    code = request.args.get('code')
+    if not code:
+        return "Lỗi: Không tìm thấy code xác thực", 400
+
+    # 1. Đổi code lấy Access Token
+    data = {
+        'client_id': CLIENT_ID,
+        'client_secret': CLIENT_SECRET,
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': REDIRECT_URI
+    }
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    
+    r = requests.post(f'{API_ENDPOINT}/oauth2/token', data=data, headers=headers)
+    if r.status_code != 200:
+        return f"Lỗi xác thực Discord: {r.text}", 400
+    
+    token_data = r.json()
+    access_token = token_data['access_token']
+    
+    # 2. Lấy thông tin User
+    headers = {'Authorization': f'Bearer {access_token}'}
+    r_user = requests.get(f'{API_ENDPOINT}/users/@me', headers=headers)
+    user_data = r_user.json()
+    
+    # 3. Lưu vào Session
+    session['user'] = user_data
+    session['token'] = access_token
+    
+    return redirect(url_for('index'))
+
+# --- ROUTES CHÍNH ---
+
 @app.route(f'{PREFIX}/')
-def index(): return render_template('index.html')
+def index():
+    # Kiểm tra đăng nhập
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    return render_template('index.html', user=session['user'])
 
 @app.route(f'{PREFIX}/api/guilds')
 def get_guilds():
     if not bot_instance: return jsonify([])
-    return jsonify([{"id": str(g.id), "name": g.name} for g in bot_instance.guilds])
+    if 'token' not in session: return jsonify([]), 401
+
+    # 1. Lấy danh sách Guild của User từ Discord API
+    headers = {'Authorization': f'Bearer {session["token"]}'}
+    r = requests.get(f'{API_ENDPOINT}/users/@me/guilds', headers=headers)
+    
+    if r.status_code != 200: return jsonify([])
+    
+    user_guilds = r.json()
+    
+    # 2. Lọc ra những Guild chung (User có mặt & Bot có mặt)
+    bot_guild_ids = [g.id for g in bot_instance.guilds]
+    common_guilds = []
+    
+    for g in user_guilds:
+        # Chỉ lấy những guild bot đang tham gia
+        if int(g['id']) in bot_guild_ids:
+            # (Tùy chọn) Kiểm tra quyền: (g['permissions'] & 0x20) là Manage Guild
+            # Hoặc đơn giản là hiển thị tất cả server chung
+            common_guilds.append({"id": g['id'], "name": g['name'], "icon": g['icon']})
+            
+    return jsonify(common_guilds)
+
+# --- CÁC API KHÁC (Cần kiểm tra login) ---
+
+def check_auth():
+    if 'user' not in session:
+        return False
+    return True
 
 @app.route(f'{PREFIX}/api/channels')
 def get_channels():
+    if not check_auth(): return jsonify([]), 401
     gid = request.args.get('guild_id')
     if not bot_instance or not gid: return jsonify([])
     try:
+        # Kiểm tra xem user có trong guild này không (bảo mật thêm nếu cần)
         g = bot_instance.get_guild(int(gid))
         return jsonify([{"id": str(c.id), "name": c.name} for c in g.voice_channels]) if g else jsonify([])
     except: return jsonify([])
 
 @app.route(f'{PREFIX}/api/join', methods=['POST'])
 def join_channel():
+    if not check_auth(): return jsonify({"status": "unauthorized"}), 401
     gid = request.args.get('guild_id'); cid = request.args.get('channel_id')
     if not bot_instance or not gid or not cid: return jsonify({"status": "error"})
     try:
@@ -79,6 +178,9 @@ def join_channel():
 
 @app.route(f'{PREFIX}/api/status')
 def get_status():
+    # API này có thể public hoặc private tùy bạn, để private cho an toàn
+    if not check_auth(): return jsonify({}), 401
+    
     gid = request.args.get('guild_id')
     if not bot_instance or not gid: return jsonify({})
     mc = bot_instance.get_cog('Music')
@@ -91,24 +193,28 @@ def get_status():
         
         playing = False; c_name = ""; c_id = ""
         current_pos = 0
+        loop_status = False
+        
         if g and g.voice_client:
             playing = g.voice_client.is_playing()
-            paused = g.voice_client.is_paused() # Lấy trạng thái pause
+            paused = g.voice_client.is_paused()
             c_name = g.voice_client.channel.name
             c_id = str(g.voice_client.channel.id)
             if gid_int in mc.start_times:
                 if playing:
                     current_pos = (time.time() - mc.start_times[gid_int]) + mc.current_offsets.get(gid_int, 0)
                 elif paused and gid_int in mc.pause_times:
-                    # Nếu đang pause: Vị trí = Thời điểm pause - Thời điểm bắt đầu + Offset
                     current_pos = (mc.pause_times[gid_int] - mc.start_times[gid_int]) + mc.current_offsets.get(gid_int, 0)
+        
+        if gid_int in mc.loops:
+            loop_status = mc.loops[gid_int]
 
         return jsonify({
             "title": cur.get('title', ''), 
             "thumbnail": cur.get('thumbnail', None),
             "channel": cur.get('channel', ''), 
             "is_playing": playing,
-            "loop": mc.loops.get(gid_int, False), 
+            "loop": loop_status, 
             "queue": [{"title": s['title']} for s in q],
             "connected_channel": c_name, 
             "connected_channel_id": c_id,
@@ -119,6 +225,8 @@ def get_status():
 
 @app.route(f'{PREFIX}/api/control/<action>', methods=['POST'])
 def control(action):
+    if not check_auth(): return jsonify({"status": "unauthorized"}), 401
+    
     gid = request.args.get('guild_id')
     if not bot_instance or not gid: return jsonify({"status": "error"})
     gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
@@ -128,49 +236,37 @@ def control(action):
     if not vc and action != "leave": return jsonify({"status": "no_voice"})
 
     if action == "pause_resume":
-        if vc.is_playing():
-            mc.pause_music(gid_int) # Gọi hàm mới từ Music Cog
-        elif vc.is_paused():
-            mc.resume_music(gid_int) # Gọi hàm mới từ Music Cog
+        if vc.is_playing(): mc.pause_music(gid_int)
+        elif vc.is_paused(): mc.resume_music(gid_int)
         run(mc.update_ui(gid_int))
     elif action == "skip": run(mc.skip_song(gid_int))
     elif action == "stop": run(mc.stop_player(gid_int))
-    
-    # [MỚI] Thêm xử lý shuffle
     elif action == "shuffle":
-        if mc.shuffle_queue(gid_int):
-            run(mc.update_ui(gid_int))
-        else:
-            return jsonify({"status": "empty_queue"})
-
+        if mc.shuffle_queue(gid_int): run(mc.update_ui(gid_int))
+        else: return jsonify({"status": "empty_queue"})
     elif action == "leave":
         run(mc.stop_player(gid_int))
         async def lv(): 
             await asyncio.sleep(0.1) 
             if g.voice_client: await g.voice_client.disconnect()
         run(lv())
-    
     elif action == "loop": 
         mc.loops[gid_int] = not mc.loops.get(gid_int, False); run(mc.update_ui(gid_int))
     elif action == "vol_up":
         v = min(1.0, mc.volumes.get(gid_int, 0.5) + 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
     elif action == "vol_down":
         v = max(0.0, mc.volumes.get(gid_int, 0.5) - 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
-    # seek trượt time bài hát
     elif action == "seek":
         seconds = request.args.get('seconds')
         if seconds:
-            # Chạy hàm seek_song trong luồng của bot
-            async def do_seek():
-                mc.seek_song(gid_int, int(float(seconds)))
+            async def do_seek(): mc.seek_song(gid_int, int(float(seconds)))
             run(do_seek())
-            
             
     return jsonify({"status": "ok"})
 
-
 @app.route(f'{PREFIX}/api/queue/move', methods=['POST'])
 def move_queue_item():
+    if not check_auth(): return jsonify({"status": "unauthorized"}), 401
     gid = request.args.get('guild_id'); from_idx = request.args.get('from'); to_idx = request.args.get('to')
     if not bot_instance or not gid or from_idx is None or to_idx is None: return jsonify({"status": "error"})
     try:
@@ -182,6 +278,7 @@ def move_queue_item():
 
 @app.route(f'{PREFIX}/api/search', methods=['GET'])
 def search_api():
+    if not check_auth(): return jsonify([]), 401
     query = request.args.get('query')
     if not bot_instance or not query: return jsonify([])
     mc = bot_instance.get_cog('Music')
@@ -198,10 +295,29 @@ def search_api():
 
 @app.route(f'{PREFIX}/api/play', methods=['POST'])
 def play_api():
+    if not check_auth(): return jsonify({"status": "unauthorized"}), 401
     gid = request.args.get('guild_id'); query = request.args.get('query')
     if not bot_instance or not gid or not query: return jsonify({"status": "error"})
     try:
         gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
+        
+        # Hàm phụ trợ tìm kênh text để gửi thông báo (đã có trong code cũ của bạn nhưng tôi viết lại cho chắc)
+        def _get_text_channel(g, mc):
+            setup_id = None
+            if mc and hasattr(mc, 'settings'): setup_id = mc.settings.get(str(g.id), {}).get("music_channel_id")
+            if not setup_id: setup_id = get_music_channel_id(g.id)
+            if setup_id: 
+                try: 
+                    c = g.get_channel(int(setup_id))
+                    if c: return c
+                except: pass
+            if g.id in mc.ui_messages: 
+                try: return mc.ui_messages[g.id].channel
+                except: pass
+            if g.voice_client and hasattr(g.voice_client.channel, 'send'): return g.voice_client.channel
+            if g.text_channels: return g.text_channels[0]
+            return None
+
         text_channel = _get_text_channel(g, mc)
         if text_channel:
             async def do_play():
@@ -219,10 +335,13 @@ def play_api():
 
 @app.route(f'{PREFIX}/api/playlists')
 def get_playlists_api():
+    if not check_auth(): return jsonify([]), 401
     if not bot_instance: return jsonify([])
     mc = bot_instance.get_cog('Music')
     if not mc: return jsonify([])
     res = []
+    # Chỉ trả về playlist của user đang đăng nhập (hoặc tất cả nếu bạn muốn chia sẻ)
+    # Ở đây tôi trả về hết như cũ
     for uid, playlists in mc.playlists.items():
         try: user = bot_instance.get_user(int(uid)); user_name = user.name if user else f"User {uid}"
         except: user_name = f"User {uid}"
@@ -232,12 +351,30 @@ def get_playlists_api():
 
 @app.route(f'{PREFIX}/api/playlist/play_all', methods=['POST'])
 def play_playlist_all_api():
+    if not check_auth(): return jsonify({"status": "unauthorized"}), 401
+    # ... (Giữ nguyên logic cũ của bạn)
     gid = request.args.get('guild_id'); uid = request.args.get('user_id'); name = request.args.get('name')
     if not bot_instance or not gid or not uid or not name: return jsonify({"status": "error"})
     try:
         gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
         songs = mc.playlists.get(str(uid), {}).get(name)
         if not songs: return jsonify({"status": "error"})
+        
+        # Hàm _get_text_channel như trên
+        def _get_text_channel(g, mc):
+            setup_id = None
+            if mc and hasattr(mc, 'settings'): setup_id = mc.settings.get(str(g.id), {}).get("music_channel_id")
+            if not setup_id: setup_id = get_music_channel_id(g.id)
+            if setup_id: 
+                try: c = g.get_channel(int(setup_id)); return c if c else None
+                except: pass
+            if g.id in mc.ui_messages: 
+                try: return mc.ui_messages[g.id].channel
+                except: pass
+            if g.voice_client and hasattr(g.voice_client.channel, 'send'): return g.voice_client.channel
+            if g.text_channels: return g.text_channels[0]
+            return None
+
         text_channel = _get_text_channel(g, mc)
         if text_channel:
              async def do():
@@ -247,34 +384,3 @@ def play_playlist_all_api():
              return jsonify({"status": "ok"})
         return jsonify({"status": "error"})
     except: return jsonify({"status": "error"})
-
-def _get_text_channel(g, mc):
-    # 1. Ưu tiên kênh đã set trong cấu hình (Lấy từ Memory của Music Cog cho chuẩn)
-    setup_id = None
-    if mc and hasattr(mc, 'settings'):
-        setup_id = mc.settings.get(str(g.id), {}).get("music_channel_id")
-    
-    # Fallback đọc file nếu memory chưa có (hiếm khi xảy ra)
-    if not setup_id:
-        setup_id = get_music_channel_id(g.id)
-
-    if setup_id: 
-        try:
-            c = g.get_channel(int(setup_id)) # Thêm int() để chắc chắn là số
-            if c: return c
-        except: pass
-        # Nếu setup_id có nhưng kênh không tìm thấy (đã xóa) -> Fallback xuống dưới
-    
-    # 2. Nếu không set (hoặc kênh set bị xóa), ưu tiên kênh đang có bảng điều khiển
-    if g.id in mc.ui_messages:
-        try: return mc.ui_messages[g.id].channel
-        except: pass
-    
-    # 3. Fallback vào kênh Voice (Tính năng mới của Discord: Text in Voice)
-    if g.voice_client and hasattr(g.voice_client.channel, 'send'): 
-        return g.voice_client.channel
-    
-    # 4. Cuối cùng lấy kênh text đầu tiên tìm thấy
-    if g.text_channels: return g.text_channels[0]
-    
-    return None
