@@ -283,18 +283,23 @@ class Music(commands.Cog):
             
             guild = self.bot.get_guild(guild_id)
             if guild and guild.voice_client:
-                await guild.voice_client.disconnect()
+                # 1. Gọi hàm stop_player để dọn dẹp hàng chờ và vòng lặp phát nhạc
+                await self.stop_player(guild_id)
+                
+                # 2. Sử dụng force=True để buộc ngắt kết nối ngay lập tức
+                await guild.voice_client.disconnect(force=True)
+                
                 await channel.send("💤 **Phòng trống quá lâu (15p), mình đi ngủ đây!**")
                 
-                # Dọn dẹp dữ liệu
-                if guild_id in self.queues: del self.queues[guild_id]
-                if guild_id in self.current_songs: del self.current_songs[guild_id]
+                # 3. Dọn dẹp tin nhắn giao diện nếu còn sót lại
                 if guild_id in self.ui_messages:
                     try: await self.ui_messages[guild_id].delete()
                     except: pass
                     
         except asyncio.CancelledError:
             print(f"❌ Hủy đếm giờ kênh {guild_id} (Có hoạt động mới)")
+        except Exception as e:
+            print(f"⚠️ Lỗi khi tự động rời kênh: {e}")
         finally:
             if guild_id in self.idle_timers:
                 del self.idle_timers[guild_id]
@@ -324,6 +329,16 @@ class Music(commands.Cog):
             # Xóa hàng chờ và tắt loop để bot không phát bài tiếp theo
             self.queues[guild_id] = []
             self.loops[guild_id] = False
+            
+            # Kiểm tra xem server có bật chế độ auto_leave không (Mặc định là True)
+            is_auto_leave = self.settings.get(str(guild_id), {}).get("auto_leave", True)
+            
+            if is_auto_leave and not vc.is_playing():
+                if guild_id not in self.idle_timers:
+                    setup_id = self.settings.get(str(guild_id), {}).get("music_channel_id")
+                    target_channel = self.bot.get_channel(int(setup_id)) if setup_id else vc.channel
+                    if target_channel:
+                        self.idle_timers[guild_id] = asyncio.create_task(self.idle_disconnect(guild_id, target_channel))
             
             # Nếu bot ĐANG RẢNH (không phát nhạc) -> Đếm giờ ngay
             if not vc.is_playing():
@@ -364,9 +379,11 @@ class Music(commands.Cog):
                         
                         await target_channel.send("✅ **Hết nhạc.**")
                         
-                        # [SỬA LẠI] Chỉ đếm giờ nếu trong phòng KHÔNG còn người (chỉ còn bot)
+                        # Chỉ đếm giờ nếu auto_leave=True VÀ phòng trống
                         guild = self.bot.get_guild(guild_id)
-                        if guild and guild.voice_client and guild.voice_client.channel:
+                        is_auto_leave = self.settings.get(str(guild_id), {}).get("auto_leave", True)
+
+                        if is_auto_leave and guild and guild.voice_client and guild.voice_client.channel:
                             if len(guild.voice_client.channel.members) == 1:
                                 if guild_id not in self.idle_timers:
                                     self.idle_timers[guild_id] = asyncio.create_task(self.idle_disconnect(guild_id, target_channel))
@@ -693,6 +710,45 @@ class Music(commands.Cog):
             if s['webpage_url'] == song_data['webpage_url']: return False
         self.playlists[user_id][playlist_name].append({'title': song_data['title'], 'webpage_url': song_data['webpage_url'], 'duration': song_data.get('duration', 0)})
         self.save_json(PLAYLIST_FILE, self.playlists); return True
+    
+    @app_commands.command(name="afk", description="Bật/Tắt chế độ tự động rời kênh khi rảnh (24/7)")
+    @app_commands.checks.has_permissions(administrator=True) # chỉ admin dùng được
+    async def afk(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        gid = str(interaction.guild_id)
+        
+        # 1. Khởi tạo settings nếu chưa có
+        if gid not in self.settings: self.settings[gid] = {}
+        
+        # 2. Lấy trạng thái hiện tại (Mặc định là True - tức là CÓ tự động rời)
+        current_status = self.settings[gid].get("auto_leave", True)
+        
+        # 3. Đảo ngược trạng thái
+        new_status = not current_status
+        self.settings[gid]["auto_leave"] = new_status
+        self.save_json(SETTINGS_FILE, self.settings)
+        
+        status_text = "BẬT" if new_status else "TẮT"
+        msg = f"✅ Chế độ tự động rời kênh: **{status_text}**"
+        if not new_status:
+            msg += "\n(Bot sẽ ở lại kênh Voice 24/7 kể cả khi không có ai)"
+
+        # 4. Xử lý logic timer ngay lập tức
+        if not new_status:
+            # Nếu tắt AFK -> Hủy đếm giờ ngay lập tức nếu đang đếm
+            if interaction.guild_id in self.idle_timers:
+                self.idle_timers[interaction.guild_id].cancel()
+                del self.idle_timers[interaction.guild_id]
+        else:
+            # Nếu bật AFK -> Kiểm tra xem phòng có đang trống không để đếm lại
+            vc = interaction.guild.voice_client
+            if vc and vc.channel and len(vc.channel.members) == 1:
+                if interaction.guild_id not in self.idle_timers:
+                    self.idle_timers[interaction.guild_id] = asyncio.create_task(
+                        self.idle_disconnect(interaction.guild_id, interaction.channel)
+                    )
+
+        await interaction.followup.send(msg)
 
 async def setup(bot):
     await bot.add_cog(Music(bot))
