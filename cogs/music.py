@@ -14,10 +14,11 @@ from discord.ui import Button, View, Select
 # CẤU HÌNH & HẰNG SỐ
 # ====================================================
 DATA_FOLDER = "data"
+QUEUE_FILE = os.path.join(DATA_FOLDER, "saved_queues.json")
 PLAYLIST_FILE = os.path.join(DATA_FOLDER, "playlists.json")
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 SEARCH_LIMIT = 5
-QUEUE_FILE = os.path.join(DATA_FOLDER, "saved_queues.json")
+
 
 # --- BỘ LỌC ÂM THANH (FFMPEG AUDIO FILTERS) ---
 FFMPEG_FILTERS = {
