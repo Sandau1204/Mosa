@@ -17,6 +17,7 @@ DATA_FOLDER = "data"
 PLAYLIST_FILE = os.path.join(DATA_FOLDER, "playlists.json")
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 SEARCH_LIMIT = 5
+QUEUE_FILE = os.path.join(DATA_FOLDER, "saved_queues.json")
 
 # --- BỘ LỌC ÂM THANH (FFMPEG AUDIO FILTERS) ---
 FFMPEG_FILTERS = {
@@ -191,6 +192,99 @@ class Music(commands.Cog):
         if not os.path.exists(DATA_FOLDER): os.makedirs(DATA_FOLDER)
         self.playlists = self.load_json(PLAYLIST_FILE)
         self.settings = self.load_json(SETTINGS_FILE)
+    
+    def save_queues_to_file(self):
+        """Lưu trạng thái hiện tại (Queue, Loop, Volume, Voice Channel) vào file."""
+        data = {}
+        for gid, queue in self.queues.items():
+            # Chỉ lưu nếu có hàng đợi hoặc đang có bài hát
+            if queue or (gid in self.current_songs):
+                guild = self.bot.get_guild(gid)
+                # Chỉ lưu nếu bot thực sự đang ở trong kênh voice
+                if not guild or not guild.voice_client or not guild.voice_client.channel: continue
+                
+                data[str(gid)] = {
+                    "queue": queue,
+                    "current_song": self.current_songs.get(gid), # Lưu bài đang hát dở
+                    "voice_channel_id": guild.voice_client.channel.id, # Lưu ID phòng voice để chui vào lại
+                    "loop": self.loops.get(gid, False),
+                    "volume": self.volumes.get(gid, 0.5)
+                }
+        self.save_json(QUEUE_FILE, data)
+        print("💾 Mosa Music: Đã lưu hàng đợi.")
+
+    def cog_unload(self):
+        """Hàm này tự động chạy khi Bot tắt hoặc Cog bị reload."""
+        self.save_queues_to_file()
+        # Dừng nhạc thủ công để tránh lỗi kẹt process ffmpeg
+        for gid in self.bot.voice_clients:
+            try: gid.disconnect(force=True)
+            except: pass
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Hàm này chạy khi Bot khởi động xong -> Tiến hành khôi phục."""
+        await self.restore_queues()
+
+    async def restore_queues(self):
+        """Đọc file json và khôi phục lại hiện trường."""
+        if not os.path.exists(QUEUE_FILE): return
+        
+        print("♻️ Đang khôi phục hàng đợi nhạc...")
+        try:
+            data = self.load_json(QUEUE_FILE)
+            for gid_str, info in data.items():
+                try:
+                    gid = int(gid_str)
+                    guild = self.bot.get_guild(gid)
+                    if not guild: continue
+
+                    # 1. Khôi phục dữ liệu biến
+                    self.queues[gid] = info.get("queue", [])
+                    self.loops[gid] = info.get("loop", False)
+                    self.volumes[gid] = info.get("volume", 0.5)
+                    
+                    # Nếu lúc tắt đang có bài hát dở, nhét nó lên đầu hàng đợi để phát lại
+                    current_song = info.get("current_song")
+                    if current_song:
+                        self.queues[gid].insert(0, current_song)
+
+                    # 2. Kết nối lại Voice Channel
+                    vc_id = info.get("voice_channel_id")
+                    voice_channel = guild.get_channel(vc_id)
+                    
+                    if voice_channel:
+                        # Kết nối voice
+                        try:
+                            if not guild.voice_client:
+                                await voice_channel.connect()
+                        except: pass # Nếu đã kết nối rồi thì bỏ qua
+                        
+                        # Set lại âm lượng cũ
+                        if guild.voice_client and guild.voice_client.source:
+                             guild.voice_client.source.volume = self.volumes[gid]
+
+                        # 3. Kích hoạt lại Player Loop
+                        # Cần tìm kênh text để gửi lại cái bảng điều khiển (UI)
+                        setup_id = self.settings.get(str(gid), {}).get("music_channel_id")
+                        text_channel = guild.get_channel(int(setup_id)) if setup_id else None
+                        
+                        # Nếu không tìm thấy kênh cài đặt, thử dùng kênh voice làm kênh chat (nếu cho phép) hoặc bỏ qua UI
+                        if not text_channel and hasattr(voice_channel, 'send'):
+                            text_channel = voice_channel
+
+                        if text_channel and self.queues[gid]:
+                             # Gọi hàm start_playing để bắt đầu vòng lặp nhạc
+                             await self.start_playing(text_channel, gid)
+                             print(f"✅ Đã khôi phục nhạc cho server: {guild.name}")
+                except Exception as e:
+                    print(f"❌ Lỗi khôi phục server {gid_str}: {e}")
+            
+            # Xóa file sau khi khôi phục để tránh lặp lại nếu lần sau tắt bot không đúng cách
+            os.remove(QUEUE_FILE)
+            
+        except Exception as e:
+            print(f"⚠️ Lỗi đọc file queue: {e}")
         
     def pause_music(self, guild_id):
         guild = self.bot.get_guild(guild_id)
@@ -321,33 +415,29 @@ class Music(commands.Cog):
         # 1. Nếu có người vào phòng (Số người > 1) -> Hủy đếm giờ
         if len(vc.channel.members) > 1:
             if guild_id in self.idle_timers:
-                self.idle_timers[guild_id].cancel()
-                del self.idle_timers[guild_id]
+                try:
+                    self.idle_timers[guild_id].cancel()
+                    del self.idle_timers[guild_id]
+                except: pass
 
         # 2. Nếu phòng trống (Chỉ còn 1 mình bot)
         elif len(vc.channel.members) == 1:
-            # Xóa hàng chờ và tắt loop để bot không phát bài tiếp theo
-            self.queues[guild_id] = []
-            self.loops[guild_id] = False
+            # --- LOGIC MỚI: GIỮ NGUYÊN HÀNG ĐỢI & ĐẾM NGƯỢC NGAY ---
             
             # Kiểm tra xem server có bật chế độ auto_leave không (Mặc định là True)
             is_auto_leave = self.settings.get(str(guild_id), {}).get("auto_leave", True)
             
-            if is_auto_leave and not vc.is_playing():
+            if is_auto_leave:
+                # Nếu chưa có hẹn giờ thì bắt đầu đếm ngay lập tức
                 if guild_id not in self.idle_timers:
+                    # Xác định kênh text để gửi thông báo khi hết giờ
                     setup_id = self.settings.get(str(guild_id), {}).get("music_channel_id")
                     target_channel = self.bot.get_channel(int(setup_id)) if setup_id else vc.channel
+                    
                     if target_channel:
+                        # Bắt đầu đếm 15 phút (bất kể đang phát nhạc hay không)
                         self.idle_timers[guild_id] = asyncio.create_task(self.idle_disconnect(guild_id, target_channel))
-            
-            # Nếu bot ĐANG RẢNH (không phát nhạc) -> Đếm giờ ngay
-            if not vc.is_playing():
-                if guild_id not in self.idle_timers:
-                    setup_id = self.settings.get(str(guild_id), {}).get("music_channel_id")
-                    target_channel = self.bot.get_channel(int(setup_id)) if setup_id else vc.channel
-                    if target_channel:
-                        self.idle_timers[guild_id] = asyncio.create_task(self.idle_disconnect(guild_id, target_channel))
-
+                        
     async def player_loop(self, guild_id, channel):
         while True:
             is_seeking = self.seek_flags.get(guild_id, False)
