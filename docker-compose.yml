@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  mosa-bot:
+    build: .
+    container_name: mosa_bot
+    restart: unless-stopped
+    ports:
+      - "5000:5000" # Mở port 5000 cho Web Dashboard
+    volumes:
+      - ./data:/app/data # Map thư mục data ra ngoài để lưu giữ queue, playlist, config
+      - ./cookies.txt:/app/cookies.txt # Map file cookie (nếu có) để yt-dlp không bị lỗi xác minh
+    env_file:
+      - .env # Đọc các biến môi trường từ file .env

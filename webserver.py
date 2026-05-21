@@ -111,43 +111,33 @@ def callback():
 
 @app.route(f'{PREFIX}/')
 def index():
-    # Kiểm tra đăng nhập
-    if 'user' not in session:
-        return redirect(url_for('login'))
+    dummy_user = {
+        "id": "123456789", 
+        "username": "Admin (Khách)", 
+        "avatar": None
+    }
+    return render_template('index.html', user=dummy_user)
     
-    return render_template('index.html', user=session['user'])
 
 @app.route(f'{PREFIX}/api/guilds')
 def get_guilds():
     if not bot_instance: return jsonify([])
-    if 'token' not in session: return jsonify([]), 401
-
-    # 1. Lấy danh sách Guild của User từ Discord API
-    headers = {'Authorization': f'Bearer {session["token"]}'}
-    r = requests.get(f'{API_ENDPOINT}/users/@me/guilds', headers=headers)
     
-    if r.status_code != 200: return jsonify([])
-    
-    user_guilds = r.json()
-    
-    # 2. Lọc ra những Guild chung (User có mặt & Bot có mặt)
-    bot_guild_ids = [g.id for g in bot_instance.guilds]
+    # Bỏ qua kiểm tra token
+    # Lấy trực tiếp danh sách tất cả các server mà bot đang tham gia
     common_guilds = []
-    
-    for g in user_guilds:
-        # Chỉ lấy những guild bot đang tham gia
-        if int(g['id']) in bot_guild_ids:
-            # (Tùy chọn) Kiểm tra quyền: (g['permissions'] & 0x20) là Manage Guild
-            # Hoặc đơn giản là hiển thị tất cả server chung
-            common_guilds.append({"id": g['id'], "name": g['name'], "icon": g['icon']})
-            
+    for g in bot_instance.guilds:
+        # Trả về ID, tên và mã băm (hash) của icon server
+        icon_hash = g.icon.key if g.icon else None
+        common_guilds.append({"id": str(g.id), "name": g.name, "icon": icon_hash})
+        
     return jsonify(common_guilds)
+
 
 # --- CÁC API KHÁC (Cần kiểm tra login) ---
 
 def check_auth():
-    if 'user' not in session:
-        return False
+
     return True
 
 @app.route(f'{PREFIX}/api/channels')

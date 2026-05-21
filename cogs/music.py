@@ -33,7 +33,8 @@ FFMPEG_FILTERS = {
 }
 
 YDL_OPTIONS = {
-    'format': 'bestaudio/best',
+    'format': 'ba/b',
+    'extractor_args': {'youtube': ['player_client=android,web']},
     'noplaylist': False,
     'extract_flat': 'in_playlist',
     'quiet': True,
