@@ -123,28 +123,9 @@ class Roles(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         """Sự kiện kích hoạt khi ai đó thả icon vào tin nhắn"""
-        if payload.member.bot: return # Bỏ qua nếu là bot thả icon
-        
-        data = self.load_data()
-        guild_id = str(payload.guild_id)
-        message_id = str(payload.message_id)
-        emoji_str = str(payload.emoji)
-
-        try:
-            role_id = data[guild_id]["reaction_roles"][message_id][emoji_str]
-            guild = self.bot.get_guild(payload.guild_id)
-            role = guild.get_role(role_id)
-            
-            if role:
-                await payload.member.add_roles(role)
-        except (KeyError, TypeError):
-            # Lỗi KeyError xảy ra khi tin nhắn hoặc emoji không nằm trong dữ liệu cài đặt, ta cứ bỏ qua
-            pass
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        """Sự kiện kích hoạt khi ai đó thả icon vào tin nhắn"""
-        if payload.member.bot: return # Bỏ qua nếu là bot
+        # Bỏ qua nếu là bot hoặc không xác định được member
+        if getattr(payload, "member", None) is None or payload.member.bot: 
+            return 
         
         data = self.load_data()
         guild_id = str(payload.guild_id)
@@ -161,20 +142,13 @@ class Roles(commands.Cog):
                 role = guild.get_role(role_id)
                 
                 if role:
-                    await payload.member.add_roles(role)
-            else:
-                # Nếu thả icon lạ, bot sẽ tự động xóa icon đó đi
-                guild = self.bot.get_guild(payload.guild_id)
-                channel = guild.get_channel(payload.channel_id)
-                if channel:
                     try:
-                        msg = await channel.fetch_message(payload.message_id)
-                        # Xóa phản ứng của người dùng đó (yêu cầu bot có quyền Manage Messages)
-                        await msg.remove_reaction(payload.emoji, payload.member)
+                        await payload.member.add_roles(role)
+                        print(f"✅ Đã cấp role {role.name} cho {payload.member.name}")
                     except discord.Forbidden:
-                        print("Lỗi: Bot cần cấp quyền 'Quản lý tin nhắn' (Manage Messages) để xóa emoji lạ.")
-                    except discord.HTTPException:
-                        pass
+                        print(f"❌ Lỗi Forbidden: Bot không có quyền cấp role {role.name}. Hãy kiểm tra lại Role Hierarchy và quyền Manage Roles!")
+                    except Exception as e:
+                        print(f"❌ Lỗi không xác định khi cấp role: {e}")
     # ==========================================
     # 3. CẤP ROLE CHO TẤT CẢ NGƯỜI DÙNG
     # ==========================================
