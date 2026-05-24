@@ -34,7 +34,7 @@ FFMPEG_FILTERS = {
 
 YDL_OPTIONS = {
     'format': 'ba/b',
-    'extractor_args': {'youtube': ['player_client=android,web']},
+    #'extractor_args': {'youtube': ['player_client=android,web']},
     'noplaylist': False,
     'extract_flat': 'in_playlist',
     'quiet': True,
@@ -510,6 +510,10 @@ class Music(commands.Cog):
                     self.current_songs[guild_id] = song_data 
                 else:
                     play_url = song_data.get('stream_url')
+                    
+                if not play_url:
+                    await channel.send(f"⚠️ Không thể trích xuất âm thanh cho bài: **{song_data['title']}** (Có thể do YouTube chặn). Đang bỏ qua...")
+                    continue
 
                 ffmpeg_local = os.path.abspath("ffmpeg.exe")
                 exe = ffmpeg_local if os.path.exists(ffmpeg_local) else "ffmpeg"

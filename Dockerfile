@@ -6,6 +6,8 @@ RUN apt-get update && \
     apt-get install -y ffmpeg tini && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+    
+RUN ffmpeg -version
 
 # Thiết lập thư mục làm việc trong container
 WORKDIR /app
