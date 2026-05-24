@@ -28,9 +28,6 @@ class Roles(commands.Cog):
         with open(ROLE_DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
     
-    
-    
-
     # ==========================================
     # 1. TÍNH NĂNG AUTO-ROLE (CẤP ROLE TỰ ĐỘNG)
     # ==========================================
@@ -149,6 +146,48 @@ class Roles(commands.Cog):
                         print(f"❌ Lỗi Forbidden: Bot không có quyền cấp role {role.name}. Hãy kiểm tra lại Role Hierarchy và quyền Manage Roles!")
                     except Exception as e:
                         print(f"❌ Lỗi không xác định khi cấp role: {e}")
+    @commands.Cog.listener()
+    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
+        """Sự kiện kích hoạt khi ai đó gỡ icon khỏi tin nhắn"""
+        # Bỏ qua nếu là bot tự gỡ
+        if payload.user_id == self.bot.user.id:
+            return
+            
+        data = self.load_data()
+        guild_id = str(payload.guild_id)
+        message_id = str(payload.message_id)
+        emoji_str = str(payload.emoji)
+
+        # Kiểm tra xem tin nhắn này có phải là bảng Reaction Role không
+        if guild_id in data and "reaction_roles" in data[guild_id] and message_id in data[guild_id]["reaction_roles"]:
+            
+            # Nếu icon người dùng gỡ đúng là icon cài đặt role
+            if emoji_str in data[guild_id]["reaction_roles"][message_id]:
+                role_id = data[guild_id]["reaction_roles"][message_id][emoji_str]
+                
+                # Lấy object Server (Guild)
+                guild = self.bot.get_guild(payload.guild_id)
+                if guild is None:
+                    return
+                    
+                role = guild.get_role(role_id)
+                
+                # Trong sự kiện remove, payload.member thường là None nên phải tìm/fetch member thủ công
+                member = guild.get_member(payload.user_id)
+                if member is None:
+                    try:
+                        member = await guild.fetch_member(payload.user_id)
+                    except discord.NotFound:
+                        return # Bỏ qua nếu người dùng đã rời server
+                
+                if role and member:
+                    try:
+                        await member.remove_roles(role)
+                        print(f"✅ Đã thu hồi role {role.name} từ {member.name}")
+                    except discord.Forbidden:
+                        print(f"❌ Lỗi Forbidden: Bot không có quyền thu hồi role {role.name}.")
+                    except Exception as e:
+                        print(f"❌ Lỗi không xác định khi thu hồi role: {e}")
     # ==========================================
     # 3. CẤP ROLE CHO TẤT CẢ NGƯỜI DÙNG
     # ==========================================
@@ -210,7 +249,5 @@ class Roles(commands.Cog):
         else:
              await interaction.followup.send(f"⚠️ Lỗi: {str(error)}", ephemeral=True)
     
-    
-
 async def setup(bot):
     await bot.add_cog(Roles(bot))

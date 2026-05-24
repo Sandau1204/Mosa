@@ -1,5 +1,5 @@
 import discord
-import os # Cần thêm thư viện os để xử lý đường dẫn file
+import os
 from discord import app_commands
 from discord.ext import commands
 
@@ -11,7 +11,6 @@ class Admin(commands.Cog):
     @app_commands.describe(amount="Số lượng cần xóa")
     @app_commands.checks.has_permissions(manage_messages=True)
     async def clear(self, interaction: discord.Interaction, amount: int):
-        # Defer ẩn (chỉ mình người dùng thấy đang xử lý)
         await interaction.response.defer(ephemeral=True) 
         
         if amount < 1:
@@ -46,26 +45,20 @@ class Admin(commands.Cog):
         except discord.Forbidden:
              await interaction.followup.send("❌ Bot không đủ quyền.")
 
-    # --- LỆNH MỚI: CẬP NHẬT COOKIES ---
     @app_commands.command(name="cookies", description="[Admin] Cập nhật file cookies.txt cho Bot")
     @app_commands.describe(file="Chọn file cookies.txt từ máy tính để upload")
-    @app_commands.checks.has_permissions(administrator=True) # Chỉ Administrator mới được dùng
+    @app_commands.checks.has_permissions(administrator=True)
     async def cookies(self, interaction: discord.Interaction, file: discord.Attachment):
         await interaction.response.defer(ephemeral=True)
 
-        # 1. Kiểm tra định dạng file
         if not file.filename.endswith(".txt"):
             await interaction.followup.send("❌ Vui lòng chỉ upload file có đuôi `.txt` (Ví dụ: `cookies.txt`)")
             return
 
-        # 2. Đường dẫn file gốc (nằm cùng cấp với main.py)
         save_path = "cookies.txt"
 
         try:
-            # 3. Lưu file đè lên file cũ
             await file.save(save_path)
-            
-            # 4. Thông báo thành công
             print(f"🔄 [System] Cookies updated by {interaction.user.name}")
             await interaction.followup.send(
                 f"✅ **Đã cập nhật `cookies.txt` thành công!**\n"
@@ -75,11 +68,56 @@ class Admin(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"❌ Có lỗi khi lưu file: {str(e)}")
 
+    @app_commands.command(name="msg", description="[Admin] Yêu cầu bot gửi tin nhắn đến một kênh cụ thể")
+    @app_commands.describe(channel="Kênh bạn muốn bot gửi tin nhắn vào", message="Nội dung tin nhắn")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def msg(self, interaction: discord.Interaction, channel: discord.TextChannel, message: str):
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            await channel.send(message)
+            await interaction.followup.send(f"✅ Đã gửi tin nhắn đến {channel.mention} thành công!")
+        except discord.Forbidden:
+            await interaction.followup.send(f"❌ Bot không có quyền gửi tin nhắn vào kênh {channel.mention}.")
+        except Exception as e:
+            await interaction.followup.send(f"❌ Có lỗi xảy ra: {str(e)}")
+
+    # --- LỆNH MỚI: REP TIN NHẮN THAY MẶT ADMIN ---
+    @app_commands.command(name="rep", description="[Admin] Yêu cầu bot phản hồi một tin nhắn cụ thể")
+    @app_commands.describe(
+        channel="Kênh chứa tin nhắn cần phản hồi", 
+        message_id="ID của tin nhắn cần phản hồi", 
+        reply_text="Nội dung phản hồi"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def rep(self, interaction: discord.Interaction, channel: discord.TextChannel, message_id: str, reply_text: str):
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            # Lấy tin nhắn dựa trên ID
+            target_message = await channel.fetch_message(int(message_id))
+            # Cho bot reply tin nhắn đó
+            await target_message.reply(reply_text)
+            
+            await interaction.followup.send(f"✅ Đã phản hồi tin nhắn thành công trong {channel.mention}!")
+        except ValueError:
+            await interaction.followup.send("❌ ID tin nhắn không hợp lệ. Vui lòng chỉ nhập các chữ số (ID).")
+        except discord.NotFound:
+            await interaction.followup.send(f"❌ Không tìm thấy tin nhắn có ID `{message_id}` trong kênh {channel.mention}. Vui lòng kiểm tra lại.")
+        except discord.Forbidden:
+            await interaction.followup.send("❌ Bot không có quyền đọc lịch sử tin nhắn hoặc gửi tin nhắn vào kênh đó.")
+        except discord.HTTPException as e:
+             await interaction.followup.send(f"❌ Có lỗi kết nối: {str(e)}")
+        except Exception as e:
+            await interaction.followup.send(f"❌ Có lỗi xảy ra: {str(e)}")
+
     # Xử lý lỗi quyền hạn
     @clear.error
     @kick.error
     @ban.error
     @cookies.error
+    @msg.error
+    @rep.error # Thêm xử lý lỗi cho lệnh rep
     async def error_handler(self, interaction: discord.Interaction, error):
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
