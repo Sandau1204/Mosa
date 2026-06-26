@@ -24,11 +24,12 @@ class General(commands.Cog):
 
     @app_commands.command(name="avatar", description="Xem ảnh đại diện")
     @app_commands.describe(member="Chọn thành viên")
-    async def avatar(self, interaction: discord.Interaction, member: discord.Member = None):
+    async def avatar(self, interaction: discord.Interaction, member: discord.Member | None = None):
         await interaction.response.defer()
         target = member or interaction.user
         embed = discord.Embed(title=f"Avatar của {target.name}", color=discord.Color.blue())
-        embed.set_image(url=target.avatar.url)
+        if target.avatar:
+            embed.set_image(url=target.avatar.url)
         await interaction.followup.send(embed=embed)
 
 async def setup(bot):

@@ -8,6 +8,8 @@ from webserver import run_web
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+if not TOKEN:
+    raise ValueError("DISCORD_TOKEN environment variable is not set")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -26,7 +28,10 @@ class MyBot(commands.Bot):
         print("🔄 Đã đồng bộ Slash Commands!")
 
     async def on_ready(self):
-        print(f'🤖 Bot đã online: {self.user} (ID: {self.user.id})')
+        user = self.user
+        user_display = f"{user}" if user else "Unknown"
+        user_id = getattr(user, 'id', 'Unknown')
+        print(f'🤖 Bot đã online: {user_display} (ID: {user_id})')
         await self.change_presence(activity=discord.Game(name="/play để nghe nhạc"))
 
 bot = MyBot()

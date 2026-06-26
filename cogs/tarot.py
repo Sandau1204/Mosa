@@ -4,13 +4,15 @@ from discord.ext import commands
 import random
 import json
 import os
+from typing import Dict, Optional
 from dotenv import load_dotenv
 
 # --- CẤU HÌNH ---
 load_dotenv() # Load file .env
+owner_id = os.getenv('OWNER_ID')
 try:
     # Lấy ID từ .env và chuyển sang số nguyên (int)
-    OWNER_ID = int(os.getenv('OWNER_ID'))
+    OWNER_ID = int(owner_id) if owner_id is not None else 0
 except (TypeError, ValueError):
     print("⚠️ CẢNH BÁO: Chưa cấu hình OWNER_ID trong file .env hoặc ID sai định dạng!")
     OWNER_ID = 0
@@ -22,7 +24,8 @@ class Tarot(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.deck = self.load_tarot_data()
-        self.config = self.load_config()
+        # Explicitly type self.config so static checkers know the expected value types
+        self.config: Dict[str, Optional[int]] = self.load_config()
 
     def load_tarot_data(self):
         if not os.path.exists(DATA_FILE):
@@ -30,12 +33,24 @@ class Tarot(commands.Cog):
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
 
-    def load_config(self):
+    def load_config(self) -> Dict[str, Optional[int]]:
+        # Return a config dict where channel_id may be an int or None
         if not os.path.exists(CONFIG_FILE):
             return {"channel_id": None}
         try:
             with open(CONFIG_FILE, 'r') as f:
-                return json.load(f)
+                data = json.load(f)
+                # Ensure the key exists and has the correct type
+                if not isinstance(data, dict):
+                    return {"channel_id": None}
+                cid = data.get("channel_id")
+                if cid is None:
+                    return {"channel_id": None}
+                try:
+                    # explicitly return the expected dict type
+                    return {"channel_id": int(cid)}
+                except (TypeError, ValueError):
+                    return {"channel_id": None}
         except:
             return {"channel_id": None}
 
@@ -72,9 +87,23 @@ class Tarot(commands.Cog):
             await interaction.response.send_message("🚫 Bạn không phải chủ sở hữu Bot (Owner ID không khớp)!", ephemeral=True)
             return
 
-        self.config["channel_id"] = interaction.channel_id
+        # interaction.channel_id can be int or None; store as int or None explicitly
+        self.config["channel_id"] = int(interaction.channel_id) if interaction.channel_id is not None else None
         self.save_config()
-        await interaction.response.send_message(f"✅ Đã thiết lập **{interaction.channel.mention}** là kênh Tarot duy nhất.")
+        # Safely get a mention for the channel; some channel types (DM/Group) may not have .mention
+        chan = interaction.channel
+        if chan is None:
+            chan_mention = "kênh Tarot"
+        elif getattr(chan, 'mention', None):
+            # Some channel types (e.g., DMChannel/GroupChannel) may not have a mention attribute
+            # Use getattr to avoid static type-checker errors when attribute is missing
+            chan_mention = getattr(chan, 'mention')
+        elif hasattr(chan, 'name') and getattr(chan, 'name', None):
+            chan_mention = f"#{getattr(chan, 'name')}"
+        else:
+            chan_mention = "kênh Tarot"
+
+        await interaction.response.send_message(f"✅ Đã thiết lập **{chan_mention}** là kênh Tarot duy nhất.")
 
     @app_commands.command(name="tarot_one", description="Bốc 1 lá bài Tarot")
     async def tarot_one(self, interaction: discord.Interaction):
@@ -99,7 +128,8 @@ class Tarot(commands.Cog):
         for i, card in enumerate(cards_data):
             embed = self.create_tarot_embed(interaction.user, card)
             embed.set_author(name=f"Vị trí: {positions[i]}")
-            await interaction.channel.send(embed=embed)
+            # Use followup to send embeds reliably regardless of channel type
+            await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="tarot_search", description="Tra cứu lá bài")
     async def tarot_search(self, interaction: discord.Interaction, name: str):

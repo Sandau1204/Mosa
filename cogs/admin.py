@@ -1,5 +1,6 @@
 import discord
 import os
+from pathlib import Path
 from discord import app_commands
 from discord.ext import commands
 
@@ -17,7 +18,13 @@ class Admin(commands.Cog):
             await interaction.followup.send("Số lượng phải lớn hơn 0!")
             return
         
-        deleted = await interaction.channel.purge(limit=amount)
+        channel = interaction.channel
+        # Ensure this command is run in a text channel where purge is available
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.followup.send("❌ Lệnh chỉ có thể chạy trong kênh văn bản (Text Channel).")
+            return
+
+        deleted = await channel.purge(limit=amount)
         await interaction.followup.send(f"🧹 Đã xóa **{len(deleted)}** tin nhắn.")
 
     @app_commands.command(name="kick", description="Kick thành viên")
@@ -55,9 +62,11 @@ class Admin(commands.Cog):
             await interaction.followup.send("❌ Vui lòng chỉ upload file có đuôi `.txt` (Ví dụ: `cookies.txt`)")
             return
 
-        save_path = "cookies.txt"
+        save_path = Path("cookies.txt")
 
         try:
+            # Path provides a PathLike object which satisfies the type
+            # requirements of discord.Attachment.save
             await file.save(save_path)
             print(f"🔄 [System] Cookies updated by {interaction.user.name}")
             await interaction.followup.send(

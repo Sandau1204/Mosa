@@ -88,6 +88,14 @@ class Roles(commands.Cog):
         
         try:
             channel = interaction.channel
+            if channel is None:
+                await interaction.followup.send("❌ Không thể xác định kênh hiện tại.")
+                return
+            
+            if not isinstance(channel, discord.TextChannel):
+                await interaction.followup.send("❌ Lệnh này chỉ hoạt động trong kênh văn bản.")
+                return
+            
             # Thử tìm tin nhắn trong kênh hiện tại
             msg = await channel.fetch_message(int(message_id))
             
@@ -120,10 +128,10 @@ class Roles(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         """Sự kiện kích hoạt khi ai đó thả icon vào tin nhắn"""
-        # Bỏ qua nếu là bot hoặc không xác định được member
-        if getattr(payload, "member", None) is None or payload.member.bot: 
-            return 
-        
+        member = getattr(payload, "member", None)
+        if member is None or member.bot:
+            return
+
         data = self.load_data()
         guild_id = str(payload.guild_id)
         message_id = str(payload.message_id)
@@ -131,17 +139,20 @@ class Roles(commands.Cog):
 
         # Kiểm tra xem tin nhắn này có phải là bảng Reaction Role không
         if guild_id in data and "reaction_roles" in data[guild_id] and message_id in data[guild_id]["reaction_roles"]:
-            
+
             # Nếu icon người dùng thả đúng là icon cài đặt role
             if emoji_str in data[guild_id]["reaction_roles"][message_id]:
                 role_id = data[guild_id]["reaction_roles"][message_id][emoji_str]
                 guild = self.bot.get_guild(payload.guild_id)
+                if guild is None:
+                    return
+
                 role = guild.get_role(role_id)
-                
+
                 if role:
                     try:
-                        await payload.member.add_roles(role)
-                        print(f"✅ Đã cấp role {role.name} cho {payload.member.name}")
+                        await member.add_roles(role)
+                        print(f"✅ Đã cấp role {role.name} cho {member.name}")
                     except discord.Forbidden:
                         print(f"❌ Lỗi Forbidden: Bot không có quyền cấp role {role.name}. Hãy kiểm tra lại Role Hierarchy và quyền Manage Roles!")
                     except Exception as e:
@@ -199,6 +210,9 @@ class Roles(commands.Cog):
         await interaction.response.defer(ephemeral=False) 
         
         guild = interaction.guild
+        if guild is None:
+            await interaction.followup.send("❌ Lỗi: Không thể lấy thông tin Server.", ephemeral=True)
+            return
         
         # Kiểm tra xem bot có quyền cấp role này không (Vị trí role của bot phải cao hơn role muốn cấp)
         if role.position >= guild.me.top_role.position:

@@ -185,17 +185,19 @@ def get_status():
         current_pos = 0
         loop_status = False
         
-        if g and g.voice_client:
-            playing = g.voice_client.is_playing()
-            paused = g.voice_client.is_paused()
-            c_name = g.voice_client.channel.name
-            c_id = str(g.voice_client.channel.id)
-            if gid_int in mc.start_times:
-                if playing:
-                    current_pos = (time.time() - mc.start_times[gid_int]) + mc.current_offsets.get(gid_int, 0)
-                elif paused and gid_int in mc.pause_times:
-                    current_pos = (mc.pause_times[gid_int] - mc.start_times[gid_int]) + mc.current_offsets.get(gid_int, 0)
-        
+        if g:
+            vc = g.voice_client
+            if vc:
+                playing = vc.is_playing()
+                paused = vc.is_paused()
+                c_name = vc.channel.name
+                c_id = str(vc.channel.id)
+                if gid_int in mc.start_times:
+                    if playing:
+                        current_pos = (time.time() - mc.start_times[gid_int]) + mc.current_offsets.get(gid_int, 0)
+                    elif paused and gid_int in mc.pause_times:
+                        current_pos = (mc.pause_times[gid_int] - mc.start_times[gid_int]) + mc.current_offsets.get(gid_int, 0)
+
         if gid_int in mc.loops:
             loop_status = mc.loops[gid_int]
 
@@ -219,33 +221,50 @@ def control(action):
     
     gid = request.args.get('guild_id')
     if not bot_instance or not gid: return jsonify({"status": "error"})
-    gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
-    vc = g.voice_client if g else None
-    def run(coro): asyncio.run_coroutine_threadsafe(coro, bot_instance.loop)
+    gid_int = int(gid)
+    mc = bot_instance.get_cog('Music')
+    if not mc: return jsonify({"status": "error"})
+    g = bot_instance.get_guild(gid_int)
+    if not g: return jsonify({"status": "error"})
+    vc = g.voice_client
+    loop = bot_instance.loop
+    if not loop: return jsonify({"status": "error"})
+    def run(coro): return asyncio.run_coroutine_threadsafe(coro, loop)
     
     if not vc and action != "leave": return jsonify({"status": "no_voice"})
 
     if action == "pause_resume":
-        if vc.is_playing(): mc.pause_music(gid_int)
-        elif vc.is_paused(): mc.resume_music(gid_int)
+        if vc and vc.is_playing(): mc.pause_music(gid_int)
+        elif vc and vc.is_paused(): mc.resume_music(gid_int)
         run(mc.update_ui(gid_int))
-    elif action == "skip": run(mc.skip_song(gid_int))
-    elif action == "stop": run(mc.stop_player(gid_int))
+    elif action == "skip":
+        run(mc.skip_song(gid_int))
+    elif action == "stop":
+        run(mc.stop_player(gid_int))
     elif action == "shuffle":
         if mc.shuffle_queue(gid_int): run(mc.update_ui(gid_int))
         else: return jsonify({"status": "empty_queue"})
     elif action == "leave":
         run(mc.stop_player(gid_int))
-        async def lv(): 
-            await asyncio.sleep(0.1) 
+        async def lv():
+            await asyncio.sleep(0.1)
             if g.voice_client: await g.voice_client.disconnect()
         run(lv())
-    elif action == "loop": 
-        mc.loops[gid_int] = not mc.loops.get(gid_int, False); run(mc.update_ui(gid_int))
+    elif action == "loop":
+        mc.loops[gid_int] = not mc.loops.get(gid_int, False)
+        run(mc.update_ui(gid_int))
     elif action == "vol_up":
-        v = min(1.0, mc.volumes.get(gid_int, 0.5) + 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
+        if vc and getattr(vc, 'source', None):
+            v = min(1.0, mc.volumes.get(gid_int, 0.5) + 0.1)
+            mc.volumes[gid_int] = v
+            vc.source.volume = v
+            run(mc.update_ui(gid_int))
     elif action == "vol_down":
-        v = max(0.0, mc.volumes.get(gid_int, 0.5) - 0.1); mc.volumes[gid_int] = v; vc.source.volume = v; run(mc.update_ui(gid_int))
+        if vc and getattr(vc, 'source', None):
+            v = max(0.0, mc.volumes.get(gid_int, 0.5) - 0.1)
+            mc.volumes[gid_int] = v
+            vc.source.volume = v
+            run(mc.update_ui(gid_int))
     elif action == "seek":
         seconds = request.args.get('seconds')
         if seconds:
@@ -290,6 +309,7 @@ def play_api():
     if not bot_instance or not gid or not query: return jsonify({"status": "error"})
     try:
         gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
+        if not g or not mc: return jsonify({"status": "error"})
         
         # Hàm phụ trợ tìm kênh text để gửi thông báo (đã có trong code cũ của bạn nhưng tôi viết lại cho chắc)
         def _get_text_channel(g, mc):
@@ -342,35 +362,59 @@ def get_playlists_api():
 @app.route(f'{PREFIX}/api/playlist/play_all', methods=['POST'])
 def play_playlist_all_api():
     if not check_auth(): return jsonify({"status": "unauthorized"}), 401
-    # ... (Giữ nguyên logic cũ của bạn)
-    gid = request.args.get('guild_id'); uid = request.args.get('user_id'); name = request.args.get('name')
-    if not bot_instance or not gid or not uid or not name: return jsonify({"status": "error"})
+    gid = request.args.get('guild_id')
+    uid = request.args.get('user_id')
+    name = request.args.get('name')
+    if not bot_instance or not gid or not uid or not name:
+        return jsonify({"status": "error"})
     try:
-        gid_int = int(gid); mc = bot_instance.get_cog('Music'); g = bot_instance.get_guild(gid_int)
-        songs = mc.playlists.get(str(uid), {}).get(name)
-        if not songs: return jsonify({"status": "error"})
-        
-        # Hàm _get_text_channel như trên
+        gid_int = int(gid)
+        mc = bot_instance.get_cog('Music')
+        g = bot_instance.get_guild(gid_int)
+        if not g or not mc:
+            return jsonify({"status": "error"})
+
+        songs = None
+        if hasattr(mc, 'playlists'):
+            playlists_by_user = mc.playlists.get(str(uid)) or mc.playlists.get(uid)
+            if playlists_by_user:
+                songs = playlists_by_user.get(name)
+
+        if not songs:
+            return jsonify({"status": "error"})
+
         def _get_text_channel(g, mc):
             setup_id = None
-            if mc and hasattr(mc, 'settings'): setup_id = mc.settings.get(str(g.id), {}).get("music_channel_id")
-            if not setup_id: setup_id = get_music_channel_id(g.id)
-            if setup_id: 
-                try: c = g.get_channel(int(setup_id)); return c if c else None
-                except: pass
-            if g.id in mc.ui_messages: 
-                try: return mc.ui_messages[g.id].channel
-                except: pass
-            if g.voice_client and hasattr(g.voice_client.channel, 'send'): return g.voice_client.channel
-            if g.text_channels: return g.text_channels[0]
+            if mc and hasattr(mc, 'settings'):
+                setup_id = mc.settings.get(str(g.id), {}).get("music_channel_id")
+            if not setup_id:
+                setup_id = get_music_channel_id(g.id)
+            if setup_id:
+                try:
+                    c = g.get_channel(int(setup_id))
+                    if c:
+                        return c
+                except:
+                    pass
+            if g.id in mc.ui_messages:
+                try:
+                    return mc.ui_messages[g.id].channel
+                except:
+                    pass
+            if g.voice_client and hasattr(g.voice_client.channel, 'send'):
+                return g.voice_client.channel
+            if g.text_channels:
+                return g.text_channels[0]
             return None
 
         text_channel = _get_text_channel(g, mc)
         if text_channel:
-             async def do():
-                 fake = FakeInteraction(g, text_channel, g.me)
-                 await mc.process_song_request(fake, songs) 
-             asyncio.run_coroutine_threadsafe(do(), bot_instance.loop)
-             return jsonify({"status": "ok"})
+            async def do():
+                fake = FakeInteraction(g, text_channel, g.me)
+                for song in songs:
+                    await mc.process_song_request(fake, song)
+            asyncio.run_coroutine_threadsafe(do(), bot_instance.loop)
+            return jsonify({"status": "ok"})
         return jsonify({"status": "error"})
-    except: return jsonify({"status": "error"})
+    except Exception:
+        return jsonify({"status": "error"})

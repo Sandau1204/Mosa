@@ -6,6 +6,7 @@ import os
 import re
 import time 
 import random  
+from typing import Any, cast
 from discord import app_commands
 from discord.ext import commands
 from discord.ui import Button, View, Select
@@ -79,70 +80,100 @@ class SongSelectionView(discord.ui.View):
 class MusicController(discord.ui.View):
     def __init__(self, cog, guild_id, song_info):
         super().__init__(timeout=None); self.cog = cog; self.guild_id = guild_id; self.song_info = song_info
+
     async def interaction_check(self, interaction: discord.Interaction):
-        if interaction.user.voice and interaction.user.voice.channel == interaction.guild.voice_client.channel: return True
-        await interaction.response.send_message("❌ Vào Voice trước!", ephemeral=True); return False
+        guild = interaction.guild
+        member = interaction.user if isinstance(interaction.user, discord.Member) else (guild.get_member(interaction.user.id) if guild else None)
+        if guild and member and member.voice and guild.voice_client and member.voice.channel == guild.voice_client.channel:
+            return True
+        await interaction.response.send_message("❌ Vào Voice trước!", ephemeral=True)
+        return False
+
+    async def _safe_reply(self, interaction: discord.Interaction, message=None, ephemeral=False, defer=False):
+        if defer or message is None:
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+            return
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=ephemeral)
+        else:
+            await interaction.response.send_message(message, ephemeral=ephemeral)
+
     def create_embed(self):
         loop_status = self.cog.loops.get(self.guild_id, False)
         volume = self.cog.volumes.get(self.guild_id, 0.5)
         current_filter_name = "Off"
         current_filter_val = self.cog.current_filters.get(self.guild_id)
         for name, val in FFMPEG_FILTERS.items():
-            if val == current_filter_val: current_filter_name = name; break
-            
+            if val == current_filter_val:
+                current_filter_name = name
+                break
+
         embed = discord.Embed(title="🎶 Đang phát nhạc", description=f"**{self.song_info['title']}**", color=discord.Color.purple())
-        if self.song_info.get('thumbnail'): embed.set_thumbnail(url=self.song_info['thumbnail'])
+        if self.song_info.get('thumbnail'):
+            embed.set_thumbnail(url=self.song_info['thumbnail'])
         embed.set_footer(text=f"Vol: {int(volume*100)}% | Loop: {'Bật' if loop_status else 'Tắt'} | Tune: {current_filter_name}")
         return embed
-    
+
     @discord.ui.button(emoji="⏸️", style=discord.ButtonStyle.secondary, row=0, custom_id="btn_pause")
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
-        vc = interaction.guild.voice_client; 
-        if vc: 
-            if vc.is_playing(): 
-                self.cog.pause_music(self.guild_id) # Sửa dòng này
+        guild = interaction.guild
+        vc = guild.voice_client if guild else None
+        if vc and isinstance(vc, discord.VoiceClient):
+            if vc.is_playing():
+                self.cog.pause_music(self.guild_id)
                 button.emoji = "▶️"
-            elif vc.is_paused(): 
-                self.cog.resume_music(self.guild_id) # Sửa dòng này
+            elif vc.is_paused():
+                self.cog.resume_music(self.guild_id)
                 button.emoji = "⏸️"
-            await self.cog.update_ui(self.guild_id); await interaction.response.defer()
-            
+            await self.cog.update_ui(self.guild_id)
+        await self._safe_reply(interaction, defer=True)
+
     @discord.ui.button(emoji="⏭️", style=discord.ButtonStyle.secondary, row=0)
     async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.cog.skip_song(interaction.guild_id); await interaction.response.send_message("⏭️ Skip", ephemeral=True)
-        
+        await self.cog.skip_song(interaction.guild_id)
+        await self._safe_reply(interaction, "⏭️ Skip", ephemeral=True)
+
     @discord.ui.button(emoji="🔀", style=discord.ButtonStyle.secondary, row=0)
     async def shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.cog.shuffle_queue(self.guild_id)
-        await interaction.response.send_message("🔀 Đã trộn hàng đợi.", ephemeral=True)
+        await self._safe_reply(interaction, "🔀 Đã trộn hàng đợi.", ephemeral=True)
         await self.cog.update_ui(self.guild_id)
-        
-    @discord.ui.button(emoji="🔂", style=discord.ButtonStyle.secondary, row=0) 
+
+    @discord.ui.button(emoji="🔂", style=discord.ButtonStyle.secondary, row=0)
     async def loop(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.cog.loops[self.guild_id] = not self.cog.loops.get(self.guild_id, False)
-        await self.cog.update_ui(self.guild_id); await interaction.response.defer()
-        
+        await self.cog.update_ui(self.guild_id)
+        await self._safe_reply(interaction, defer=True)
+
     @discord.ui.button(emoji="📜", style=discord.ButtonStyle.secondary, row=0)
     async def queue_list(self, interaction: discord.Interaction, button: discord.ui.Button):
         msg = "\n".join([f"{i+1}. {s['title']}" for i, s in enumerate(self.cog.queues.get(self.guild_id, [])[:10])]) or "Trống"
-        await interaction.response.send_message(f"**Queue:**\n{msg}", ephemeral=True)
-        
+        await self._safe_reply(interaction, f"**Queue:**\n{msg}", ephemeral=True)
+
     @discord.ui.button(emoji="🔉", style=discord.ButtonStyle.gray, row=1)
     async def vol_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.change_vol(interaction, -0.1)
-        
+
     @discord.ui.button(emoji="🔊", style=discord.ButtonStyle.gray, row=1)
     async def vol_up(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.change_vol(interaction, 0.1)
-        
+
     @discord.ui.button(emoji="🛑", style=discord.ButtonStyle.danger, row=1)
     async def stop(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.cog.stop_player(interaction.guild_id); await interaction.response.send_message("🛑 Stopped", ephemeral=True)
+        await self.cog.stop_player(interaction.guild_id)
+        await self._safe_reply(interaction, "🛑 Stopped", ephemeral=True)
+
     async def change_vol(self, interaction, change):
-        vc = interaction.guild.voice_client
+        guild = interaction.guild
+        vc = guild.voice_client if guild else None
         if vc and vc.source:
             self.cog.volumes[self.guild_id] = round(max(0.0, min(1.0, self.cog.volumes.get(self.guild_id, 0.5) + change)), 2)
-            vc.source.volume = self.cog.volumes[self.guild_id]; await self.cog.update_ui(self.guild_id); await interaction.response.defer()
+            vc.source.volume = self.cog.volumes[self.guild_id]
+            await self.cog.update_ui(self.guild_id)
+            await self._safe_reply(interaction, defer=True)
+            return
+        await self._safe_reply(interaction, "❌ Không có âm thanh để chỉnh.", ephemeral=True)
 
 class PlaylistSongSelect(discord.ui.Select):
     def __init__(self, cog, interaction, songs_list, playlist_name):
@@ -342,22 +373,22 @@ class Music(commands.Cog):
 
     async def search_youtube(self, q):
         loop = asyncio.get_event_loop()
-        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+        with yt_dlp.YoutubeDL(cast(Any, YDL_OPTIONS)) as ydl:
             try: return (await loop.run_in_executor(None, lambda: ydl.extract_info(f"ytsearch{SEARCH_LIMIT}:{q}", download=False))).get('entries', [])
             except: return []
 
     async def get_song_info(self, q):
         loop = asyncio.get_event_loop()
-        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+        with yt_dlp.YoutubeDL(cast(Any, YDL_OPTIONS)) as ydl:
             try:
                 info = await loop.run_in_executor(None, lambda: ydl.extract_info(q, download=False))
                 if 'entries' in info: return info['entries']
-                return {'stream_url': info['url'], 'webpage_url': info.get('webpage_url', info.get('url')), 'title': info['title'], 'thumbnail': info.get('thumbnail'), 'channel': info.get('uploader', 'Unknown'), 'duration': info.get('duration', 0)}
+                return {'stream_url': info.get('url'), 'webpage_url': info.get('webpage_url', info.get('url')), 'title': info.get('title', 'Unknown'), 'thumbnail': info.get('thumbnail'), 'channel': info.get('uploader', 'Unknown'), 'duration': info.get('duration', 0)}
             except: return None
 
     def get_stream_info(self, url):
         try:
-            opts = YDL_OPTIONS.copy()
+            opts = cast(Any, YDL_OPTIONS.copy())
             opts['extract_flat'] = False 
             return yt_dlp.YoutubeDL(opts).extract_info(url, download=False)
         except: return None
@@ -369,7 +400,10 @@ class Music(commands.Cog):
         if not vc: return
         view = MusicController(self, guild_id, info)
         for child in view.children:
-            if hasattr(child, "custom_id") and child.custom_id == "btn_pause": child.emoji = "▶️" if vc.is_paused() else "⏸️"; break
+            # use getattr to avoid static type check errors about unknown attribute
+            if getattr(child, "custom_id", None) == "btn_pause":
+                setattr(child, "emoji", "▶️" if vc.is_paused() else "⏸️")
+                break
         try: await msg.edit(embed=view.create_embed(), view=view)
         except: pass
 
@@ -503,7 +537,7 @@ class Music(commands.Cog):
                 full_info = await loop.run_in_executor(None, lambda: self.get_stream_info(song_data['webpage_url']))
                 
                 if full_info:
-                    play_url = full_info['url']
+                    play_url = full_info.get('url')
                     song_data['title'] = full_info.get('title', song_data['title'])
                     song_data['thumbnail'] = full_info.get('thumbnail', song_data['thumbnail'])
                     song_data['duration'] = full_info.get('duration', song_data['duration'])
@@ -527,7 +561,13 @@ class Music(commands.Cog):
                 if start_offset > 0:
                     current_opts['before_options'] = f"-ss {start_offset} " + current_opts.get('before_options', '')
 
-                source = discord.FFmpegPCMAudio(play_url, executable=exe, **current_opts)
+                # Pass only supported keyword args to avoid type errors (e.g., pipe/stderr)
+                source = discord.FFmpegPCMAudio(
+                    play_url,
+                    executable=exe,
+                    before_options=current_opts.get('before_options'),
+                    options=current_opts.get('options')
+                )
                 vol = self.volumes.get(guild_id, self.get_default_volume(guild_id))
                 self.volumes[guild_id] = vol
                 
@@ -662,11 +702,15 @@ class Music(commands.Cog):
     @app_commands.checks.has_permissions(manage_channels=True)
     async def set_music(self, interaction: discord.Interaction):
         await interaction.response.defer()
+        if not interaction.channel:
+            await interaction.followup.send("❌ Command must be used in a channel")
+            return
         gid = str(interaction.guild_id)
         if gid not in self.settings: self.settings[gid] = {}
         self.settings[gid]["music_channel_id"] = interaction.channel.id
         self.save_json(SETTINGS_FILE, self.settings)
-        await interaction.followup.send(f"✅ Channel: {interaction.channel.mention}")
+        chan_mention = getattr(interaction.channel, "mention", str(interaction.channel))
+        await interaction.followup.send(f"✅ Channel: {chan_mention}")
 
     @app_commands.command(name="tune", description="Chỉnh hiệu ứng âm thanh (Bassboost, Nightcore...)")
     @app_commands.choices(effect=[
@@ -687,8 +731,14 @@ class Music(commands.Cog):
         filter_str = FFMPEG_FILTERS.get(effect.value)
         self.current_filters[gid] = filter_str
         
-        vc = interaction.guild.voice_client
-        if vc and vc.is_playing() and gid in self.start_times:
+        vc = interaction.guild.voice_client if interaction.guild else None
+        source = getattr(vc, "source", None)
+        if (
+            vc is not None
+            and source is not None
+            and not getattr(source, "is_stream", lambda: False)()
+            and gid in self.start_times
+        ):
             current_pos = (time.time() - self.start_times[gid]) + self.current_offsets.get(gid, 0)
             self.seek_song(gid, current_pos)
             
@@ -706,8 +756,19 @@ class Music(commands.Cog):
     async def play(self, interaction: discord.Interaction, query: str):
         if not await self.check_music_channel(interaction): return
         await interaction.response.defer()
-        if not interaction.user.voice: return await interaction.followup.send("❌ Voice?")
-        if not interaction.guild.voice_client: await interaction.user.voice.channel.connect()
+
+        if not isinstance(interaction.user, discord.Member):
+            return await interaction.followup.send("❌ Voice?")
+
+        member = interaction.user
+        if not member.voice:
+            return await interaction.followup.send("❌ Voice?")
+
+        channel = getattr(member.voice, "channel", None)
+        if not interaction.guild or not getattr(interaction.guild, "voice_client", None):
+            if not channel:
+                return await interaction.followup.send("❌ Voice?")
+            await channel.connect()
         
         if is_url(query):
             info = await self.get_song_info(query)
@@ -732,7 +793,10 @@ class Music(commands.Cog):
     async def volume(self, interaction: discord.Interaction, level: int):
         if not await self.check_music_channel(interaction): return
         await interaction.response.defer(); self.volumes[interaction.guild_id] = level/100
-        if interaction.guild.voice_client and interaction.guild.voice_client.source: interaction.guild.voice_client.source.volume = level/100
+        vc = interaction.guild.voice_client if interaction.guild else None
+        source = getattr(vc, "source", None) if vc is not None else None
+        if source is not None:
+            source.volume = level/100
         await self.update_ui(interaction.guild_id); await interaction.followup.send(f"🔊 Vol: {level}%")
 
     @app_commands.command(name="loop", description="Loop")
@@ -767,7 +831,18 @@ class Music(commands.Cog):
         if not await self.check_music_channel(interaction): return
         await interaction.response.defer(); uid = str(interaction.user.id)
         if uid not in self.playlists or name not in self.playlists[uid]: return await interaction.followup.send("❌ Không thấy.")
-        if not interaction.guild.voice_client: await interaction.user.voice.channel.connect()
+        vc = getattr(interaction.guild, 'voice_client', None) if interaction.guild is not None else None
+        if not vc:
+            # interaction.user may be a discord.User (no .voice). Ensure it's a Member first.
+            if not isinstance(interaction.user, discord.Member):
+                return await interaction.followup.send("❌ Bạn phải ở trong voice channel.")
+
+            voice_state = getattr(interaction.user, 'voice', None)
+            channel = getattr(voice_state, 'channel', None) if voice_state is not None else None
+            if channel is None:
+                return await interaction.followup.send("❌ Bạn phải ở trong voice channel.")
+
+            await channel.connect()
         gid = interaction.guild_id; 
         if gid not in self.queues: self.queues[gid] = []
         for s in self.playlists[uid][name]: 
@@ -841,8 +916,9 @@ class Music(commands.Cog):
                 del self.idle_timers[interaction.guild_id]
         else:
             # Nếu bật AFK -> Kiểm tra xem phòng có đang trống không để đếm lại
-            vc = interaction.guild.voice_client
-            if vc and vc.channel and len(vc.channel.members) == 1:
+            guild = interaction.guild
+            vc = guild.voice_client if guild is not None else None
+            if vc and vc.channel and isinstance(vc.channel, discord.VoiceChannel) and len(vc.channel.members) == 1:
                 if interaction.guild_id not in self.idle_timers:
                     self.idle_timers[interaction.guild_id] = asyncio.create_task(
                         self.idle_disconnect(interaction.guild_id, interaction.channel)
