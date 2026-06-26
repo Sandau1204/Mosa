@@ -1,37 +1,30 @@
-name: Deploy Mosa Bot to Server
-
-# Chạy action này mỗi khi có code mới được push lên nhánh main
+name: Deploy to Windows Home Server
 on:
   push:
     branches:
-      - main 
-
+      - main
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted # Chạy trực tiếp trên máy tính cài runner
     steps:
-      - name: Deploying via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          # Kịch bản chạy trên server của bạn
-          script: |
-            # 1. Di chuyển vào thư mục chứa code bot (Thay đổi đường dẫn này cho đúng với server của bạn)
-            cd C:\Users\Administrator\Documents\Mosa
-            
-            # 2. Reset các thay đổi local (nếu có) và kéo code mới nhất về
-            git reset --hard
-            git pull origin main
-            
-            # 3. Kích hoạt môi trường ảo Python
-            source venv/bin/activate
-            # Nếu dùng Windows Server, lệnh kích hoạt có thể là: .\venv\Scripts\activate
-            
-            # 4. Cài đặt các thư viện mới (nếu file requirements.txt có thay đổi)
-            pip install -r requirements.txt
-            
-            # 5. Khởi động lại PM2
-            pm2 restart mosa-bot
+      - name: Deploy Script
+        run: |
+          echo "Đang bắt đầu quá trình deploy trên Windows Server 2019..."
+          
+          # 1. Di chuyển vào thư mục chứa code bot thực tế
+          cd C:\Users\Administrator\Documents\Mosa
+          
+          # 2. Reset các thay đổi local (nếu có) và kéo code mới nhất về
+          git reset --hard
+          git pull origin main
+          
+          # 3. Kích hoạt môi trường ảo Python (Lệnh chuẩn của Windows)
+          .\venv\Scripts\activate
+          
+          # 4. Cài đặt các thư viện mới (nếu file requirements.txt có thay đổi)
+          pip install -r requirements.txt
+          
+          # 5. Khởi động lại PM2
+          pm2 restart mosa-bot
+          
+          echo "Deploy hoàn tất thành công!"
