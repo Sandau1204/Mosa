@@ -16,10 +16,10 @@ jobs:
       - name: Tạo file .env tự động
         run: |
           echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" | Out-File -FilePath .env -Encoding ascii
-          echo "OWNER_ID=${{ secrets.OWNER_ID }}" | Out-File -FilePath .env -Encoding ascii
-          echo "DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}" | Out-File -FilePath .env -Encoding ascii
-          echo "DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}" | Out-File -FilePath .env -Encoding ascii
-          echo "DISCORD_REDIRECT_URI=${{ secrets.DISCORD_REDIRECT_URI }}" | Out-File -FilePath .env -Encoding ascii
+          echo "OWNER_ID=${{ secrets.OWNER_ID }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "DISCORD_REDIRECT_URI=${{ secrets.DISCORD_REDIRECT_URI }}" | Out-File -FilePath .env -Encoding ascii -Append
           
 
       - name: Cài đặt/Cập nhật thư viện Python
