@@ -32,7 +32,7 @@ class MyBot(commands.Bot):
         user_display = f"{user}" if user else "Unknown"
         user_id = getattr(user, 'id', 'Unknown')
         print(f'🤖 Bot đã online: {user_display} (ID: {user_id})')
-        await self.change_presence(activity=discord.Game(name="/play để nghe nhạc"))
+        #await self.change_presence(activity=discord.Game(name="/play để nghe nhạc"))
 
 bot = MyBot()
 
