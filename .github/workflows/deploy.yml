@@ -13,6 +13,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Tạo file .env tự động
+        run: |
+          echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" > .env
+          echo "OWNER_ID=${{ secrets.OWNER_ID }}" >> .env
+          echo "DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}" >> .env
+          echo "DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}" >> .env 
+          echo "DISCORD_REDIRECT_URI=${{ secrets.DISCORD_REDIRECT_URI }}" >> .env
+          
+
       - name: Cài đặt/Cập nhật thư viện Python
         # Lệnh này sẽ cài đặt các gói cần thiết như discord.py, flask, yt-dlp từ requirements.txt
         run: |
