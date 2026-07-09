@@ -514,11 +514,12 @@
             animation: 150,
             draggable: ".queue-item",
             handle: ".q-drag",
-            delay: 80,
+            delay: 200,
             delayOnTouchOnly: true,
-            touchStartThreshold: 10,
-            fallbackOnBody: true,
+            touchStartThreshold: 20,
+            fallbackOnBody: false,
             swapThreshold: 0.65,
+            forceFallback: false,
             onStart: function(evt) {
                 isDragging = true;
                 const handle = evt.item.querySelector('.q-drag');
