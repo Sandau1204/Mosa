@@ -505,6 +505,7 @@
         let isFetching = false;
         let isDragging = false; 
         let isSeeking = false; 
+        let lastQueueSnapshot = '';
         
         const searchModal = new bootstrap.Modal(document.getElementById('searchModal'));
         const playlistModal = new bootstrap.Modal(document.getElementById('playlistModal'));
@@ -591,23 +592,30 @@
                     document.getElementById('timeTotal').innerText = formatTime(d.duration);
                 }
 
-                const qDiv = document.getElementById('queueList'); let html = "";
-                if(d.queue && d.queue.length > 0) {
-                    d.queue.forEach((s, i) => {
-                        html += `
-                        <div class="queue-item">
-                            <span class="q-idx">${i+1}</span>
-                            <div class="q-info">
-                                <div class="q-title">${s.title}</div>
-                                <div class="q-artist">Sắp phát</div>
-                            </div>
-                            <i class="fas fa-bars q-drag"></i>
-                        </div>`;
-                    });
-                } else {
-                    html = '<div class="text-center text-muted py-5"><i class="fas fa-music mb-2" style="font-size: 2rem; opacity: 0.3;"></i><br>Hàng đợi trống</div>';
+                const qDiv = document.getElementById('queueList');
+                const queue = d.queue || [];
+                // Build a simple snapshot (order + webpage_url/title) to detect real changes.
+                const newSnapshot = queue.map(s => (s.webpage_url || s.title)).join('|');
+                if (newSnapshot !== lastQueueSnapshot) {
+                    lastQueueSnapshot = newSnapshot;
+                    let html = "";
+                    if(queue.length > 0) {
+                        queue.forEach((s, i) => {
+                            html += `
+                            <div class="queue-item" data-pos="${i}">
+                                <span class="q-idx">${i+1}</span>
+                                <div class="q-info">
+                                    <div class="q-title">${s.title}</div>
+                                    <div class="q-artist">Sắp phát</div>
+                                </div>
+                                <i class="fas fa-bars q-drag"></i>
+                            </div>`;
+                        });
+                    } else {
+                        html = '<div class="text-center text-muted py-5"><i class="fas fa-music mb-2" style="font-size: 2rem; opacity: 0.3;"></i><br>Hàng đợi trống</div>';
+                    }
+                    qDiv.innerHTML = html;
                 }
-                if(qDiv.innerHTML !== html) qDiv.innerHTML = html; 
                 isFetching = false;
             }).catch(() => isFetching = false);
         }
