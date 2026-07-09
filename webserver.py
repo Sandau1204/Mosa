@@ -240,7 +240,7 @@ def get_status():
             "channel": cur.get('channel', ''), 
             "is_playing": playing,
             "loop": loop_status, 
-            "queue": [{"title": s['title']} for s in q],
+            "queue": [{"title": s.get('title', ''), "webpage_url": s.get('webpage_url'), "duration": s.get('duration', 0)} for s in q],
             "connected_channel": c_name, 
             "connected_channel_id": c_id,
             "duration": cur.get('duration', 0), 
@@ -375,6 +375,7 @@ def play_api():
             asyncio.run_coroutine_threadsafe(do_play(), bot_instance.loop)
         return jsonify({"status": "ok"})
     except Exception as e: return jsonify({"status": "error"})
+
 
 @app.route(f'{PREFIX}/api/playlists')
 def get_playlists_api():

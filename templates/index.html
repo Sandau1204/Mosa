@@ -212,17 +212,66 @@
             border-radius: 6px;
             background: transparent;
             transition: 0.2s;
-            cursor: grab;
             border-bottom: 1px solid rgba(255,255,255,0.03);
+            cursor: default;
         }
         .queue-item:hover { background: rgba(255,255,255,0.05); }
-        .queue-item:active { cursor: grabbing; }
+        .queue-item:active { cursor: default; }
         
         .q-idx { color: var(--accent); font-weight: bold; width: 25px; font-size: 0.9rem; }
         .q-info { flex-grow: 1; min-width: 0; }
         .q-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; font-size: 0.95rem; }
         .q-artist { font-size: 0.8rem; color: var(--text-sub); }
-        .q-drag { color: #404040; }
+        .q-drag {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            margin-left: 10px;
+            border-radius: 12px;
+            color: #404040;
+            cursor: grab;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            transition: background 0.2s, color 0.2s;
+        }
+        .q-drag:hover,
+        .q-drag:active {
+            color: var(--accent);
+            background: rgba(255,255,255,0.08);
+        }
+        .q-drag.grabbing { cursor: grabbing; }
+
+
+        .playlist-track {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 10px;
+            transition: background 0.2s;
+        }
+        .playlist-track:hover { background: rgba(255,255,255,0.08); }
+        .playlist-track .track-play-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            padding: 0;
+            width: 34px;
+        }
+        .playlist-track .track-title {
+            flex-grow: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
         /* --- Search & Bottom Area --- */
         .bottom-actions { margin-top: 20px; }
@@ -292,6 +341,10 @@
                 padding: 8px 12px;
                 font-size: 0.9rem !important;
                 margin-left: 5px;
+            }
+            .q-drag {
+                width: 48px;
+                height: 48px;
             }
         }
         
@@ -458,9 +511,25 @@
         let cachedPlaylists = [];
 
         let queueSortable = new Sortable(document.getElementById('queueList'), {
-            animation: 150, draggable: ".queue-item", handle: ".queue-item", 
-            onStart: function() { isDragging = true; },
-            onEnd: function(evt) { isDragging = false; if(evt.oldIndex !== evt.newIndex) moveQueueItem(evt.oldIndex, evt.newIndex); }
+            animation: 150,
+            draggable: ".queue-item",
+            handle: ".q-drag",
+            delay: 80,
+            delayOnTouchOnly: true,
+            touchStartThreshold: 10,
+            fallbackOnBody: true,
+            swapThreshold: 0.65,
+            onStart: function(evt) {
+                isDragging = true;
+                const handle = evt.item.querySelector('.q-drag');
+                if (handle) handle.classList.add('grabbing');
+            },
+            onEnd: function(evt) {
+                isDragging = false;
+                const handle = evt.item.querySelector('.q-drag');
+                if (handle) handle.classList.remove('grabbing');
+                if(evt.oldIndex !== evt.newIndex) moveQueueItem(evt.oldIndex, evt.newIndex);
+            }
         });
 
         window.onload = () => { loadGuilds(); setInterval(updateState, 1000); }
@@ -552,7 +621,7 @@
                 if(d.length === 0) { cont.innerHTML = '<div class="text-center py-3">Chưa có playlist nào được lưu.</div>'; return; }
                 let html = '';
                 d.forEach((pl, idx) => {
-                    html += `<div class="list-group-item bg-dark text-white border-secondary mb-2 rounded"><div class="d-flex justify-content-between align-items-center"><div><h6 class="mb-0 fw-bold">${pl.name} <span class="badge bg-success ms-2" style="font-size:0.6rem">${pl.count} bài</span></h6><small class="text-muted">Tạo bởi: ${pl.owner}</small></div><div class="btn-group"><button onclick="toggleTracks(${idx})" class="btn btn-sm btn-outline-secondary">Xem</button><button onclick="playFullPlaylist('${pl.owner_id}', '${pl.name}')" class="btn btn-sm btn-success"><i class="fas fa-play"></i> Phát</button></div></div><div id="tracks-${idx}" style="display:none; margin-top:10px; border-top:1px solid #333; padding-top:5px;">${pl.tracks.map(t => `<div class="d-flex justify-content-between align-items-center py-1 border-bottom border-secondary" style="font-size:0.85rem;"><span class="text-truncate me-2">${t.title}</span><button onclick="playSingleTrack('${t.webpage_url || t.url}')" class="btn btn-sm text-primary"><i class="fas fa-play"></i></button></div>`).join('')}</div></div>`;
+                    html += `<div class="list-group-item bg-dark text-white border-secondary mb-2 rounded"><div class="d-flex justify-content-between align-items-center"><div><h6 class="mb-0 fw-bold">${pl.name} <span class="badge bg-success ms-2" style="font-size:0.6rem">${pl.count} bài</span></h6><small class="text-muted">Tạo bởi: ${pl.owner}</small></div><div class="btn-group"><button onclick="toggleTracks(${idx})" class="btn btn-sm btn-outline-secondary">Xem</button><button onclick="playFullPlaylist('${pl.owner_id}', '${pl.name}')" class="btn btn-sm btn-success"><i class="fas fa-play"></i> Phát</button></div></div><div id="tracks-${idx}" style="display:none; margin-top:10px; border-top:1px solid #333; padding-top:5px;">${pl.tracks.map(t => `<div class="playlist-track border-bottom border-secondary"><button onclick="playSingleTrack('${t.webpage_url || t.url}'); event.stopPropagation();" class="btn btn-sm btn-outline-success track-play-btn"><i class="fas fa-play"></i></button><span class="track-title text-truncate">${t.title}</span></div>`).join('')}</div></div>`;
                 });
                 cont.innerHTML = html;
             });
@@ -561,7 +630,7 @@
         function toggleTracks(idx) { const el = document.getElementById(`tracks-${idx}`); el.style.display = el.style.display === 'block' ? 'none' : 'block'; }
         function playFullPlaylist(uid, name) { if(!currentGuildId) return alert("Chưa chọn server!"); fetch(`${BASE_URL}/api/playlist/play_all?guild_id=${currentGuildId}&user_id=${uid}&name=${encodeURIComponent(name)}`, {method:'POST'}).then(r=>r.json()).then(d => { if(d.status === 'ok') { alert("Đã thêm playlist!"); playlistModal.hide(); } else alert("Lỗi: " + d.message); }); }
         function playSingleTrack(url) { playDirect(url); }
-        
+         
         function loadGuilds() {
             fetch(`${BASE_URL}/api/guilds`).then(r=>r.json()).then(d => {
                 const sel = document.getElementById('guildSelect'); sel.innerHTML = '<option value="" disabled selected>Server...</option>';

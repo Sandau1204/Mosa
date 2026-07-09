@@ -427,6 +427,9 @@ class Music(commands.Cog):
                 if guild_id in self.ui_messages:
                     try: await self.ui_messages[guild_id].delete()
                     except: pass
+
+                # 4. Dọn dẹp các trạng thái còn sót lại nếu bot đã rời hoàn toàn
+                await self.cleanup_on_disconnect(guild_id)
                     
         except asyncio.CancelledError:
             print(f"❌ Hủy đếm giờ kênh {guild_id} (Có hoạt động mới)")
@@ -436,10 +439,46 @@ class Music(commands.Cog):
             if guild_id in self.idle_timers:
                 del self.idle_timers[guild_id]
 
+    async def cleanup_on_disconnect(self, guild_id):
+        if guild_id in self.idle_timers:
+            try:
+                self.idle_timers[guild_id].cancel()
+            except: pass
+            del self.idle_timers[guild_id]
+
+        self.manual_stops[guild_id] = True
+        self.force_skips[guild_id] = True
+
+        if guild_id in self.current_songs:
+            del self.current_songs[guild_id]
+
+        guild = self.bot.get_guild(guild_id)
+        if guild and guild.voice_client:
+            try: guild.voice_client.stop()
+            except: pass
+
+        if guild_id in self.ui_messages:
+            try: await self.ui_messages[guild_id].delete()
+            except: pass
+            del self.ui_messages[guild_id]
+
+        if guild_id in self.active_tasks:
+            task = self.active_tasks[guild_id]
+            if task and not task.done():
+                try: task.cancel()
+                except: pass
+            del self.active_tasks[guild_id]
+
     # Tự động xử lý khi người dùng ra/vào kênh
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        if member.bot: return # Bỏ qua bot khác
+        if member.bot:
+            if member.id != self.bot.user.id:
+                return
+            # Nếu bot tự động rời voice chat thì dừng toàn bộ nhạc và huỷ nhiệm vụ đang chạy
+            if before.channel is not None and after.channel is None:
+                await self.cleanup_on_disconnect(member.guild.id)
+            return
         
         # Lấy voice client của bot trong server này
         vc = member.guild.voice_client
@@ -530,7 +569,8 @@ class Music(commands.Cog):
             voice_cog = self.bot.get_cog("Voice")
             if voice_cog and guild_id in voice_cog.welcome_channels: del voice_cog.welcome_channels[guild_id]
             guild = self.bot.get_guild(guild_id)
-            if not guild or not guild.voice_client: break 
+            if not guild or not guild.voice_client or not guild.voice_client.is_connected() or not guild.voice_client.channel:
+                break
 
             try:
                 loop = asyncio.get_event_loop()
@@ -634,6 +674,10 @@ class Music(commands.Cog):
         if guild_id in self.idle_timers:
             self.idle_timers[guild_id].cancel()
             del self.idle_timers[guild_id]
+
+        guild = self.bot.get_guild(guild_id)
+        if not guild or not guild.voice_client or not guild.voice_client.is_connected() or not guild.voice_client.channel:
+            return
 
         self.manual_stops[guild_id] = False
         if guild_id not in self.active_tasks or self.active_tasks[guild_id].done():
