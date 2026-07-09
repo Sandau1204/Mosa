@@ -48,17 +48,50 @@ def get_music_channel_id(guild_id):
 # Lớp giả lập interaction cho các lệnh
 class FakeInteraction:
     def __init__(self, guild, channel, user):
-        self.guild = guild; self.guild_id = guild.id; self.channel = channel; self.user = user
-        self.response = self.Response(); self.followup = self.Followup(channel)
+        self.guild = guild
+        self.guild_id = guild.id
+        self.channel = channel
+        self.channel_id = channel.id if channel else None
+        self.user = user
+        self.response = self.Response(channel)
+        self.followup = self.Followup(channel)
+
     class Response:
-        def is_done(self): return True
-        async def defer(self, ephemeral=False): pass
+        def __init__(self, channel):
+            self._channel = channel
+            self._sent = False
+
+        def is_done(self):
+            return self._sent
+
+        async def defer(self, ephemeral=False):
+            self._sent = True
+            return None
+
+        async def send(self, content=None, embed=None, view=None, ephemeral=False):
+            self._sent = True
+            if self._channel:
+                kwargs = {}
+                if content is not None: kwargs['content'] = content
+                if embed is not None: kwargs['embed'] = embed
+                try:
+                    await self._channel.send(**kwargs)
+                except Exception:
+                    pass
+
     class Followup:
-        def __init__(self, c): self.c = c
-        async def send(self, content=None, view=None, ephemeral=False):
-            if not ephemeral and self.c: 
-                try: await self.c.send(content, view=view)
-                except: pass
+        def __init__(self, channel):
+            self._channel = channel
+
+        async def send(self, content=None, embed=None, view=None, ephemeral=False):
+            if self._channel:
+                kwargs = {}
+                if content is not None: kwargs['content'] = content
+                if embed is not None: kwargs['embed'] = embed
+                try:
+                    await self._channel.send(**kwargs)
+                except Exception:
+                    pass
 
 # --- ROUTES XÁC THỰC (AUTH) ---
 
