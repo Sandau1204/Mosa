@@ -254,6 +254,12 @@
             padding: 8px 10px;
             transition: background 0.2s;
         }
+        /* Ghost placeholder when dragging */
+        .sortable-ghost {
+            opacity: 0.9;
+            transform: scale(0.98);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+        }
         .playlist-track:hover { background: rgba(255,255,255,0.08); }
         .playlist-track .track-play-btn {
             display: inline-flex;
@@ -521,6 +527,11 @@
             fallbackOnBody: false,
             swapThreshold: 0.65,
             forceFallback: false,
+            // Auto-scroll options: scroll when dragging near the edges of the scrollable container
+            scroll: true,
+            scrollSensitivity: 60, // px from edge
+            scrollSpeed: 10, // px per frame
+            ghostClass: 'sortable-ghost',
             onStart: function(evt) {
                 isDragging = true;
                 const handle = evt.item.querySelector('.q-drag');
