@@ -7,6 +7,7 @@ from discord.ext import commands
 
 NUMEROLOGY_FILE = "data/numerologyRulingNumber.json"
 NUMEROLOGY_CONFIG_FILE = "data/numerology_config.json"
+IMAGE_DIR = "data/images"
 
 class Numerology(commands.Cog):
     def __init__(self, bot):
@@ -41,9 +42,9 @@ class Numerology(commands.Cog):
                 return False
         return True
 
-    def calculate_ruling_number(self, dob_string: str) -> str | None:
+    def calculate_ruling_number(self, dob_string: str) -> str:
         digits = re.sub(r'\D', '', dob_string)
-        if not digits: return None
+        if not digits: return ""
         total = sum(int(d) for d in digits)
         while total > 11 and total not in [22, 33]:
             total = sum(int(d) for d in str(total))
@@ -79,7 +80,19 @@ class Numerology(commands.Cog):
         embed.add_field(name="Gợi ý nghề nghiệp", value=info.get("job", "N/A")[:1024], inline=False)
         embed.set_footer(text=f"Phân tích cho ngày sinh: {dob}")
 
-        await interaction.followup.send(embed=embed)
+        # Xử lý hình ảnh cục bộ
+        image_filename = f"{ruling_number}.png"
+        image_path = os.path.join(IMAGE_DIR, image_filename)
+        file_to_send = discord.utils.MISSING
+
+        if os.path.exists(image_path):
+            file_to_send = discord.File(image_path, filename=image_filename)
+            embed.set_thumbnail(url=f"attachment://{image_filename}")
+
+        if file_to_send is not discord.utils.MISSING:
+            await interaction.followup.send(embed=embed, file=file_to_send)
+        else:
+            await interaction.followup.send(embed=embed)
 
     @thanso_setup.error
     async def error_handler(self, interaction: discord.Interaction, error):

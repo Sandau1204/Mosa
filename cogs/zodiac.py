@@ -1,12 +1,13 @@
 import discord
+from typing import Optional
 import os
 import json
-from typing import Optional
 from discord import app_commands
 from discord.ext import commands
 
 ZODIAC_FILE = "data/zodiac_meaning.json"
 ZODIAC_CONFIG_FILE = "data/zodiac_config.json"
+IMAGE_DIR = "data/images"
 
 class Zodiac(commands.Cog):
     def __init__(self, bot):
@@ -99,10 +100,21 @@ class Zodiac(commands.Cog):
         if "career" in info or "job" in info:
             career = info.get("career", info.get("job", ""))
             embed.add_field(name="Sự nghiệp", value=("".join(career) if isinstance(career, list) else str(career))[:1024], inline=False)
-        if "image" in info: embed.set_thumbnail(url=info["image"])
         embed.set_footer(text=f"Thông tin dành cho ngày sinh: {day}/{month}")
 
-        await interaction.followup.send(embed=embed)
+        # Xử lý hình ảnh cục bộ
+        image_filename = info.get("image", f"{sign_key}.png")
+        image_path = os.path.join(IMAGE_DIR, image_filename)
+        file_to_send = discord.utils.MISSING
+
+        if os.path.exists(image_path):
+            file_to_send = discord.File(image_path, filename=image_filename)
+            embed.set_thumbnail(url=f"attachment://{image_filename}")
+
+        if file_to_send is not discord.utils.MISSING:
+            await interaction.followup.send(embed=embed, file=file_to_send)
+        else:
+            await interaction.followup.send(embed=embed)
 
     @zodiac_setup.error
     async def error_handler(self, interaction: discord.Interaction, error):

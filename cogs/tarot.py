@@ -7,7 +7,7 @@ from discord.ext import commands
 
 TAROT_FILE = "data/tarot_meaning.json"
 TAROT_CONFIG_FILE = "data/tarot_config.json"
-BASE_IMAGE_URL = "https://your-domain.com/static/tarot/"
+IMAGE_DIR = "data/images"
 
 class Tarot(commands.Cog):
     def __init__(self, bot):
@@ -74,10 +74,21 @@ class Tarot(commands.Cog):
         embed.add_field(name="Từ khóa", value=keywords, inline=False)
         embed.add_field(name="Mô tả", value=description[:1024], inline=False)
         embed.add_field(name="Ý nghĩa", value=meaning[:1024], inline=False)
-        embed.set_thumbnail(url=f"{BASE_IMAGE_URL}{card.get('image', '')}")
         embed.set_footer(text="Mosa Tarot Reader")
 
-        await interaction.followup.send(content=f"{interaction.user.mention}, đây là thông điệp dành cho bạn:", embed=embed)
+        # Xử lý hình ảnh từ thư mục cục bộ
+        image_filename = card.get('image', '')
+        image_path = os.path.join(IMAGE_DIR, image_filename)
+        file_to_send = discord.utils.MISSING
+
+        if image_filename and os.path.exists(image_path):
+            file_to_send = discord.File(image_path, filename=image_filename)
+            embed.set_thumbnail(url=f"attachment://{image_filename}")
+
+        if file_to_send is not discord.utils.MISSING:
+            await interaction.followup.send(content=f"{interaction.user.mention}, đây là thông điệp dành cho bạn:", embed=embed, file=file_to_send)
+        else:
+            await interaction.followup.send(content=f"{interaction.user.mention}, đây là thông điệp dành cho bạn:", embed=embed)
 
     @tarot_setup.error
     async def error_handler(self, interaction: discord.Interaction, error):
