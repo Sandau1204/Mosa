@@ -45,7 +45,8 @@ class WordGame(commands.Cog):
             "channel_id": channel_id,
             "current_word": "",
             "last_user": 0,
-            "score": 0
+            "score": 0,
+            "used_words": [] # Thêm mảng lưu các từ đã dùng
         }
         self.save_data()
         
@@ -60,6 +61,7 @@ class WordGame(commands.Cog):
             self.data[guild_id]["current_word"] = ""
             self.data[guild_id]["last_user"] = 0
             self.data[guild_id]["score"] = 0
+            self.data[guild_id]["used_words"] = [] # Reset lại mảng từ đã dùng
             self.save_data()
             await interaction.response.send_message("🔄 Đã reset trò chơi! Hãy bắt đầu lại bằng một từ mới.", ephemeral=False)
         else:
@@ -79,6 +81,10 @@ class WordGame(commands.Cog):
 
         content = message.content.strip().lower()
         game_info = self.data[guild_id]
+
+        # Khởi tạo used_words nếu data cũ chưa có (để tránh lỗi)
+        if "used_words" not in game_info:
+            game_info["used_words"] = []
 
         # --- Xử lý dấu hỏi chấm (?) ---
         if content == "?":
@@ -104,13 +110,9 @@ class WordGame(commands.Cog):
             return
 
         # --- Luật 3: Phải là từ Tiếng Anh có nghĩa ---
-        # SpellChecker trả về set những từ sai, nếu word nằm trong đó nghĩa là sai chính tả/không có nghĩa
-        # Cách check: content phải KHÔNG nằm trong danh sách sai -> tức là đúng
-        # Lưu ý: unknown method trả về danh sách từ sai. Nếu list rỗng -> Đúng.
         misspelled = self.spell.unknown([content])
         if content in misspelled:
             await message.add_reaction("❓") # Từ lạ/sai chính tả
-            # await message.reply(f"❌ **{content}** không có trong từ điển Tiếng Anh.", delete_after=5)
             return
 
         # --- Luật 4: Chữ cuối từ trước = Chữ đầu từ sau ---
@@ -123,11 +125,19 @@ class WordGame(commands.Cog):
                 await message.delete(delay=5)
                 return
 
+        # --- Luật 5: Không được lặp lại từ đã dùng ---
+        if content in game_info["used_words"]:
+            await message.add_reaction("❌")
+            await message.reply(f"❌ Từ **{content.upper()}** đã được sử dụng trước đó! Hãy chọn từ khác.", delete_after=5)
+            await message.delete(delay=5)
+            return
+
         # --- THÀNH CÔNG ---
         # Cập nhật dữ liệu
         self.data[guild_id]["current_word"] = content
         self.data[guild_id]["last_user"] = message.author.id
         self.data[guild_id]["score"] += 1
+        self.data[guild_id]["used_words"].append(content) # Thêm từ vào danh sách đã dùng
         self.save_data()
 
         await message.add_reaction("✅")
