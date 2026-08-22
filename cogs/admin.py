@@ -8,7 +8,7 @@ class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="clear", description="[Admin] Xóa tin nhắn")
+    @app_commands.command(name="clear", description="Xóa tin nhắn")
     @app_commands.describe(amount="Số lượng cần xóa")
     @app_commands.checks.has_permissions(manage_messages=True)
     async def clear(self, interaction: discord.Interaction, amount: int):
@@ -27,7 +27,7 @@ class Admin(commands.Cog):
         deleted = await channel.purge(limit=amount)
         await interaction.followup.send(f"🧹 Đã xóa **{len(deleted)}** tin nhắn.")
 
-    @app_commands.command(name="kick", description="[Admin] Kick thành viên")
+    @app_commands.command(name="kick", description="Kick thành viên")
     @app_commands.checks.has_permissions(kick_members=True)
     async def kick(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
         await interaction.response.defer(ephemeral=True)
@@ -42,7 +42,7 @@ class Admin(commands.Cog):
         except discord.Forbidden:
             await interaction.followup.send("❌ Bot không đủ quyền (Role thấp hơn).")
 
-    @app_commands.command(name="ban", description="[Admin] Cấm thành viên")
+    @app_commands.command(name="ban", description="Cấm thành viên")
     @app_commands.checks.has_permissions(ban_members=True)
     async def ban(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Không có lý do"):
         await interaction.response.defer(ephemeral=True)
