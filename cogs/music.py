@@ -400,7 +400,7 @@ class Music(commands.Cog):
         if not vc: return
         view = MusicController(self, guild_id, info)
         for child in view.children:
-            # Sử dụng `getattr` để tránh lỗi kiểm tra kiểu tĩnh liên quan đến thuộc tính không xác định.
+            # use getattr to avoid static type check errors about unknown attribute
             if getattr(child, "custom_id", None) == "btn_pause":
                 setattr(child, "emoji", "▶️" if vc.is_paused() else "⏸️")
                 break
@@ -601,7 +601,7 @@ class Music(commands.Cog):
                 if start_offset > 0:
                     current_opts['before_options'] = f"-ss {start_offset} " + current_opts.get('before_options', '')
 
-                # Chỉ truyền các đối số từ khóa được hỗ trợ để tránh lỗi kiểu dữ liệu (e.g., pipe/stderr).
+                # Pass only supported keyword args to avoid type errors (e.g., pipe/stderr)
                 source = discord.FFmpegPCMAudio(
                     play_url,
                     executable=exe,
@@ -877,7 +877,7 @@ class Music(commands.Cog):
         if uid not in self.playlists or name not in self.playlists[uid]: return await interaction.followup.send("❌ Không thấy.")
         vc = getattr(interaction.guild, 'voice_client', None) if interaction.guild is not None else None
         if not vc:
-            # `interaction.user` có thể là một `discord.User` (không có thuộc tính `.voice`). Hãy đảm bảo đó là một `Member` trước tiên.
+            
             if not isinstance(interaction.user, discord.Member):
                 return await interaction.followup.send("❌ Bạn phải ở trong voice channel.")
 
