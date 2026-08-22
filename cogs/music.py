@@ -400,7 +400,7 @@ class Music(commands.Cog):
         if not vc: return
         view = MusicController(self, guild_id, info)
         for child in view.children:
-            # use getattr to avoid static type check errors about unknown attribute
+            
             if getattr(child, "custom_id", None) == "btn_pause":
                 setattr(child, "emoji", "▶️" if vc.is_paused() else "⏸️")
                 break
@@ -601,7 +601,7 @@ class Music(commands.Cog):
                 if start_offset > 0:
                     current_opts['before_options'] = f"-ss {start_offset} " + current_opts.get('before_options', '')
 
-                # Pass only supported keyword args to avoid type errors (e.g., pipe/stderr)
+                
                 source = discord.FFmpegPCMAudio(
                     play_url,
                     executable=exe,
