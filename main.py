@@ -2,6 +2,7 @@ import discord
 import os
 import asyncio
 import threading
+from typing import Optional
 from discord.ext import commands
 from dotenv import load_dotenv
 from flask import ctx
@@ -39,26 +40,23 @@ bot = MyBot()
 
 # Lệnh prefix (!sync) dùng để đồng bộ Slash Command thủ công
 @bot.command(name="sync")
-@commands.is_owner() # Yêu cầu quyền chủ Bot (chủ Application trên Discord Developer Portal)
-async def sync(ctx):
-    msg = await ctx.send("🔄 Đang đồng bộ Slash Commands, vui lòng đợi...")
+@commands.is_owner() 
+async def sync(ctx, option: Optional[str] = None):
+    msg = await ctx.send("🔄 Đang xử lý Slash Commands, vui lòng đợi...")
     try:
-    # Copy các lệnh global sang server test (giống logic cũ của bạn)
-        bot.tree.copy_global_to(guild=bot.MY_GUILD)
-        
-    # 1. Đồng bộ ngay lập tức cho server Test
-        synced_test = await bot.tree.sync(guild=bot.MY_GUILD)
-        
-    # 2. Đồng bộ cho toàn bộ các server khác (Global)
+        if option == "clean":
+            # Xóa sạch các lệnh (Guild commands) bị nhân đôi tại Server Test
+            bot.tree.clear_commands(guild=bot.MY_GUILD)
+            await bot.tree.sync(guild=bot.MY_GUILD)
+            await msg.edit(content="🧹 **Đã dọn dẹp lệnh bị nhân đôi tại Server Test!**\n(Nhấn Ctrl + R trên Discord để tải lại giao diện)")
+            return
+
+        # Mặc định chỉ đồng bộ Global để tránh bị nhân đôi ở Server Test
         synced_global = await bot.tree.sync()
+        await msg.edit(content=f"✅ **Đồng bộ hoàn tất!**\n🌍 Toàn cầu (Global): Cập nhật `{len(synced_global)}` lệnh.")
         
-        await msg.edit(content=(
-            f"✅ **Đồng bộ hoàn tất!**\n"
-            f"🛠️ Server Test (ID: {bot.MY_GUILD.id}): Cập nhật `{len(synced_test)}` lệnh.\n"
-            f"🌍 Toàn cầu (Global): Cập nhật `{len(synced_global)}` lệnh."
-        ))
     except Exception as e:
-        await msg.edit(content=f"❌ **Đồng bộ thất bại!** Lỗi: {e}")
+        await msg.edit(content=f"❌ **Lỗi:** {e}")
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
