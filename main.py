@@ -25,14 +25,14 @@ class MyBot(commands.Bot):
             if filename.endswith('.py'):
                 await self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'✅ Đã nạp module: {filename}')
-        try:
-            await self.tree.sync()
-            print("🔄 Đã đồng bộ Slash Commands!")
+        await self.tree.sync()
+        print("🔄 Đã đồng bộ Slash Commands!")
+        #try:
             #self.tree.copy_global_to(guild=self.MY_GUILD)
             #synced = await self.tree.sync(guild=self.MY_GUILD)
             #print(f"Đã đồng bộ {len(synced)} Slash Commands cho server test!")
-        except Exception as e:
-            print(f"Lỗi khi đồng bộ lệnh: {e}")
+        #except Exception as e:
+            #print(f"Lỗi khi đồng bộ lệnh: {e}")
 
     async def on_ready(self):
         user = self.user
