@@ -18,21 +18,22 @@ intents.members = True
 class MyBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='!', intents=intents, help_command=None)
-        #self.MY_GUILD = discord.Object(id=1114556955843899516)
+        self.MY_GUILD = discord.Object(id=908946644819669003)
         
     async def setup_hook(self):
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py'):
                 await self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'✅ Đã nạp module: {filename}')
-        await self.tree.sync()
-        print("🔄 Đã đồng bộ Slash Commands!")
-        #try:
-            #self.tree.copy_global_to(guild=self.MY_GUILD)
-            #synced = await self.tree.sync(guild=self.MY_GUILD)
-            #print(f"Đã đồng bộ {len(synced)} Slash Commands cho server test!")
-        #except Exception as e:
-            #print(f"Lỗi khi đồng bộ lệnh: {e}")
+        
+        try:
+            await self.tree.sync()
+            print("🔄 Đã đồng bộ Slash Commands!")
+            self.tree.copy_global_to(guild=self.MY_GUILD)
+            synced = await self.tree.sync(guild=self.MY_GUILD)
+            print(f"Đã đồng bộ {len(synced)} Slash Commands cho server test!")
+        except Exception as e:
+            print(f"Lỗi khi đồng bộ lệnh: {e}")
 
     async def on_ready(self):
         user = self.user
