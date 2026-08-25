@@ -6,3 +6,4 @@ gTTS
 pyspellchecker
 requests
 flask
+nltk

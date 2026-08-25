@@ -4,7 +4,22 @@ import os
 import string
 from discord import app_commands
 from discord.ext import commands
-from spellchecker import SpellChecker
+
+# Import nltk thay cho spellchecker
+import nltk
+from nltk.corpus import words
+
+# Tự động tải dữ liệu từ vựng NLTK nếu máy chưa có
+try:
+    nltk.data.find('corpora/words')
+except LookupError:
+    nltk.download('words', quiet=True)
+
+# Lọc tạo tập hợp (set) từ vựng tiếng Anh để tốc độ tra cứu là tức thì (O(1))
+ENGLISH_WORDS = set(word.lower() for word in words.words())
+
+# Danh sách đen (Blacklist): Chặn triệt để các từ lóng/viết tắt mà bạn không muốn bot nhận
+BLACKLIST = {"lol", "wtf", "omg", "brb", "lmao", "afk", "btw", "fyi", "idk"}
 
 # File lưu dữ liệu trò chơi
 GAME_DATA_FILE = os.path.join("data", "wordgame.json")
@@ -12,7 +27,7 @@ GAME_DATA_FILE = os.path.join("data", "wordgame.json")
 class WordGame(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.spell = SpellChecker() # Công cụ check chính tả
+        # Đã loại bỏ self.spell = SpellChecker() vì dùng nltk
         self.data = self.load_data()
 
     # --- XỬ LÝ DỮ LIỆU ---
@@ -110,9 +125,9 @@ class WordGame(commands.Cog):
             return
 
         # --- Luật 3: Phải là từ Tiếng Anh có nghĩa ---
-        misspelled = self.spell.unknown([content])
-        if content in misspelled:
-            await message.add_reaction("❓") # Từ lạ/sai chính tả
+        # Kiểm tra độ dài (chặn các chữ cái đơn lẻ), kiểm tra blacklist và kiểm tra trong bộ từ điển NLTK
+        if len(content) <= 1 or content in BLACKLIST or content not in ENGLISH_WORDS:
+            await message.add_reaction("❓") # Từ lạ/sai chính tả/viết tắt
             return
 
         # --- Luật 4: Chữ cuối từ trước = Chữ đầu từ sau ---
