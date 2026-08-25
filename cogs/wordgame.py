@@ -19,7 +19,7 @@ except LookupError:
 ENGLISH_WORDS = set(word.lower() for word in words.words())
 
 # Danh sách đen (Blacklist): Chặn triệt để các từ lóng/viết tắt mà bạn không muốn bot nhận
-BLACKLIST = {"lol", "wtf", "omg", "brb", "lmao", "afk", "btw", "fyi", "idk"}
+BLACKLIST = {"lol", "wtf", "omg", "brb", "lmao", "afk", "btw", "fyi", "idk", "ne"}
 
 # File lưu dữ liệu trò chơi
 GAME_DATA_FILE = os.path.join("data", "wordgame.json")
