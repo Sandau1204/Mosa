@@ -4,9 +4,11 @@ import json
 from discord import app_commands
 from discord.ext import commands
 from gtts import gTTS
+from dotenv import load_dotenv
 
 # CẤU HÌNH DATA
-DATA_FOLDER = "data"
+load_dotenv()
+DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
 NAME_FILE = os.path.join(DATA_FOLDER, "name.json")
 
 class Voice(commands.Cog):

@@ -21,8 +21,11 @@ ENGLISH_WORDS = set(word.lower() for word in words.words())
 # Danh sách đen (Blacklist): Chặn triệt để các từ lóng/viết tắt mà bạn không muốn bot nhận
 BLACKLIST = {"lol", "wtf", "omg", "brb", "lmao", "afk", "btw", "fyi", "idk", "ne", "tbh", "smh", "rofl", "gg", "nvm", "ikr", "omfg", "lmao", "wtf", "bff", "jk", "imo", "irl", "tmi", "fml", "omg", "lmao", "rofl", "smh", "brb", "btw", "idk", "nvm", "ikr", "omfg", "bff", "jk", "imo", "irl", "tmi", "fml", "ur", "eer"}  # Thêm các từ viết tắt phổ biến và các chữ cái đơn lẻ
 
+from dotenv import load_dotenv
 # File lưu dữ liệu trò chơi
-GAME_DATA_FILE = os.path.join("data", "wordgame.json")
+load_dotenv()
+DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
+GAME_DATA_FILE = os.path.join(DATA_FOLDER, "wordgame.json")
 
 class WordGame(commands.Cog):
     def __init__(self, bot):

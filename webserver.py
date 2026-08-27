@@ -28,7 +28,7 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 PREFIX = "" 
-DATA_FOLDER = "data"
+DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")
 
 def run_web(bot):

@@ -10,11 +10,14 @@ from typing import Any, cast
 from discord import app_commands
 from discord.ext import commands
 from discord.ui import Button, View, Select
+from dotenv import load_dotenv
 
 # ====================================================
 # CẤU HÌNH & HẰNG SỐ
 # ====================================================
-DATA_FOLDER = "data"
+load_dotenv()
+
+DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
 QUEUE_FILE = os.path.join(DATA_FOLDER, "saved_queues.json")
 PLAYLIST_FILE = os.path.join(DATA_FOLDER, "playlists.json")
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "server_settings.json")

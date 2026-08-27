@@ -3,9 +3,12 @@ import os
 import json
 from discord import app_commands
 from discord.ext import commands
+from dotenv import load_dotenv
 
 # Đường dẫn lưu trữ dữ liệu Role
-ROLE_DATA_FILE = "data/role_settings.json"
+load_dotenv()  # Load biến môi trường từ file .env
+DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
+ROLE_DATA_FILE = os.path.join(DATA_FOLDER, "role_settings.json")
 
 class Roles(commands.Cog):
     def __init__(self, bot):
@@ -14,8 +17,8 @@ class Roles(commands.Cog):
 
     def init_data_file(self):
         """Khởi tạo file JSON nếu chưa tồn tại"""
-        if not os.path.exists("data"):
-            os.makedirs("data")
+        if not os.path.exists(DATA_FOLDER):
+            os.makedirs(DATA_FOLDER)
         if not os.path.exists(ROLE_DATA_FILE):
             with open(ROLE_DATA_FILE, "w", encoding="utf-8") as f:
                 json.dump({}, f)
