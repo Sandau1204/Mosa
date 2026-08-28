@@ -212,6 +212,16 @@ class PrioritizeView(discord.ui.View):
 # ====================================================
 # CORE LOGIC
 # ====================================================
+
+class MusicPlayer:
+    def __init__(self):
+        self.current_song = None
+        self.start_time = 0
+        self.eleapsed_time = 0
+    def play_song(self, song_url, seek_time=0):
+        self.current_song = song_url
+        self.start_time = time.time() -seek_time
+        options = FFMPEG_OPTIONS.copy()
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -228,6 +238,7 @@ class Music(commands.Cog):
         
         # Biến lưu các bộ đếm giờ thoát kênh
         self.idle_timers = {} 
+        self.players = {}
         
         
 
@@ -481,10 +492,55 @@ class Music(commands.Cog):
         if member.bot:
             if member.id != self.bot.user.id:
                 return
-            # Nếu bot tự động rời voice chat thì dừng toàn bộ nhạc và huỷ nhiệm vụ đang chạy
+            # 2. Phát hiện sự kiện bot bị văng khỏi kênh thoại
             if before.channel is not None and after.channel is None:
-                await self.cleanup_on_disconnect(member.guild.id)
-            return
+                guild_id = before.channel.guild.id
+                player = self.players.get(guild_id)
+                # 3. Kiểm tra xem bot có đang hát hay không
+                if player and player.get('is_playing') and player.get('current_song'):
+                    print(f"[Proxy Reconnect] Đang phục hồi kết nối cho kênh {before.channel.name}...")
+                    
+                    # Tính thời gian đã phát (giây
+                    elapsed_time = time.time() - player['start_time']
+                    
+                    # Delay nhẹ để proxy dọn dẹp kết nối TCP cũ
+                    await asyncio.sleep(2) 
+                    
+                    try:
+                        # Kết nối lại vào kênh cũ
+                        vc = await before.channel.connect()
+                        player['vc'] = vc # Lưu lại VoiceClient mới
+
+                        # Ép FFmpeg tua đến giây bị ngắt kết nối bằng cờ -ss
+                        ffmpeg_options = {
+                            'before_options': f'-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -ss {elapsed_time}',
+                            'options': '-vn'
+                        }
+
+                        # Khởi tạo lại luồng âm thanh
+                        audio_source = discord.FFmpegPCMAudio(
+                            player['current_song_url'],
+                            before_options=ffmpeg_options['before_options'],
+                            options=ffmpeg_options['options'],
+                        )
+                    
+                        # Phát lại và giữ nguyên callback (after) để tiếp tục hàng chờ
+                        # Tiếp tục vòng lặp phát nhạc hiện tại khi bài hát kết thúc.
+                        vc.play(
+                            audio_source,
+                            after=lambda e: self.bot.loop.call_soon_threadsafe(
+                                asyncio.create_task,
+                                self.start_playing(before.channel, guild_id),
+                            ),
+                        )
+
+                        # Reset lại bộ đếm thời gian bắt đầu
+                        player['start_time'] = time.time() - elapsed_time
+
+                    except Exception as e:
+                        print(f"Không thể kết nối lại: {e}")
+                         
+                    
         
         # Lấy voice client của bot trong server này
         vc = member.guild.voice_client
