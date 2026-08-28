@@ -30,7 +30,6 @@ GAME_DATA_FILE = os.path.join(DATA_FOLDER, "wordgame.json")
 class WordGame(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # Đã loại bỏ self.spell = SpellChecker() vì dùng nltk
         self.data = self.load_data()
 
     # --- XỬ LÝ DỮ LIỆU ---
@@ -90,10 +89,14 @@ class WordGame(commands.Cog):
     async def on_message(self, message):
         # 1. Bỏ qua bot và tin nhắn hệ thống
         if message.author.bot: return
+        # 2. Bỏ qua tin nhắn bắt đầu bằng |
+        if message.content.strip().startswith("|"): return 
+        # 3. Bỏ qua tin nhắn trả lời (reply) để tránh spam
+        if message.reference is not None: return
 
         guild_id = str(message.guild.id)
         
-        # 2. Kiểm tra xem có phải kênh nối từ không
+        # 4. Kiểm tra xem có phải kênh nối từ không
         if guild_id not in self.data: return
         if message.channel.id != self.data[guild_id]["channel_id"]: return
 
