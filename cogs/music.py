@@ -39,7 +39,7 @@ FFMPEG_FILTERS = {
 
 YDL_OPTIONS = {
     'format': 'bestaudio/best',
-    'noplaylist': True,
+    'noplaylist': False,
     'extract_flat': 'in_playlist',
     'quiet': True,
     'no_warnings': True,
