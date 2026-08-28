@@ -38,7 +38,7 @@ FFMPEG_FILTERS = {
 
 YDL_OPTIONS = {
     'format': 'ba/b',
-    #'extractor_args': {'youtube': ['player_client=android,web']},
+    'extractor_args': {'youtube': ['player_client=android,web']},
     'noplaylist': False,
     'extract_flat': 'in_playlist',
     'quiet': True,
@@ -46,7 +46,7 @@ YDL_OPTIONS = {
     'default_search': 'auto',
     'source_address': '0.0.0.0',
     'nocheckcertificate': True,
-    #'cookiefile': 'cookies.txt',
+    'cookiefile': 'cookies.txt',
     'cachedir': False,
 }
 
