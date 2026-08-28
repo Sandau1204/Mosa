@@ -23,6 +23,7 @@ jobs:
           echo "DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}" | Out-File -FilePath .env -Encoding ascii -Append
           echo "DISCORD_REDIRECT_URI=${{ secrets.DISCORD_REDIRECT_URI }}" | Out-File -FilePath .env -Encoding ascii -Append
           echo "DATA_FOLDER=${{ secrets.DATA_FOLDER }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "PROXY_URL=${{ secrets.PROXY_URL }}" | Out-File -FilePath .env -Encoding ascii -Append
           
       - name: Copy file cookies vào thư mục vận hành
         # Lệnh này copy file từ vị trí lưu trữ trên server vào thư mục chứa code hiện tại
