@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 # ====================================================
 load_dotenv()
 
+PROXY_URL = os.getenv("PROXY_URL")
 DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
 QUEUE_FILE = os.path.join(DATA_FOLDER, "saved_queues.json")
 PLAYLIST_FILE = os.path.join(DATA_FOLDER, "playlists.json")
@@ -37,9 +38,8 @@ FFMPEG_FILTERS = {
 }
 
 YDL_OPTIONS = {
-    'format': 'ba/b',
-    #'extractor_args': {'youtube': ['player_client=android,web']},
-    'noplaylist': False,
+    'format': 'bestaudio/best',
+    'noplaylist': True,
     'extract_flat': 'in_playlist',
     'quiet': True,
     'no_warnings': True,
@@ -49,6 +49,10 @@ YDL_OPTIONS = {
     #'cookiefile': 'cookies.txt',
     'cachedir': False,
 }
+
+if PROXY_URL:
+    YDL_OPTIONS['proxy'] = PROXY_URL
+    print(f"🌐 Đã kích hoạt proxy cho trình phát nhạc")
 
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
