@@ -262,7 +262,6 @@ class Music(commands.Cog):
         for gid in self.bot.voice_clients:
             try: gid.disconnect(force=True)
             except: pass
-
     @commands.Cog.listener()
     async def on_ready(self):
         """Hàm này chạy khi Bot khởi động xong -> Tiến hành khôi phục."""
