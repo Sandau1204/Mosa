@@ -19,7 +19,6 @@ except LookupError:
 ENGLISH_WORDS = set(word.lower() for word in words.words())
 
 # Danh sách đen (Blacklist): Chặn triệt để các từ lóng/viết tắt mà bạn không muốn bot nhận
-BLACKLIST = {"lol", "wtf", "omg", "brb", "lmao", "afk", "btw", "fyi", "idk", "ne", "tbh", "smh", "rofl", "gg", "nvm", "ikr", "omfg", "lmao", "wtf", "bff", "jk", "imo", "irl", "tmi", "fml", "omg", "lmao", "rofl", "smh", "brb", "btw", "idk", "nvm", "ikr", "omfg", "bff", "jk", "imo", "irl", "tmi", "fml", "ur", "eer"}  # Thêm các từ viết tắt phổ biến và các chữ cái đơn lẻ
 
 from dotenv import load_dotenv
 # File lưu dữ liệu trò chơi
@@ -27,6 +26,18 @@ load_dotenv()
 DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
 GAME_DATA_FILE = os.path.join(DATA_FOLDER, "wordgame.json")
 
+def load_valid_short_words():
+    file_path = os.path.join(DATA_FOLDER, "short_words.json")
+    try: 
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return set(data.get("valid_short_words", []))
+    except FileNotFoundError:
+        print(f"⚠️ File {file_path} không tồn tại. Không có từ ngắn hợp lệ nào được tải.")
+        return set()
+    
+VALID_SHORT_WORDS = load_valid_short_words()
+     
 class WordGame(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -130,11 +141,15 @@ class WordGame(commands.Cog):
             await message.delete(delay=5)
             return
 
-        # --- Luật 3: Phải là từ Tiếng Anh có nghĩa ---
-        # Kiểm tra độ dài (chặn các chữ cái đơn lẻ), kiểm tra blacklist và kiểm tra trong bộ từ điển NLTK
-        if len(content) <= 1 or content in BLACKLIST or content not in ENGLISH_WORDS:
-            await message.add_reaction("❓") # Từ lạ/sai chính tả/viết tắt
-            return
+        # --- Luật 3: so sánh whitelist
+        def check_word_validity(user_input):
+            
+            word =user_input.strip().lower()
+            if len(word) <= 3:
+                if word not in VALID_SHORT_WORDS:
+                    # Từ ngắn không có trong danh sách JSON -> Báo lỗi
+                    return False, f"❌ Từ `{word}` không hợp lệ hoặc vô nghĩa. Vui lòng nhập từ khác!"
+            return True, "✅ Từ `{word}` hợp lệ!"
 
         # --- Luật 4: Chữ cuối từ trước = Chữ đầu từ sau ---
         current_word = game_info["current_word"]
