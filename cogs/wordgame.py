@@ -18,7 +18,14 @@ except LookupError:
 # Lọc tạo tập hợp (set) từ vựng tiếng Anh để tốc độ tra cứu là tức thì (O(1))
 ENGLISH_WORDS = set(word.lower() for word in words.words())
 
-# Danh sách đen (Blacklist): Chặn triệt để các từ lóng/viết tắt mà bạn không muốn bot nhận
+# Tạo danh sách các từ hiện đại phổ biến bị NLTK bỏ sót
+MODERN_WORDS = {
+    "internet", "wifi", "email", "app", "bot", "online", "offline", 
+    "admin", "web", "website", "blog", "chat", "spam", "link",
+}
+
+# Gộp danh sách hiện đại vào từ điển chính
+ENGLISH_WORDS.update(MODERN_WORDS)
 
 from dotenv import load_dotenv
 # File lưu dữ liệu trò chơi
