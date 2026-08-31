@@ -141,15 +141,21 @@ class WordGame(commands.Cog):
             await message.delete(delay=5)
             return
 
-        # --- Luật 3: so sánh whitelist
-        def check_word_validity(user_input):
-            
-            word =user_input.strip().lower()
-            if len(word) <= 3:
-                if word not in VALID_SHORT_WORDS:
-                    # Từ ngắn không có trong danh sách JSON -> Báo lỗi
-                    return False, f"❌ Từ `{word}` không hợp lệ hoặc vô nghĩa. Vui lòng nhập từ khác!"
-            return True, "✅ Từ `{word}` hợp lệ!"
+        # --- Luật 3: Kiểm tra từ có hợp lệ không (Từ ngắn & Từ điển) ---
+        if len(content) <= 3:
+            # Kiểm tra trong file JSON nếu từ có 3 chữ cái trở xuống
+            if content not in VALID_SHORT_WORDS:
+                await message.add_reaction("❌")
+                await message.reply(f"❌ Từ `{content}` không hợp lệ hoặc vô nghĩa. Vui lòng nhập từ khác!", delete_after=5)
+                await message.delete(delay=5)
+                return
+        else:
+            # Kiểm tra trong từ điển tiếng Anh (NLTK) nếu từ dài hơn 3 chữ cái
+            if content not in ENGLISH_WORDS:
+                await message.add_reaction("❌")
+                await message.reply(f"❌ Từ `{content}` không có trong từ điển tiếng Anh! Hãy thử từ khác.", delete_after=5)
+                await message.delete(delay=5)
+                return
 
         # --- Luật 4: Chữ cuối từ trước = Chữ đầu từ sau ---
         current_word = game_info["current_word"]
