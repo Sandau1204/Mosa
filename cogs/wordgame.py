@@ -88,19 +88,45 @@ class WordGame(commands.Cog):
         await interaction.response.send_message(f"✅ Đã thiết lập kênh <#{channel_id}> làm sân chơi nối từ!\nNgười chơi hãy bắt đầu bằng một từ Tiếng Anh bất kỳ.", ephemeral=False)
 
     @app_commands.command(name="reset_noitu", description="[Admin] Reset lại trò chơi về điểm bắt đầu")
-    @app_commands.checks.has_permissions(manage_channels=True)
+    @app_commands.checks.has_permissions(manage_channels=True, manage_messages=True)
     async def reset_noitu(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
         guild_id = str(interaction.guild_id)
         
         if guild_id in self.data:
+            
+            # Lấy ID kênh đang chơi nối từ
+            channel_id = self.data[guild_id].get("channel_id")
+            
+            # 2. Reset lại file JSON
             self.data[guild_id]["current_word"] = ""
             self.data[guild_id]["last_user"] = 0
             self.data[guild_id]["score"] = 0
             self.data[guild_id]["used_words"] = [] # Reset lại mảng từ đã dùng
             self.save_data()
-            await interaction.response.send_message("🔄 Đã reset trò chơi! Hãy bắt đầu lại bằng một từ mới.", ephemeral=False)
+            
+            # 3. Tiến hành xóa toàn bộ tin nhắn trong kênh nối từ
+            channel = self.bot.get_channel(channel_id)
+            if isinstance(channel, discord.TextChannel):
+                try:
+                    # limit=None sẽ xóa toàn bộ tin nhắn
+                    await channel.purge(limit=None)
+                    
+                    # 4. Gửi thông báo bắt đầu ván mới công khai vào kênh
+                    await channel.send("🔄 **Kênh đã được dọn sạch và trò chơi đã reset!**\nNgười chơi hãy bắt đầu bằng 1 từ tiếng anh")
+                    
+                    # 5. Phản hồi xác nhận cho người gõ lệnh (chỉ người đó thấy)
+                    await interaction.followup.send("✅ Đã dọn dẹp và reset thành công!", ephemeral=True)
+                    
+                except discord.Forbidden:
+                    await interaction.followup.send("❌ Đã reset data nhưng Bot không đủ quyền (Manage Messages) để xóa tin nhắn trong kênh đó.", ephemeral=True)
+                except Exception as e:
+                    await interaction.followup.send(f"❌ Có lỗi khi xóa tin nhắn: {e}", ephemeral=True)
+            else:
+                await interaction.followup.send("✅ Đã reset game, nhưng kênh được cấu hình không hợp lệ để xóa tin nhắn.", ephemeral=True)
         else:
-            await interaction.response.send_message("❌ Server này chưa thiết lập game nối từ. Dùng `/setup_noitu` trước.", ephemeral=True)
+            await interaction.followup.send("❌ Server này chưa thiết lập game nối từ. Dùng `/setup_noitu_vi` trước.", ephemeral=True)
 
     # --- SỰ KIỆN NHẬN TIN NHẮN (LOGIC CHÍNH) ---
     @commands.Cog.listener()
