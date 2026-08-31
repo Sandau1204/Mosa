@@ -9,23 +9,43 @@ class Admin(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="clear", description="[Admin] Xóa tin nhắn")
-    @app_commands.describe(amount="Số lượng cần xóa")
+    @app_commands.describe(amount="Nhập số lượng cần xóa hoặc 'all' để xóa hết")
     @app_commands.checks.has_permissions(manage_messages=True)
-    async def clear(self, interaction: discord.Interaction, amount: int):
+    async def clear(self, interaction: discord.Interaction, amount: str):
         await interaction.response.defer(ephemeral=True) 
         
-        if amount < 1:
-            await interaction.followup.send("Số lượng phải lớn hơn 0!")
-            return
-        
         channel = interaction.channel
-        # Ensure this command is run in a text channel where purge is available
+        # Đảm bảo lệnh chạy trong TextChannel
         if not isinstance(channel, discord.TextChannel):
             await interaction.followup.send("❌ Lệnh chỉ có thể chạy trong kênh văn bản (Text Channel).")
             return
 
-        deleted = await channel.purge(limit=amount)
-        await interaction.followup.send(f"🧹 Đã xóa **{len(deleted)}** tin nhắn.")
+        # Kiểm tra giá trị amount
+        limit = None
+        if amount.lower() != "all":
+            try:
+                limit = int(amount)
+                if limit < 1:
+                    await interaction.followup.send("❌ Số lượng phải lớn hơn 0!")
+                    return
+            except ValueError:
+                await interaction.followup.send("❌ Vui lòng nhập một số hợp lệ hoặc chữ 'all'!")
+                return
+
+        # Thực hiện xóa tin nhắn (nếu limit=None, nó sẽ xóa hết)
+        try:
+            deleted = await channel.purge(limit=limit)
+            
+            # Phản hồi tùy theo số lượng
+            if amount.lower() == "all":
+                await interaction.followup.send(f"🧹 Đã xóa toàn bộ kênh (**{len(deleted)}** tin nhắn).")
+            else:
+                await interaction.followup.send(f"🧹 Đã xóa **{len(deleted)}** tin nhắn.")
+                
+        except discord.Forbidden:
+            await interaction.followup.send("❌ Bot không đủ quyền để xóa tin nhắn.")
+        except discord.HTTPException as e:
+            await interaction.followup.send(f"❌ Có lỗi xảy ra khi xóa tin nhắn: {e}")
 
     @app_commands.command(name="kick", description="[Admin] Kick thành viên")
     @app_commands.checks.has_permissions(kick_members=True)
