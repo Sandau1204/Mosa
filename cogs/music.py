@@ -225,6 +225,7 @@ class MusicPlayer:
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.channel_status_enabled = {}
         self.queues = {}; self.loops = {}; self.volumes = {}; self.current_songs = {}
         self.ui_messages = {}; self.active_tasks = {}; self.manual_stops = {}; self.force_skips = {}
         
@@ -485,6 +486,8 @@ class Music(commands.Cog):
                 try: task.cancel()
                 except: pass
             del self.active_tasks[guild_id]
+            
+    
 
     # Tự động xử lý khi người dùng ra/vào kênh
     @commands.Cog.listener()
@@ -590,6 +593,12 @@ class Music(commands.Cog):
                 
                 # --- LOGIC MỚI: Xử lý khi hết nhạc (Queue empty) ---
                 if guild_id not in self.queues or not self.queues[guild_id]:
+                    guild = self.bot.get_guild(guild_id)
+                    is_status_enabled = self.settings.get(str(guild_id), {}).get("status_enabled", False)
+                    if is_status_enabled and guild and guild.voice_client and guild.voice_client.channel:
+                        try:
+                            await guild.voice_client.channel.edit(status=None)
+                        except: pass
                     if guild_id in self.current_songs: del self.current_songs[guild_id]
                     if guild_id in self.ui_messages: 
                         try: await self.ui_messages[guild_id].delete()
@@ -680,6 +689,16 @@ class Music(commands.Cog):
                 # --- TẠO VIEW ---
                 view = MusicController(self, guild_id, song_data)
                 
+                # --- THÊM TRẠNG THÁI KÊNH ---
+                is_status_enabled = self.settings.get(str(guild_id), {}).get("status_enabled", True)
+                if is_status_enabled and guild.voice_client and guild.voice_client.channel:
+                    try:
+                        status_msg = f"🎶{song_data['title']}"[:500]
+                        await guild.voice_client.channel.edit(status=status_msg)
+                    except Exception as e:
+                        print(f"⚠️ Lỗi cập nhật trạng thái kênh: {e}")
+                        
+                    
                 # --- TÌM KÊNH ĐỂ GỬI ---
                 target_channel = channel 
                 saved_settings = self.settings.get(str(guild_id), {})
@@ -749,7 +768,14 @@ class Music(commands.Cog):
         self.queues[guild_id] = []; self.manual_stops[guild_id] = True; self.force_skips[guild_id] = True
         if guild_id in self.current_songs: del self.current_songs[guild_id]
         guild = self.bot.get_guild(guild_id)
-        if guild and guild.voice_client: guild.voice_client.stop()
+        if guild and guild.voice_client:
+            is_status_enabled = self.settings.get(str(guild_id), {}).get("status_enabled", False)
+            if is_status_enabled and guild.voice_client.channel:
+                try:
+                    await guild.voice_client.channel.edit(status=None)
+                except: pass
+                
+            guild.voice_client.stop()
     
     async def skip_song(self, guild_id):
         self.force_skips[guild_id] = True; guild = self.bot.get_guild(guild_id)
@@ -1030,6 +1056,43 @@ class Music(commands.Cog):
                         self.idle_disconnect(interaction.guild_id, interaction.channel)
                     )
 
+        await interaction.followup.send(msg)
+    
+    @app_commands.command(name="channel_status", description="Bật/Tắt tính năng trạng thái kênh")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def channel_status(self, interaction: discord.Interaction):
+        # 1. Thêm defer để tránh lỗi timeout do gọi API edit status của Discord
+        await interaction.response.defer()
+        
+        guild_id = str(interaction.guild_id)
+        if guild_id not in self.settings: self.settings[guild_id] = {}
+        
+        # 2. Đọc và lưu trực tiếp bằng key "status_enabled" để đồng bộ với player_loop
+        current_status = self.settings[guild_id].get("status_enabled", False)
+        new_status = not current_status
+        self.settings[guild_id]["status_enabled"] = new_status
+        self.save_json(SETTINGS_FILE, self.settings)
+        
+        status_text = "✅ Bật" if new_status else "❌ Tắt"
+        msg = f"**Trạng thái kênh** đã được {status_text}."
+        
+        guild = interaction.guild
+        if guild and guild.voice_client and guild.voice_client.channel:
+            try:
+                voice_channel = guild.voice_client.channel
+                if isinstance(voice_channel, discord.VoiceChannel):
+                    if not new_status:
+                        await voice_channel.edit(status=None)
+                    elif interaction.guild_id in self.current_songs:
+                        song_title = self.current_songs[interaction.guild_id].get('title', 'Unknown')
+                        # Logic hiển thị bài hát đã chính xác
+                        await voice_channel.edit(status=f"🎶 {song_title}"[:500])
+            except discord.Forbidden:
+                msg += " ⚠️ Bot không có quyền chỉnh sửa trạng thái kênh."
+            except Exception:
+                pass
+                
+        # 3. Sửa đúng chính tả interaction
         await interaction.followup.send(msg)
 
 async def setup(bot):
