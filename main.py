@@ -2,6 +2,7 @@ import discord
 import os
 import asyncio
 import threading
+import requests
 from typing import Optional
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -40,23 +41,69 @@ bot = MyBot()
 
 # Lệnh prefix (!sync) dùng để đồng bộ Slash Command thủ công
 @bot.command(name="sync")
-@commands.is_owner() 
+@commands.is_owner()
 async def sync(ctx, option: Optional[str] = None):
-    msg = await ctx.send("🔄 Đang xử lý Slash Commands, vui lòng đợi...")
+    msg = await ctx.send("Đang xử lý Slash Commands, vui lòng đợi...")
     try:
         if option == "clean":
-            # Xóa sạch các lệnh (Guild commands) bị nhân đôi tại Server Test
             bot.tree.clear_commands(guild=bot.MY_GUILD)
             await bot.tree.sync(guild=bot.MY_GUILD)
-            await msg.edit(content="🧹 **Đã dọn dẹp lệnh bị nhân đôi tại Server Test!**\n(Nhấn Ctrl + R trên Discord để tải lại giao diện)")
+            await msg.edit(content="Đã dọn sạch lệnh ở Server Test!**\n(Nhấn Ctrl + R trên Discord để làm mới giao diện)")
             return
-
-        # Mặc định chỉ đồng bộ Global để tránh bị nhân đôi ở Server Test
-        synced_global = await bot.tree.sync()
-        await msg.edit(content=f"✅ **Đồng bộ hoàn tất!**\n🌍 Toàn cầu (Global): Cập nhật `{len(synced_global)}` lệnh.")
+        
+        # --- BẮT ĐẦU CÁCH 2: CUSTOM BULK SYNC ---
+        # Lấy Application ID (nếu bot đã ready thì thuộc tính application có sẵn)
+        app_id = getattr(bot.application, "id", None) or getattr(bot.user, "id", None)
+        if app_id is None:
+            raise RuntimeError("Bot application ID is unavailable")
+        
+        # 1. Thu thập các lệnh hiện có trong code của bot.tree
+        payload = []
+        commands_to_sync = bot.tree.get_commands() # Lấy danh sách lệnh Global
+        
+        for cmd in commands_to_sync:
+            # Hàm to_dict() giúp chuyển lệnh về định dạng API của Discord
+            payload.append(cmd.to_dict(bot.tree)) 
+            
+        headers = {
+            "Authorization": f"Bot {TOKEN}",
+            "Content-Type": "application/json"
+        }
+        url = f"https://discord.com/api/v10/applications/{app_id}/commands"
+        
+        # 2. Lấy danh sách lệnh đang có trên Discord bằng API
+        resp = requests.get(url, headers=headers)
+        if resp.status_code == 200:
+            existing_commands = resp.json()
+            
+            # 3. Tìm lệnh Entry Point (Loại 4 là Primary Entry Point)
+            entry_point_cmd = next((c for c in existing_commands if c.get("type") == 4), None)
+            
+            # 4. Nếu tìm thấy trên Discord có lệnh này, chúng ta gộp nó vào payload
+            if entry_point_cmd:
+                payload.append({
+                    "name": entry_point_cmd["name"],
+                    "type": 4,
+                    "description": "", # Lệnh loại 4 không được có description
+                    "handler": entry_point_cmd.get("handler", 2),
+                    "integration_types": entry_point_cmd.get("integration_types", [0, 1]),
+                    "contexts": entry_point_cmd.get("contexts", [0, 1, 2])
+                })
+        
+        # 5. Gửi request đồng bộ đè lên Discord
+        sync_resp = requests.put(url, headers=headers, json=payload)
+        
+        if sync_resp.status_code == 200:
+             # Tính toán số lượng lệnh đã đồng bộ thành công (trừ đi Entry Point nếu có)
+             synced_count = len(sync_resp.json())
+             has_entry = " (Đã giữ lại Entry Point App Launcher)" if entry_point_cmd else ""
+             
+             await msg.edit(content=f"Đồng bộ tất cả hoàn tất!**\nToàn cầu (Global): Cập nhật `{synced_count}` lệnh.{has_entry}")
+        else:
+             await msg.edit(content=f"**Lỗi API:** {sync_resp.status_code} - {sync_resp.text}")
         
     except Exception as e:
-        await msg.edit(content=f"❌ **Lỗi:** {e}")
+        await msg.edit(content=f"**Lỗi Code:** {e}")
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):

@@ -432,7 +432,7 @@ class Music(commands.Cog):
         except: pass
         
     async def update_channel_status(self, guild_id, text=None):
-        """Hàm hỗ trợ cập nhật trạng thái kênh an toàn (chỉ dành cho VoiceChannel)"""
+        """Hàm hỗ trợ cập nhật trạng thái kênh an toàn"""
         guild = self.bot.get_guild(guild_id)
         if not guild or not guild.voice_client or not guild.voice_client.channel:
             return
@@ -444,12 +444,12 @@ class Music(commands.Cog):
 
         voice_channel = guild.voice_client.channel
         
-        # CHỈ áp dụng cho discord.VoiceChannel để tránh lỗi với Pylance/StageChannel
+        # Chỉ áp dụng cho VoiceChannel
         if isinstance(voice_channel, discord.VoiceChannel):
             try:
                 await voice_channel.edit(status=text)
             except discord.Forbidden:
-                pass # Bỏ qua nếu bot không có quyền đổi trạng thái
+                print(f"⚠️ CẢNH BÁO: Bot thiếu quyền 'Set Voice Channel Status' ở kênh {voice_channel.name}")
             except Exception as e:
                 print(f"⚠️ Lỗi cập nhật trạng thái kênh: {e}")
 
