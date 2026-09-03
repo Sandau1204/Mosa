@@ -130,9 +130,15 @@ class MusicController(discord.ui.View):
             if vc.is_playing():
                 self.cog.pause_music(self.guild_id)
                 button.emoji = "▶️"
+                # XÓA trạng thái kênh khi tạm dừng
+                await self.cog.update_channel_status(self.guild_id, None)
             elif vc.is_paused():
                 self.cog.resume_music(self.guild_id)
                 button.emoji = "⏸️"
+                # HIỆN LẠI trạng thái kênh khi tiếp tục
+                song_title = self.song_info.get('title', 'Unknown')
+                await self.cog.update_channel_status(self.guild_id, f"🎶 {song_title}"[:500])
+                
             await self.cog.update_ui(self.guild_id)
         await self._safe_reply(interaction, defer=True)
 
@@ -424,6 +430,28 @@ class Music(commands.Cog):
                 break
         try: await msg.edit(embed=view.create_embed(), view=view)
         except: pass
+        
+    async def update_channel_status(self, guild_id, text=None):
+        """Hàm hỗ trợ cập nhật trạng thái kênh an toàn (chỉ dành cho VoiceChannel)"""
+        guild = self.bot.get_guild(guild_id)
+        if not guild or not guild.voice_client or not guild.voice_client.channel:
+            return
+            
+        # Kiểm tra tính năng có đang bật hay không
+        is_status_enabled = self.settings.get(str(guild_id), {}).get("status_enabled", False)
+        if not is_status_enabled:
+            return
+
+        voice_channel = guild.voice_client.channel
+        
+        # CHỈ áp dụng cho discord.VoiceChannel để tránh lỗi với Pylance/StageChannel
+        if isinstance(voice_channel, discord.VoiceChannel):
+            try:
+                await voice_channel.edit(status=text)
+            except discord.Forbidden:
+                pass # Bỏ qua nếu bot không có quyền đổi trạng thái
+            except Exception as e:
+                print(f"⚠️ Lỗi cập nhật trạng thái kênh: {e}")
 
     # Hàm đếm ngược 15 phút rồi thoát
     async def idle_disconnect(self, guild_id, channel):
@@ -591,15 +619,15 @@ class Music(commands.Cog):
             else:
                 self.force_skips[guild_id] = False
                 
-                # --- LOGIC MỚI: Xử lý khi hết nhạc (Queue empty) ---
+                
+                # --- Xử lý khi hết nhạc (Queue empty) ---
                 if guild_id not in self.queues or not self.queues[guild_id]:
-                    guild = self.bot.get_guild(guild_id)
-                    is_status_enabled = self.settings.get(str(guild_id), {}).get("status_enabled", False)
-                    if is_status_enabled and guild and guild.voice_client and guild.voice_client.channel:
-                        try:
-                            await guild.voice_client.channel.edit(status=None)
-                        except: pass
+                    # 1. Xóa trạng thái kênh khi hết nhạc
+                    await self.update_channel_status(guild_id, None)
+                    
                     if guild_id in self.current_songs: del self.current_songs[guild_id]
+                    
+                    # 2. Dọn dẹp tin nhắn giao diện nếu còn sót lại
                     if guild_id in self.ui_messages: 
                         try: await self.ui_messages[guild_id].delete()
                         except: pass
@@ -626,11 +654,10 @@ class Music(commands.Cog):
                                 if guild_id not in self.idle_timers:
                                     self.idle_timers[guild_id] = asyncio.create_task(self.idle_disconnect(guild_id, target_channel))
                             else:
-                                # Nếu vẫn còn người -> Không làm gì cả (Bot ở lại, không đếm giờ)
                                 pass
 
                     if guild_id in self.manual_stops: del self.manual_stops[guild_id]
-                    break 
+                    break
                 # -----------------------------------------------------
 
                 song_data = self.queues[guild_id].pop(0)
@@ -689,14 +716,8 @@ class Music(commands.Cog):
                 # --- TẠO VIEW ---
                 view = MusicController(self, guild_id, song_data)
                 
-                # --- THÊM TRẠNG THÁI KÊNH ---
-                is_status_enabled = self.settings.get(str(guild_id), {}).get("status_enabled", True)
-                if is_status_enabled and guild.voice_client and guild.voice_client.channel:
-                    try:
-                        status_msg = f"🎶{song_data['title']}"[:500]
-                        await guild.voice_client.channel.edit(status=status_msg)
-                    except Exception as e:
-                        print(f"⚠️ Lỗi cập nhật trạng thái kênh: {e}")
+                # --- THÊM TRẠNG THÁI KÊNH (Dùng helper) ---
+                await self.update_channel_status(guild_id, f"🎶 {song_data['title']}"[:500])
                         
                     
                 # --- TÌM KÊNH ĐỂ GỬI ---
@@ -767,14 +788,12 @@ class Music(commands.Cog):
     async def stop_player(self, guild_id):
         self.queues[guild_id] = []; self.manual_stops[guild_id] = True; self.force_skips[guild_id] = True
         if guild_id in self.current_songs: del self.current_songs[guild_id]
+        
+        # Xóa trạng thái kênh khi stop
+        await self.update_channel_status(guild_id, None)
+        
         guild = self.bot.get_guild(guild_id)
         if guild and guild.voice_client:
-            is_status_enabled = self.settings.get(str(guild_id), {}).get("status_enabled", False)
-            if is_status_enabled and guild.voice_client.channel:
-                try:
-                    await guild.voice_client.channel.edit(status=None)
-                except: pass
-                
             guild.voice_client.stop()
     
     async def skip_song(self, guild_id):
