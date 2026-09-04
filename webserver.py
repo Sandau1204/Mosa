@@ -14,7 +14,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 load_dotenv()
 
 app = Flask(__name__, static_url_path='/static')
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "mosa-dashboard-secret-key-123") # Key bảo mật cho session
+app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24)) # Key bảo mật cho session
 # cấu hình cookie
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
@@ -211,6 +211,7 @@ def get_guilds():
         common_guilds.append({"id": str(g.id), "name": g.name, "icon": icon_hash})
         
     return jsonify(common_guilds)
+check_auth()
 
 
 # --- CÁC API KHÁC (Cần kiểm tra login) ---
