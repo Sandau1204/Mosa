@@ -211,7 +211,7 @@ def get_guilds():
         common_guilds.append({"id": str(g.id), "name": g.name, "icon": icon_hash})
         
     return jsonify(common_guilds)
-check_auth()
+
 
 
 # --- CÁC API KHÁC (Cần kiểm tra login) ---
