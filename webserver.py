@@ -14,6 +14,8 @@ load_dotenv()
 
 app = Flask(__name__, static_url_path='/static')
 app.secret_key = os.urandom(24) # Key bảo mật cho session
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+app.config['SESSION_COOKIE_SECURE'] = True
 
 bot_instance = None 
 
@@ -99,12 +101,12 @@ class FakeInteraction:
 def login():
     # Tạo URL đăng nhập Discord
     oauth_url = f"{API_ENDPOINT}/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
-    return render_template('login.html', auth_url=oauth_url)
+    return render_template('index.html', auth_url=oauth_url)
 
 @app.route(f'{PREFIX}/logout')
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+    return redirect(url_for('index'))
 
 @app.route(f'{PREFIX}/callback')
 def callback():
@@ -140,16 +142,62 @@ def callback():
     
     return redirect(url_for('index'))
 
+# Cho phép Discord nhúng Dashboard vào iframe
+@app.after_request
+def add_security_headers(response):
+    # Cho phép Discord client nhúng iframe
+    response.headers['Content-Security-Policy'] = "frame-ancestors 'self' https://discord.com https://*.discord.com;"
+    # Xóa X-Frame-Options nếu có để tránh xung đột với frame-ancestors
+    response.headers.pop('X-Frame-Options', None)
+    return response
+
+def check_auth():
+    return 'user' in session
+
+# --- ROUTE XÁC THỰC DÀNH CHO DISCORD ACTIVITY SDK ---
+@app.route(f'{PREFIX}/api/activity-token', methods=['POST'])
+def activity_token():
+    """Nhận code từ Embedded App SDK và đổi lấy access_token"""
+    data = request.json or {}
+    code = data.get('code')
+    if not code:
+        return jsonify({"error": "Missing authorization code"}), 400
+
+    token_payload = {
+        'client_id': CLIENT_ID,
+        'client_secret': CLIENT_SECRET,
+        'grant_type': 'authorization_code',
+        'code': code
+    }
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    r = requests.post(f'{API_ENDPOINT}/oauth2/token', data=token_payload, headers=headers)
+    
+    if r.status_code != 200:
+        return jsonify({"error": "Failed to exchange token", "details": r.text}), 400
+        
+    token_data = r.json()
+    access_token = token_data['access_token']
+
+    # Lấy thông tin user
+    user_res = requests.get(f'{API_ENDPOINT}/users/@me', headers={'Authorization': f'Bearer {access_token}'})
+    user_data = user_res.json() if user_res.status_code == 200 else {}
+
+    # Lưu session
+    session['user'] = user_data
+    session['token'] = access_token
+
+    return jsonify({
+        "access_token": access_token,
+        "user": user_data
+    })
 # --- ROUTES CHÍNH ---
 
 @app.route(f'{PREFIX}/')
 def index():
-    dummy_user = {
-        "id": "123456789", 
-        "username": "Admin (Khách)", 
-        "avatar": None
-    }
-    return render_template('index.html', user=dummy_user)
+    user = session.get('user')
+    return render_template('index.html', user=user, client_id=CLIENT_ID)
+
+
     
 
 @app.route(f'{PREFIX}/api/guilds')
@@ -168,10 +216,6 @@ def get_guilds():
 
 
 # --- CÁC API KHÁC (Cần kiểm tra login) ---
-
-def check_auth():
-
-    return True
 
 @app.route(f'{PREFIX}/api/channels')
 def get_channels():
