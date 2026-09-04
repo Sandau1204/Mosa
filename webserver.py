@@ -189,6 +189,9 @@ def activity_token():
 
 @app.route(f'{PREFIX}/')
 def index():
+    if not check_auth():
+        return redirect(url_for('login'))
+    
     user = session.get('user')
     return render_template('index.html', user=user, client_id=CLIENT_ID)
 
