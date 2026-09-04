@@ -8,14 +8,19 @@ import json
 import time
 import requests
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Load biến môi trường
 load_dotenv()
 
 app = Flask(__name__, static_url_path='/static')
-app.secret_key = os.urandom(24) # Key bảo mật cho session
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "mosa-dashboard-secret-key-123") # Key bảo mật cho session
+# cấu hình cookie
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
+
+# Khai báo ProxyFix để Flask nhận diện đúng giao thức HTTPS từ Ngrok/Cloudflare
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 bot_instance = None 
 
@@ -157,7 +162,6 @@ def check_auth():
 # --- ROUTE XÁC THỰC DÀNH CHO DISCORD ACTIVITY SDK ---
 @app.route(f'{PREFIX}/api/activity-token', methods=['POST'])
 def activity_token():
-    """Nhận code từ Embedded App SDK và đổi lấy access_token"""
     data = request.json or {}
     code = data.get('code')
     if not code:
@@ -168,28 +172,19 @@ def activity_token():
         'client_secret': CLIENT_SECRET,
         'grant_type': 'authorization_code',
         'code': code
+        # LƯU Ý: Với Embedded SDK, Discord yêu cầu KHÔNG gửi redirect_uri
     }
+    
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     r = requests.post(f'{API_ENDPOINT}/oauth2/token', data=token_payload, headers=headers)
     
     if r.status_code != 200:
+        print(f"[LỖI OAUTH2 SDK] {r.status_code} - {r.text}") # <--- Dòng này sẽ in lỗi ra Terminal
         return jsonify({"error": "Failed to exchange token", "details": r.text}), 400
-        
+
     token_data = r.json()
-    access_token = token_data['access_token']
-
-    # Lấy thông tin user
-    user_res = requests.get(f'{API_ENDPOINT}/users/@me', headers={'Authorization': f'Bearer {access_token}'})
-    user_data = user_res.json() if user_res.status_code == 200 else {}
-
-    # Lưu session
-    session['user'] = user_data
-    session['token'] = access_token
-
-    return jsonify({
-        "access_token": access_token,
-        "user": user_data
-    })
+    session['token'] = token_data.get('access_token')
+    return jsonify(token_data)
 # --- ROUTES CHÍNH ---
 
 @app.route(f'{PREFIX}/')
