@@ -9,8 +9,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-    <!-- Discord Embedded App SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@discord/embedded-app-sdk@1.1.0/output/index.min.js"></script>
     
     <style>
         /* --- User Dropdown --- */
@@ -380,9 +378,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const CLIENT_ID = "{{ client_id }}";
-        let discordSdk = null;
-        let isActivity = false;
         
         const BASE_URL = ""; 
         let currentGuildId = localStorage.getItem('lastGuild') || "";
@@ -394,72 +389,6 @@
         const searchModal = new bootstrap.Modal(document.getElementById('searchModal'));
         const playlistModal = new bootstrap.Modal(document.getElementById('playlistModal'));
         let cachedPlaylists = [];
-
-        async function initDiscordApp() {
-            const inIframe = window.self !== window.top;
-            
-            if (inIframe && typeof DiscordSDK !== 'undefined' && CLIENT_ID) {
-                try {
-                    discordSdk = new DiscordSDK.DiscordSDK(CLIENT_ID);
-                    await discordSdk.ready();
-                    isActivity = true;
-                    console.log("Discord Activity Ready. Context:", discordSdk.channelId, discordSdk.guildId);
-
-                    const { code } = await discordSdk.commands.authorize({
-                        client_id: CLIENT_ID,
-                        response_type: 'code',
-                        state: '',
-                        prompt: 'none',
-                        scope: ['identify', 'guilds']
-                    });
-
-                    // Gửi code lấy token (bắt buộc dùng credentials: 'include')
-                    const res = await fetch(`${BASE_URL}/api/activity-token`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ code }),
-                        credentials: 'include' 
-                    });
-                    const authData = await res.json();
-
-                    if (authData.access_token) {
-                        await discordSdk.commands.authenticate({ access_token: authData.access_token });
-                        
-                        if (authData.user) {
-                            const avatarUrl = authData.user.avatar 
-                                ? `https://cdn.discordapp.com/avatars/${authData.user.id}/${authData.user.avatar}.png`
-                                : `https://cdn.discordapp.com/embed/avatars/0.png`;
-                            document.querySelector('.user-avatar')?.setAttribute('src', avatarUrl);
-                            const nameSpan = document.querySelector('.user-dropdown-btn span');
-                            if (nameSpan) nameSpan.innerText = authData.user.global_name || authData.user.username;
-                        }
-                    }
-
-                    if (discordSdk.guildId) {
-                        currentGuildId = discordSdk.guildId;
-                        localStorage.setItem('lastGuild', currentGuildId);
-                        
-                        await loadGuilds();
-                        if (discordSdk.channelId) {
-                            const chSel = document.getElementById('channelSelect');
-                            chSel.value = discordSdk.channelId;
-                            // Join channel với cookie
-                            fetch(`${BASE_URL}/api/join?guild_id=${discordSdk.guildId}&channel_id=${discordSdk.channelId}`, { 
-                                method: 'POST', 
-                                credentials: 'include' 
-                            });
-                        }
-                    }
-                } catch (err) {
-                    console.warn("Khởi tạo Activity SDK thất bại, dùng chế độ Web thường:", err);
-                    isActivity = false;
-                }
-            }
-
-            if (!isActivity) {
-                loadGuilds();
-            }
-        }
 
         let queueSortable = new Sortable(document.getElementById('queueList'), {
             animation: 150,
