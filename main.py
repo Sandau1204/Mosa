@@ -7,7 +7,7 @@ from typing import Optional
 from discord.ext import commands
 from dotenv import load_dotenv
 from flask import ctx
-from webserver import run_web 
+#from webserver import run_web 
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -114,9 +114,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
 
 if __name__ == '__main__':
     # Chạy Web Server
-    print("🌐 Đang khởi động Web Dashboard...")
-    t = threading.Thread(target=run_web, args=(bot,))
-    t.daemon = True
-    t.start()
+    #print("🌐 Đang khởi động Web Dashboard...")
+    #t = threading.Thread(target=run_web, args=(bot,))
+    #t.daemon = True
+    #t.start()
     
     bot.run(TOKEN)
