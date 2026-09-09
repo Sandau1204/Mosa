@@ -236,7 +236,7 @@
             .queue-box { height: auto; max-height: 65vh; min-height: 400px; }
             .controls button { width: 50px; height: 50px; font-size: 1.4rem; }
             .controls .btn-play { width: 70px; height: 70px; }
-            .top-bar { flex-direction: column; gap: 10px; align-items: stretch; }
+            .top-bar { flex-direction: row; flex-wrap: wrap; gap: 10px; }
             .top-actions { display: flex; gap: 10px; justify-content: space-between; }
             .top-actions select { flex-grow: 1; max-width: none !important; }
             .queue-header { position: sticky; top: 0; background-color: var(--bg-color); z-index: 10; padding-top: 5px; padding-bottom: 10px; }
@@ -256,7 +256,7 @@
                 <div class="brand-logo">
                     <i class="fas fa-music"></i> MOSA DASHBOARD <span id="trackChannel" class="status-badge">Chưa phát</span>
                 </div>
-                <div class="top-actions d-flex gap-2 align-items-center">
+                <div class="top-actions d-flex flex-wrap gap-2 align-items-center justify-content-end">
                     <select id="guildSelect" class="form-select form-select-sm" onchange="loadChannels()" style="max-width: 150px;">
                         <option value="" disabled selected>Server...</option>
                     </select>
@@ -291,7 +291,7 @@
             
             <div class="main-content">
                 <div class="row g-4">
-                    <div class="col-lg-5">
+                    <div class="col-md-5 col-lg-5">
                         <div class="player-section">
                             <div class="art-box">
                                 <img id="trackArt" src="" class="art-img" alt="Album Art">
@@ -318,7 +318,7 @@
                         </div>
                     </div>
                     
-                    <div class="col-lg-7">
+                    <div class="col-md-7 col-lg-7">
                         <div class="queue-header">
                             <h5><i class="fas fa-list-ul me-2 text-success"></i> Hàng đợi</h5>
                             <div>
