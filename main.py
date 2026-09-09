@@ -7,7 +7,7 @@ from typing import Optional
 from discord.ext import commands
 from dotenv import load_dotenv
 from flask import ctx
-#from webserver import run_web 
+from webserver import run_web 
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -36,6 +36,14 @@ class MyBot(commands.Bot):
         user_id = getattr(user, 'id', 'Unknown')
         print(f'🤖 Bot đã online: {user_display} (ID: {user_id})')
         #await self.change_presence(activity=discord.Game(name="/play để nghe nhạc"))
+        
+        await self.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.watching, 
+                name="Dashboard | localhost:5000"
+            ),
+            status=discord.Status.online
+        )
 
 bot = MyBot()
 
@@ -113,10 +121,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
         await interaction.followup.send(f"⚠️ Lỗi: {str(error)}", ephemeral=True)
 
 if __name__ == '__main__':
-    # Chạy Web Server
-    #print("🌐 Đang khởi động Web Dashboard...")
-    #t = threading.Thread(target=run_web, args=(bot,))
-    #t.daemon = True
-    #t.start()
+    print("🚀 Đang khởi động Web Dashboard...")
+    t = threading.Thread(target=run_web, args=(bot,))
+    t.daemon = True
+    t.start()
     
     bot.run(TOKEN)
