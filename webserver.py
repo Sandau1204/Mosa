@@ -98,9 +98,16 @@ def callback():
 
 @app.route("/")
 def index():
+    # 1. Nếu mở trong Discord Activity (sẽ có frame_id trên URL)
+    if request.args.get('frame_id'):
+        # Trả thẳng về trang index.html, việc đăng nhập sẽ do JavaScript SDK lo
+        return render_template("index.html", is_activity=True)
+    
+    # 2. Nếu mở bằng trình duyệt Web bình thường
     if not check_auth():
         return render_template("login.html")
-    return render_template("index.html", user=session.get("user"))
+    
+    return render_template("index.html", user=session.get("user"), is_activity=False)
 
 # --- API ROUTES ---
 @app.route("/api/guilds")
