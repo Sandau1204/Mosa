@@ -252,6 +252,31 @@
         }
 
         // --- API CALLS (VOICE CHANNEL) ---
+
+        document.getElementById('search-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const query = document.getElementById('search-input').value;
+            if (!query || !globalUserId) return;
+
+            try {
+                const res = await fetch('/api/play', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, user_id: globalUserId })
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    showToast(data.error, 'error');
+                } else {
+                    showToast(`Đã thêm: ${query}`, 'success');
+                }
+            } catch (err) {
+                showToast('Lỗi kết nối tới server', 'error');
+            }
+            document.getElementById('search-input').value = "";
+        });
+        
         window.connectBot = async function() {
             if (!globalUserId) return;
             try {
