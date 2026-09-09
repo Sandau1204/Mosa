@@ -215,6 +215,7 @@
                 if (webUser) {
                     globalUserId = webUser.id;
                     updateUserUI(webUser.username, webUser.avatar, webUser.id);
+                    fetchGuilds();
                     hideLoading();
                 } else {
                     window.location.href = "/login";
@@ -297,20 +298,33 @@
         // --- API CALLS (VOICE CHANNEL) ---
         window.connectBot = async function() {
             if (!globalUserId) return;
+
+            const guildId = document.getElementById('guild-select').value;
+            const channelId = document.getElementById('channel-select').value;
+
+            if (!guildId || !channelId) {
+                showToast('Vui lòng chọn Server và Kênh thoại!', 'error');
+                return;
+            }
+        
             try {
                 const res = await fetch('/api/connect', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: globalUserId })
+                    body: JSON.stringify({ 
+                        user_id: globalUserId,
+                        guild_id: guildId,
+                        channel_id: channelId
+                    })
                 });
                 const data = await res.json();
-                
+
                 if (data.error) {
-                    showToast(data.error, 'error');
+                    showToast(data.error, 'error'); // Báo lỗi nếu user chưa vào đúng kênh thoại
                 } else {
-                    showToast(`Đã kết nối vào ${data.channel_name}`, 'success');
+                    showToast(`Bot đã vào kênh ${data.channel_name}`, 'success');
                     updateConnectionUI(true, data.channel_name);
                 }
-            } catch (e) { showToast('Lỗi mạng', 'error'); }
+            } catch (e) { showToast('Lỗi mạng hoặc máy chủ', 'error'); }
         }
 
         window.disconnectBot = async function() {
