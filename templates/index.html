@@ -99,7 +99,7 @@
                 const CLIENT_ID = "1321104228361703424"; 
 
                 log("1. Đang tải SDK...");
-                const module = await import("https://unpkg.com/@discord/embedded-app-sdk@1.2.0/lib/index.mjs");
+                const module = await import("/static/discord-sdk.mjs");
                 const DiscordSDK = module.DiscordSDK;
                 
                 log("2. Khởi tạo SDK...");
