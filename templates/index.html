@@ -76,7 +76,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100%;
+            min-height: 100vh;
             padding: 20px;
         }
         .dashboard-container {
@@ -224,8 +224,13 @@
         @media (max-width: 768px) {
             .app-wrapper { padding: 0; display: block; }
             .dashboard-container {
-                border-radius: 0; border: none; min-height: 100vh; height: auto;
-                backdrop-filter: none; background-color: rgba(18, 18, 18, 0.95); padding-bottom: 20px;
+                border-radius: 0;
+                border: none;
+                min-height: 100%;
+                height: auto;
+                backdrop-filter: none;
+                background-color: rgba(18, 18, 18, 0.95);
+                padding-bottom: 20px;
             }
             .player-section { margin-bottom: 15px; padding: 15px; }
             .queue-box { height: auto; max-height: 65vh; min-height: 400px; }
