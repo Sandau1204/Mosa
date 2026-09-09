@@ -94,6 +94,20 @@
         }
 
         async function init() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (!urlParams.get('frame_id')) {
+                // Nếu KHÔNG có frame_id => Đang mở trên Cốc Cốc/Chrome
+                log("Đang mở trên Web Browser. Bỏ qua Discord SDK.");
+                
+                // Ẩn màn hình loading đi để hiện giao diện Dashboard
+                const loadingScreen = document.getElementById("loading-screen");
+                loadingScreen.style.opacity = "0";
+                setTimeout(() => loadingScreen.style.display = "none", 500);
+                
+                document.getElementById("user-name").innerText = "Đăng nhập từ Web";
+                return; // Dừng lại, không chạy Discord SDK bên dưới nữa
+            }
+            
             try {
                 // 1. NHẬP CLIENT ID CỦA BẠN VÀO ĐÂY (Bắt buộc là DÃY SỐ)
                 const CLIENT_ID = "1321104228361703424"; 
