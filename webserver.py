@@ -10,11 +10,12 @@ load_dotenv()
 app = Flask(__name__, static_url_path='/static')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
 
+DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
 CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://localhost:5000/callback")
 API_ENDPOINT = "https://discord.com/api/v10"
-SETTINGS_FILE = "data/server_settings.json"
+SETTINGS_FILE = os.path.join(DATA_FOLDER, "settings.json")
 
 bot_instance = None
 
@@ -25,6 +26,31 @@ def run_web(bot):
 
 def check_auth():
     return "token" in session
+
+@app.route("/api/token", methods=["POST"])
+def get_activity_token():
+    data = request.json
+    code = data.get("code")
+    
+    if not code:
+        return jsonify({"error": "No code provided"}), 400
+
+    # Dùng code đổi lấy access_token từ Discord
+    token_data = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": REDIRECT_URI # Phải khớp hoàn toàn với redirect uri trong portal (không cần tồn tại thật nếu dùng activity)
+    }
+    
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    resp = requests.post(f"{API_ENDPOINT}/oauth2/token", data=token_data, headers=headers)
+    
+    if resp.status_code != 200:
+        return jsonify({"error": resp.text}), 400
+        
+    return jsonify(resp.json()) # Trả access_token về cho Frontend
 
 # --- AUTH ROUTES ---
 @app.route("/login")

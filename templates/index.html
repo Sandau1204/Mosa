@@ -113,6 +113,64 @@
         </div>
     </main>
 
+    <!-- Bổ sung thẻ script kiểu module ở cuối file HTML -->
+    <script type="module">
+        // 1. Nhập SDK của Discord (từ CDN)
+        import { DiscordSDK } from "https://unpkg.com/@discord/embedded-app-sdk@1.2.0/lib/index.mjs";
+    
+        const discordSdk = new DiscordSDK("YOUR_CLIENT_ID");
+    
+        async function setupDiscordActivity() {
+            // 2. Chờ SDK sẵn sàng
+            await discordSdk.ready();
+            console.log("Discord SDK đã sẵn sàng!");
+        
+            try {
+                // 3. Xin quyền người dùng (Hiện popup mượt mà trong Discord)
+                const { code } = await discordSdk.commands.authorize({
+                    client_id: "YOUR_CLIENT_ID",
+                    response_type: "code",
+                    state: "",
+                    prompt: "none",
+                    scope: ["identify", "guilds"] // Các quyền cần lấy
+                });
+            
+                // 4. Gửi 'code' về Flask Backend để đổi lấy access_token
+                const response = await fetch('/api/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code })
+                });
+                const { access_token } = await response.json();
+            
+                // 5. Authenticate Activity bằng access_token
+                const auth = await discordSdk.commands.authenticate({
+                    access_token: access_token
+                });
+            
+                if (auth == null) {
+                    throw new Error("Authenticate thất bại");
+                }
+            
+                console.log("Đăng nhập thành công với tài khoản:", auth.user.username);
+                
+                // Cập nhật giao diện với thông tin User
+                document.getElementById("user-name").innerText = auth.user.username;
+                
+                if(auth.user.avatar) {
+                    const avatarUrl = `https://cdn.discordapp.com/avatars/${auth.user.id}/${auth.user.avatar}.png`;
+                    document.getElementById("user-avatar").src = avatarUrl;
+                }
+            
+            } catch (error) {
+                console.error("Lỗi đăng nhập Activity:", error);
+            }
+        }
+    
+        // Khởi chạy khi load trang
+        setupDiscordActivity();
+    </script>
+
     <!-- Script kết nối API (Ví dụ mẫu) -->
     <script>
         // Gọi API điều khiển được cấu hình trong webserver.py
