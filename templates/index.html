@@ -22,8 +22,7 @@
             --radius-lg: 12px;
             --transition: 0.2s ease;
         }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'gg sans', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
         
         body {
             background-color: var(--bg-base);
@@ -47,12 +46,6 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4e5058; }
-
         /* Header */
         header {
             background-color: var(--bg-panel); padding: 12px 24px;
@@ -74,15 +67,11 @@
             .app-container { grid-template-columns: 1fr; overflow-y: auto; }
         }
 
-        /* Panel Common */
         .panel { background-color: var(--bg-panel); border-radius: var(--radius-lg); padding: 20px; display: flex; flex-direction: column; }
         .panel-title { font-size: 1.1rem; font-weight: 700; color: var(--text-header); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
 
-        /* Left Column: Player & Search */
-        .player-section { gap: 20px; }
-        
         /* Search Bar */
-        .search-box { display: flex; gap: 10px; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
         .search-input {
             flex: 1; background-color: var(--bg-input); color: var(--text-normal);
             border: none; padding: 12px 16px; border-radius: var(--radius-md);
@@ -101,9 +90,16 @@
         .thumbnail-container {
             width: 100%; max-width: 320px; aspect-ratio: 16/9; margin-bottom: 24px;
             border-radius: var(--radius-lg); overflow: hidden;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.4); position: relative; background-color: var(--bg-input);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4); background-color: var(--bg-input);
         }
-        .thumbnail { width: 100%; height: 100%; object-fit: cover; transition: opacity 0.3s; }
+        
+        .thumbnail { width: 100%; height: 100%; object-fit: cover; }
+        
+        /* Hiệu ứng đĩa than quay */
+        .empty-thumbnail-svg { width: 100%; height: 100%; }
+        .spin-slow { animation: spin 4s linear infinite; }
+        .spin-paused { animation-play-state: paused; }
+
         .song-info { margin-bottom: 24px; width: 100%; }
         .song-title { font-size: 1.5rem; font-weight: 700; color: var(--text-header); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 10px; }
         .song-author { font-size: 1rem; color: var(--text-muted); }
@@ -112,11 +108,6 @@
         .progress-container { width: 100%; max-width: 400px; margin-bottom: 20px; }
         .progress-bar { width: 100%; height: 6px; background-color: var(--bg-input); border-radius: 3px; cursor: pointer; position: relative; }
         .progress-fill { height: 100%; background-color: var(--accent); border-radius: 3px; width: 0%; transition: width 0.1s linear; position: relative; }
-        .progress-fill::after {
-            content: ''; position: absolute; right: -6px; top: -4px; width: 14px; height: 14px;
-            background-color: white; border-radius: 50%; opacity: 0; transition: opacity 0.2s;
-        }
-        .progress-container:hover .progress-fill::after { opacity: 1; }
         .time-info { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; font-variant-numeric: tabular-nums; }
 
         /* Controls */
@@ -128,8 +119,7 @@
         .btn-play:hover { background-color: white; transform: scale(1.05); color: var(--bg-base); }
         .btn-play svg { width: 28px; height: 28px; }
 
-        /* Right Column: Queue */
-        .queue-section { overflow: hidden; }
+        /* Queue List */
         .queue-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
         .queue-item {
             display: flex; align-items: center; gap: 12px; padding: 8px;
@@ -137,40 +127,25 @@
             background-color: var(--bg-base); cursor: pointer;
         }
         .queue-item:hover { background-color: var(--bg-hover); }
-        .queue-item.active { background-color: rgba(88, 101, 242, 0.15); border-left: 3px solid var(--accent); }
         .q-thumb { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; background-color: var(--bg-input); flex-shrink: 0; }
         .q-info { flex: 1; min-width: 0; }
         .q-title { font-size: 0.9rem; font-weight: 600; color: var(--text-header); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
         .q-author { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .q-duration { font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
         .empty-queue { text-align: center; color: var(--text-muted); margin-top: 40px; font-size: 0.9rem; }
-
-        /* Toast Notifications (Thay thế alert) */
-        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-        .toast {
-            background-color: var(--bg-panel); border-left: 4px solid var(--accent);
-            color: var(--text-header); padding: 12px 20px; border-radius: 4px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 0.9rem;
-            animation: slideIn 0.3s ease forwards; pointer-events: auto;
-        }
-        .toast.error { border-left-color: var(--danger); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
     </style>
 </head>
 <body>
 
+    <!-- MÀN HÌNH LOADING -->
     <div id="loading-screen">
         <div class="spinner"></div>
         <h2 style="font-size: 1.2rem; color: var(--text-header);">Đang khởi tạo Mosa Music...</h2>
-        <p style="color: var(--text-muted); margin-top: 8px; font-size: 0.9rem;">Vui lòng đợi vài giây</p>
+        <p style="color: var(--text-muted); margin-top: 8px; font-size: 0.9rem;" id="loading-status">Vui lòng chờ giây lát</p>
     </div>
-
-    <div id="toast-container"></div>
 
     <header>
         <div class="brand">
-            <div class="brand-icon">🎵</div>
+            <div class="brand-icon">🤖</div>
             MOSA DASHBOARD
         </div>
         <div class="user-profile">
@@ -181,18 +156,34 @@
 
     <div class="app-container">
         
-        <!-- Cột Trái: Trình phát và Tìm kiếm -->
+        <!-- Cột Trái: Trình phát -->
         <main class="panel player-section">
-            <!-- Search Bar -->
             <form class="search-box" id="search-form">
-                <input type="text" class="search-input" id="search-input" placeholder="Tìm kiếm tên bài hát hoặc dán Link (YouTube, Spotify)..." required>
+                <input type="text" class="search-input" id="search-input" placeholder="Tìm kiếm bài hát hoặc dán Link..." required>
                 <button type="submit" class="btn-search">Phát nhạc</button>
             </form>
 
-            <!-- Now Playing Area -->
             <div class="now-playing">
                 <div class="thumbnail-container">
-                    <img src="https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?q=80&w=800&auto=format&fit=crop" id="np-thumbnail" class="thumbnail" alt="Thumbnail">
+                    
+                    <!-- SVG ĐĨA NHẠC TRỐNG (Không bao giờ bị lỗi CSP của Discord) -->
+                    <svg id="np-svg" viewBox="0 0 100 100" class="empty-thumbnail-svg spin-slow spin-paused">
+                        <rect width="100" height="100" fill="#1e1f22"/>
+                        <!-- Viền đĩa -->
+                        <circle cx="50" cy="50" r="42" fill="#111214" stroke="#2b2d31" stroke-width="2"/>
+                        <!-- Rãnh đĩa -->
+                        <circle cx="50" cy="50" r="32" fill="none" stroke="#2b2d31" stroke-width="1"/>
+                        <circle cx="50" cy="50" r="22" fill="none" stroke="#2b2d31" stroke-width="1"/>
+                        <!-- Tâm đĩa màu Discord -->
+                        <circle cx="50" cy="50" r="12" fill="#5865F2"/>
+                        <!-- Lỗ giữa -->
+                        <circle cx="50" cy="50" r="3" fill="#1e1f22"/>
+                        <!-- Nốt nhạc icon ở giữa -->
+                        <path d="M48 42 v-4 h5 v1 h-3 v3 a2 2 0 1 0 2 2 v-5" fill="#ffffff"/>
+                    </svg>
+
+                    <!-- ẢNH THUMBNAIL (Sẽ được JS bật lên nếu có link ảnh) -->
+                    <img src="" id="np-thumbnail" class="thumbnail" style="display: none;" alt="Thumbnail">
                 </div>
                 
                 <div class="song-info">
@@ -200,7 +191,6 @@
                     <p class="song-author" id="np-author">Hãy tìm kiếm để bắt đầu</p>
                 </div>
 
-                <!-- Progress -->
                 <div class="progress-container">
                     <div class="progress-bar" id="progress-bar">
                         <div class="progress-fill" id="progress-fill"></div>
@@ -211,29 +201,23 @@
                     </div>
                 </div>
 
-                <!-- Controls -->
                 <div class="controls">
-                    <!-- Icon Shuffle -->
-                    <button class="btn-ctrl" onclick="toggleAction('shuffle')" title="Trộn bài">
+                    <button class="btn-ctrl" onclick="alert('Chức năng Trộn bài')" title="Trộn bài">
                         <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
                     </button>
-                    <!-- Icon Prev -->
-                    <button class="btn-ctrl" onclick="playPrev()" title="Bài trước">
+                    <button class="btn-ctrl" onclick="alert('Lùi bài')" title="Bài trước">
                         <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
                     </button>
-                    <!-- Icon Play/Pause -->
                     <button class="btn-ctrl btn-play" id="btn-play-pause" onclick="togglePlay()">
-                        <!-- Play Icon (Mặc định) -->
+                        <!-- Icon Play -->
                         <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                        <!-- Pause Icon (Ẩn) -->
+                        <!-- Icon Pause -->
                         <svg id="icon-pause" viewBox="0 0 24 24" style="display: none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                     </button>
-                    <!-- Icon Next -->
-                    <button class="btn-ctrl" onclick="playNext()" title="Bài tiếp">
+                    <button class="btn-ctrl" onclick="alert('Chuyển bài')" title="Bài tiếp">
                         <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
                     </button>
-                    <!-- Icon Loop -->
-                    <button class="btn-ctrl" onclick="toggleAction('loop')" title="Lặp lại">
+                    <button class="btn-ctrl" onclick="alert('Chức năng Lặp')" title="Lặp lại">
                         <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
                     </button>
                 </div>
@@ -243,78 +227,62 @@
         <!-- Cột Phải: Danh sách chờ -->
         <aside class="panel queue-section">
             <h3 class="panel-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
                 Danh sách chờ
             </h3>
             
             <div class="queue-list" id="queue-list">
-                <!-- Data will be populated by JS -->
                 <div class="empty-queue">Chưa có bài hát nào trong hàng chờ.</div>
             </div>
         </aside>
     </div>
 
-    <!-- NHẬN DỮ LIỆU TỪ FLASK (Dành cho Web Browser) -->
+    <!-- DỮ LIỆU TỪ FLASK JINJA2 (Dành riêng cho Web) -->
     <script>
-        // Cú pháp Jinja2 để nhúng dữ liệu user từ Python vào JavaScript
         const webUser = {{ user | tojson | safe if user else 'null' }};
     </script>
 
-    <!-- SCRIPT CHÍNH -->
+    <!-- KỊCH BẢN CHÍNH -->
     <script type="module">
-        const debugLog = document.getElementById("debug-log");
-        const loadingTitle = document.getElementById("loading-title");
-        const spinner = document.getElementById("spinner");
-        const loadingScreen = document.getElementById("loading-screen");
-
-        // Hàm in log báo lỗi
-        function log(msg, isError = false) {
-            if(debugLog) debugLog.innerHTML += `<span class="${isError ? 'err-text' : ''}">${msg}</span><br>`;
-            if (isError && loadingTitle) {
-                loadingTitle.innerText = "Kết nối thất bại!";
-                loadingTitle.style.color = "#ef4444";
-                if(spinner) spinner.style.display = "none";
-            }
-        }
-
-        async function init() {
-            // 1. KIỂM TRA MÔI TRƯỜNG CHẠY (WEB hay ACTIVITY)
+        // ----------------------------------------------------------------
+        // 1. KIỂM TRA ĐĂNG NHẬP (WEB & DISCORD ACTIVITY)
+        // ----------------------------------------------------------------
+        async function checkAuthentication() {
             const urlParams = new URLSearchParams(window.location.search);
-            
+            const loadingScreen = document.getElementById("loading-screen");
+            const loadingStatus = document.getElementById("loading-status");
+
+            // NẾU MỞ TRÊN WEB (Không có tham số frame_id của Activity)
             if (!urlParams.get('frame_id')) {
-                // ============== LUỒNG 1: DÀNH CHO TRÌNH DUYỆT WEB ==============
                 if (webUser) {
-                    // Đã đăng nhập Web thành công -> Hiển thị thông tin
+                    // Đã đăng nhập Web
                     document.getElementById("user-name").innerText = webUser.username;
                     if(webUser.avatar) {
                         document.getElementById("user-avatar").src = `https://cdn.discordapp.com/avatars/${webUser.id}/${webUser.avatar}.png`;
                     }
-                    
-                    // Ẩn màn hình loading
                     loadingScreen.style.opacity = "0";
                     setTimeout(() => loadingScreen.style.display = "none", 500);
-                    return; // Kết thúc, không chạy SDK bên dưới nữa
+                    return; // Ngưng, không chạy SDK
                 } else {
-                    // Nếu lọt được vào đây mà chưa đăng nhập -> Ép đá về trang Login
+                    // Chưa đăng nhập -> Đá về trang đăng nhập
                     window.location.href = "/login";
                     return;
                 }
             }
 
-            // ============== LUỒNG 2: DÀNH CHO DISCORD ACTIVITY ==============
+            // NẾU MỞ TRONG DISCORD ACTIVITY
             try {
+                loadingStatus.innerText = "Đang kết nối SDK...";
+                
                 // ĐIỀN CLIENT ID CỦA BOT VÀO ĐÂY BẮT BUỘC
-                const CLIENT_ID = "1321104228361703424";
-
-                log("1. Đang tải SDK...");
+                const CLIENT_ID = "1321104228361703424"; 
+                
                 const module = await import("/static/discord-sdk.mjs");
                 const DiscordSDK = module.DiscordSDK;
-                
-                log("2. Khởi tạo SDK...");
                 const discordSdk = new DiscordSDK(CLIENT_ID);
                 await discordSdk.ready();
 
-                log("3. Đang gọi hộp thoại Authorize...");
+                loadingStatus.innerText = "Vui lòng phê duyệt ủy quyền Discord...";
                 const { code } = await discordSdk.commands.authorize({
                     client_id: CLIENT_ID,
                     response_type: "code",
@@ -323,41 +291,77 @@
                     scope: ["identify", "guilds"]
                 });
 
-                log("4. Đã lấy Code. Gửi tới Flask...");
+                loadingStatus.innerText = "Đang trao đổi Token...";
                 const response = await fetch('/api/token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code: code })
                 });
                 
-                if (!response.ok) {
-                    const errText = await response.text();
-                    throw new Error(`Server báo lỗi: ${errText}`);
-                }
-
+                if (!response.ok) throw new Error("Không thể kết nối đến máy chủ Backend.");
                 const data = await response.json();
                 
-                log("5. Có Token. Đang Authenticate...");
                 const auth = await discordSdk.commands.authenticate({ access_token: data.access_token });
                 
                 if (auth) {
-                    log("6. Đăng nhập HOÀN TẤT!");
                     document.getElementById("user-name").innerText = auth.user.username;
                     if(auth.user.avatar) {
                         document.getElementById("user-avatar").src = `https://cdn.discordapp.com/avatars/${auth.user.id}/${auth.user.avatar}.png`;
                     }
-                    
-                    // Ẩn loading
                     loadingScreen.style.opacity = "0";
                     setTimeout(() => loadingScreen.style.display = "none", 500);
                 }
             } catch (error) {
-                log(`Lỗi: ${error.message || error}`, true);
-                console.error(error);
+                loadingStatus.innerHTML = `<span style="color: #da373c">Lỗi xác thực: ${error.message || "Hãy thử tải lại"}</span>`;
             }
         }
 
-        init();
+        // Chạy kiểm tra đăng nhập
+        checkAuthentication();
+
+        // ----------------------------------------------------------------
+        // 2. MÔ PHỎNG LOGIC GIAO DIỆN (Nút Play/Pause & Đổi Avatar)
+        // ----------------------------------------------------------------
+        let isPlaying = false;
+        
+        window.togglePlay = function() {
+            // Đảo ngược trạng thái
+            isPlaying = !isPlaying;
+            
+            // Đổi Icon Play / Pause
+            document.getElementById('icon-play').style.display = isPlaying ? 'none' : 'block';
+            document.getElementById('icon-pause').style.display = isPlaying ? 'block' : 'none';
+            
+            // Xử lý đĩa than quay / dừng
+            const svgDisc = document.getElementById('np-svg');
+            if (isPlaying) {
+                svgDisc.classList.remove('spin-paused');
+            } else {
+                svgDisc.classList.add('spin-paused');
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // CHỖ NÀY BẠN TỰ KẾT NỐI API PYTHON CỦA BẠN VÀO NHÉ
+        // Hàm load nhạc giả lập để bạn xem thử giao diện:
+        // ----------------------------------------------------------------
+        document.getElementById('search-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const query = document.getElementById('search-input').value;
+            
+            // Ví dụ đổi giao diện ngay lập tức
+            document.getElementById('np-title').innerText = query;
+            document.getElementById('np-author').innerText = "Đang tải dữ liệu từ Bot...";
+            
+            // Kích hoạt xoay đĩa than
+            isPlaying = true;
+            document.getElementById('icon-play').style.display = 'none';
+            document.getElementById('icon-pause').style.display = 'block';
+            document.getElementById('np-svg').classList.remove('spin-paused');
+            
+            document.getElementById('search-input').value = "";
+            alert("Đã gửi lệnh phát nhạc tới Bot!");
+        });
     </script>
 </body>
 </html>
