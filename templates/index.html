@@ -4,23 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mosa Activity</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Dùng CSS tĩnh, an toàn 100% không bị Discord chặn -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Bỏ qua cảnh báo của Ngrok để CSS không bị chặn -->
-    <meta http-equiv="ngrok-skip-browser-warning" content="true">
+    <style>
+        /* Polyfill cho các class bị thiếu để không vỡ layout */
+        .gap-3 { gap: 0.75rem; }
+        .gap-4 { gap: 1rem; }
+        .gap-6 { gap: 1.5rem; }
+        .bg-gray-900 { background-color: #111827; }
+        .bg-gray-800 { background-color: #1f2937; }
+        .text-indigo-400 { color: #818cf8; }
+        .bg-indigo-500 { background-color: #6366f1; }
+        .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+    </style>
 </head>
 <body class="bg-gray-900 text-gray-100 h-screen flex flex-col overflow-hidden relative">
 
-    <!-- MÀN HÌNH LOADING KHI ĐANG ĐĂNG NHẬP ACTIVITY -->
-    <div id="loading-screen" class="absolute inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center transition-opacity duration-500">
+    <!-- MÀN HÌNH LOADING -->
+    <div id="loading-screen" class="absolute inset-0 bg-gray-900 z-50 flex flex-col items-center justify-center transition-opacity duration-500" style="background-color: #111827;">
         <i class="fa-solid fa-circle-notch fa-spin text-5xl text-indigo-500 mb-4"></i>
         <h2 class="text-xl font-bold">Đang kết nối với Discord...</h2>
-        <p class="text-gray-400 mt-2 text-sm text-center px-4">Đang xác thực tài khoản của bạn qua Embedded App SDK</p>
+        <p class="text-gray-400 mt-2 text-sm text-center px-4">Vui lòng bấm 'Phê duyệt' (Authorize) nếu Discord yêu cầu</p>
     </div>
 
-    <!-- NỘI DUNG DASHBOARD CHÍNH CỦA BẠN (Giữ nguyên cấu trúc HTML Dashboard ở câu trước) -->
-    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center shadow-md z-10">
+    <!-- HEADER DASHBOARD -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center shadow-md z-10" style="background-color: #1f2937; border-color: #374151;">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-indigo-500 rounded-full flex items-center justify-center"><i class="fa-solid fa-robot"></i></div>
             <h1 class="text-xl font-bold">MOSA MUSIC</h1>
@@ -32,50 +43,62 @@
         </div>
     </header>
 
-    <!-- (Phần body trình phát nhạc giữ nguyên như code trước) -->
-    <div class="flex-1 flex items-center justify-center p-6">
-        <div class="text-center">
-            <h2 class="text-3xl font-bold mb-4 text-indigo-400">Dashboard Đã Sẵn Sàng!</h2>
-            <p>Trình phát nhạc sẽ hiển thị tại đây.</p>
+    <!-- NỘI DUNG CHÍNH -->
+    <div class="flex-1 flex flex-col md:flex-row p-6 gap-6 overflow-hidden">
+        <!-- Khu vực phát nhạc -->
+        <div class="flex-1 bg-gray-800 rounded-xl shadow-2xl p-8 flex flex-col items-center justify-center border border-gray-700" style="background-color: #1f2937; border-color: #374151;">
+            <i class="fa-solid fa-music text-6xl text-indigo-400 mb-6"></i>
+            <h2 class="text-2xl font-bold mb-2">Trình phát nhạc đã sẵn sàng</h2>
+            <p class="text-gray-400">Tài khoản của bạn đã được kết nối thành công!</p>
+            
+            <div class="mt-8 flex items-center gap-6">
+                <button class="text-gray-400 hover:text-white transition"><i class="fa-solid fa-backward-step text-3xl"></i></button>
+                <button class="w-16 h-16 bg-indigo-500 text-white rounded-full flex items-center justify-center transition shadow-lg transform hover:scale-105"><i class="fa-solid fa-play text-2xl ml-1"></i></button>
+                <button class="text-gray-400 hover:text-white transition"><i class="fa-solid fa-forward-step text-3xl"></i></button>
+            </div>
         </div>
     </div>
 
-    <!-- TÍCH HỢP DISCORD SDK -->
-    <!-- Đổi YOUR_CLIENT_ID thành Client ID thật của Bot bạn -->
+    <!-- SCRIPT ĐĂNG NHẬP SDK -->
     <script type="module">
         import { DiscordSDK } from "https://unpkg.com/@discord/embedded-app-sdk@1.2.0/lib/index.mjs";
 
-        // Khởi tạo SDK
-        const discordSdk = new DiscordSDK("YOUR_CLIENT_ID_ĐIỀN_VÀO_ĐÂY");
+        // BƯỚC QUAN TRỌNG: Sửa dòng dưới đây thành dãy số Client ID của Bot (Ví dụ: "123456789012345678")
+        const CLIENT_ID = "1321104228361703424"; 
+
+        const discordSdk = new DiscordSDK(CLIENT_ID);
 
         async function setupActivity() {
             try {
                 await discordSdk.ready();
-                console.log("Discord SDK Ready!");
-
-                // Hiện popup xin quyền ngay trong Discord
+                
+                // Gọi popup xin quyền
                 const { code } = await discordSdk.commands.authorize({
-                    client_id: "YOUR_CLIENT_ID_ĐIỀN_VÀO_ĐÂY",
+                    client_id: CLIENT_ID,
                     response_type: "code",
                     state: "",
                     prompt: "none",
                     scope: ["identify", "guilds"]
                 });
 
-                // Gửi code về server của bạn để lấy token (Bạn cần tạo route /api/token trong webserver.py như mình hướng dẫn ở câu trước)
+                // Gửi code về server để đổi token
                 const response = await fetch('/api/token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code: code })
                 });
                 
-                const { access_token } = await response.json();
+                if (!response.ok) {
+                    throw new Error("Không thể lấy token từ máy chủ Flask của bạn");
+                }
 
+                const data = await response.json();
+                
                 // Xác thực Activity
-                const auth = await discordSdk.commands.authenticate({ access_token });
+                const auth = await discordSdk.commands.authenticate({ access_token: data.access_token });
                 
                 if (auth) {
-                    // Cập nhật giao diện
+                    // Cập nhật giao diện khi thành công
                     document.getElementById("user-name").innerText = auth.user.username;
                     if(auth.user.avatar) {
                         document.getElementById("user-avatar").src = `https://cdn.discordapp.com/avatars/${auth.user.id}/${auth.user.avatar}.png`;
@@ -86,16 +109,16 @@
                     setTimeout(() => document.getElementById("loading-screen").style.display = "none", 500);
                 }
             } catch (error) {
+                // In lỗi thẳng ra màn hình để bạn dễ debug
                 console.error("Lỗi:", error);
                 document.getElementById("loading-screen").innerHTML = `
                     <i class="fa-solid fa-triangle-exclamation text-5xl text-red-500 mb-4"></i>
                     <h2 class="text-xl font-bold text-red-400">Lỗi kết nối SDK</h2>
-                    <p class="text-gray-400 mt-2">${error.message || "Không thể xác thực Discord Activity"}</p>
+                    <p class="text-gray-300 mt-2 p-4 text-center border border-red-500 rounded bg-red-900 bg-opacity-20">${error.message || error}</p>
                 `;
             }
         }
 
-        // Chạy hàm thiết lập
         setupActivity();
     </script>
 </body>
