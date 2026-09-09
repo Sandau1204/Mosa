@@ -20,44 +20,44 @@
         <a href="{{ auth_url }}" id="web-login-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg w-full transition duration-300 flex items-center justify-center gap-3">
             <i class="fa-brands fa-discord text-xl"></i> Đăng nhập trên Web
         </a>
-
+        
         <!-- Màn hình Loading cho Discord Activity -->
         <div id="activity-loading" style="display: none;" class="w-full py-3 flex flex-col items-center">
             <i class="fas fa-spinner fa-spin text-3xl text-indigo-400 mb-3"></i>
-            <span class="text-gray-300">Đang tự động xác thực với Discord...</span>
+            <span class="text-gray-300">Đang khởi tạo xác thực Discord...</span>
         </div>
     </div>
-
+    
     <script type="module">
         import { DiscordSDK } from '/static/discord-sdk.mjs';
-
         const urlParams = new URLSearchParams(window.location.search);
         
-        // Nếu có frame_id nghĩa là đang chạy qua Discord Activity
+        // Nếu có frame_id đồng nghĩa đang chạy qua Discord Activity
         if (urlParams.has('frame_id')) {
             document.getElementById('web-login-btn').style.display = 'none';
             document.getElementById('activity-loading').style.display = 'flex';
-            document.getElementById('login-text').innerText = "Đang kết nối SDK...";
-
+            document.getElementById('login-text').innerText = "Đang khởi tạo SDK...";
+            
             async function initSDKAuth() {
                 try {
                     const discordSdk = new DiscordSDK("{{ client_id }}");
                     await discordSdk.ready();
-
+                    
+                    // Thêm rpc scopes để Activity có thể điều khiển và đọc trạng thái voice
                     const { code } = await discordSdk.commands.authorize({
                         client_id: "{{ client_id }}",
                         response_type: "code",
                         state: "",
                         prompt: "none",
-                        scope: ["identify", "guilds"]
+                        scope: ["identify", "guilds", "rpc.voice.read", "rpc.activities.write"]
                     });
-
+                    
                     const response = await fetch('/api/activity-token', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ code: code })
                     });
-
+                    
                     if (response.ok) {
                         // Trở về index kèm query param ban đầu
                         window.location.href = '/' + window.location.search;
@@ -69,7 +69,6 @@
                     alert("Lỗi khởi tạo SDK: " + error.message);
                 }
             }
-
             initSDKAuth();
         }
     </script>
