@@ -39,8 +39,8 @@ class MyBot(commands.Bot):
         
         await self.change_presence(
             activity=discord.Activity(
-                type=discord.ActivityType.watching, 
-                name="Dashboard | localhost:5000"
+                type=discord.ActivityType.listening, 
+                name="/play để nghe nhạc"
             ),
             status=discord.Status.online
         )
