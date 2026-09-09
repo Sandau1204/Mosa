@@ -441,7 +441,6 @@
         });
 
         window.onload = () => {
-            initDiscordApp();
             setInterval(updateState, 1000);
         };
 
@@ -702,6 +701,18 @@
             .catch(err => {
                 console.error(err);
                 alert("Lỗi Webserver!");
+            });
+        }
+    </script>
+</body>
+    <script type="module">
+        import { DiscordSDK } from '/static/discord-sdk.mjs';
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        if (urlParams.has('frame_id')) {
+            const discordSdk = new DiscordSDK("{{ client_id }}");
+            discordSdk.ready().then(() => {
+                console.log("Discord App Ready!");
             });
         }
     </script>

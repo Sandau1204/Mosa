@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from typing import Any, cast
 import threading
 import asyncio
 import discord
@@ -104,9 +105,9 @@ class FakeInteraction:
 
 @app.route(f'{PREFIX}/login')
 def login():
-    # Tạo URL đăng nhập Discord
     oauth_url = f"{API_ENDPOINT}/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
-    return render_template('index.html', auth_url=oauth_url)
+    # Trả về login.html thay vì index.html
+    return render_template('login.html', auth_url=oauth_url, client_id=CLIENT_ID)
 
 @app.route(f'{PREFIX}/logout')
 def logout():
@@ -166,32 +167,44 @@ def activity_token():
     code = data.get('code')
     if not code:
         return jsonify({"error": "Missing authorization code"}), 400
-
+        
     token_payload = {
         'client_id': CLIENT_ID,
         'client_secret': CLIENT_SECRET,
         'grant_type': 'authorization_code',
         'code': code
-        # LƯU Ý: Với Embedded SDK, Discord yêu cầu KHÔNG gửi redirect_uri
     }
     
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     r = requests.post(f'{API_ENDPOINT}/oauth2/token', data=token_payload, headers=headers)
     
     if r.status_code != 200:
-        print(f"[LỖI OAUTH2 SDK] {r.status_code} - {r.text}") # <--- Dòng này sẽ in lỗi ra Terminal
         return jsonify({"error": "Failed to exchange token", "details": r.text}), 400
-
+        
     token_data = r.json()
-    session['token'] = token_data.get('access_token')
+    access_token = token_data.get('access_token')
+    session['token'] = access_token
+    
+    # BẮT BUỘC: Lấy thông tin user để hàm check_auth() nhận diện được là đã login
+    r_user = requests.get(f'{API_ENDPOINT}/users/@me', headers={'Authorization': f'Bearer {access_token}'})
+    if r_user.status_code == 200:
+        session['user'] = r_user.json()
+        
     return jsonify(token_data)
 # --- ROUTES CHÍNH ---
 
 @app.route(f'{PREFIX}/')
 def index():
     if not check_auth():
-        return redirect(url_for('login'))
-    
+        # Giữ lại các tham số query cần thiết cho login (ví dụ frame_id/instance_id),
+        # nhưng loại bỏ các tham số đặc biệt của url_for như _external.
+        login_params = cast(dict[str, Any], {
+            key: value
+            for key, value in request.args.items()
+            if key not in {"_external", "_scheme", "_anchor"}
+        })
+        return redirect(url_for('login', **login_params))
+
     user = session.get('user')
     return render_template('index.html', user=user, client_id=CLIENT_ID)
 
