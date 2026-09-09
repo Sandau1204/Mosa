@@ -349,13 +349,42 @@
             else document.getElementById('np-svg').classList.add('spin-paused');
         }
 
-        document.getElementById('search-form').addEventListener('submit', function(e) {
+        document.getElementById('search-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             const query = document.getElementById('search-input').value;
-            
-            // Ở đây bạn có thể gọi fetch('/api/play') để đẩy nhạc lên Python
-            showToast(`Đang tìm kiếm: ${query}`, 'success');
+                
+            if (!query.trim()) return;
+            if (!globalUserId) {
+                showToast('Vui lòng kết nối bot trước khi phát nhạc!', 'error');
+                return;
+            }
+        
+            showToast(`Đang tìm kiếm: ${query}...`, 'success');
             document.getElementById('search-input').value = "";
+        
+            try {
+                // Thực hiện fetch đến Backend API
+                const response = await fetch('/api/play', {
+                    method: 'POST', // Đảm bảo webserver.py cũng đang nhận method POST cho /api/play
+                    headers: { 
+                        'Content-Type': 'application/json' 
+                    },
+                    body: JSON.stringify({ 
+                        query: query,
+                        user_id: globalUserId 
+                    })
+                });
+            
+                const data = await response.json();
+                
+                if (data.error) {
+                    showToast(data.error, 'error');
+                } else {
+                    showToast('Đã thêm bài hát vào hàng đợi!', 'success');
+                }
+            } catch (err) {
+                showToast('Đã xảy ra lỗi khi kết nối với máy chủ.', 'error');
+            }
         });
 
         init();
