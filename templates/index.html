@@ -441,6 +441,16 @@
         });
 
         window.onload = () => {
+            // Tự động lấy Server ID nếu người dùng đang mở qua Discord Activity
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('guild_id')) {
+                currentGuildId = urlParams.get('guild_id');
+                localStorage.setItem('lastGuild', currentGuildId);
+            }
+
+            // tải danh sách Server và Kênh vào Dropdown
+            loadGuilds();
+            // Cập nhật trạng thái trình phát nhạc mỗi giây
             setInterval(updateState, 1000);
         };
 
