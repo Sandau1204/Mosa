@@ -78,10 +78,12 @@
             justify-content: center;
             min-height: 100vh;
             padding: 20px;
+            overflow-x: auto;
         }
         .dashboard-container {
             width: 100%;
             max-width: 1200px;
+            min-width: 900px;
             background-color: var(--card-bg);
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
@@ -221,28 +223,7 @@
         .list-group-item:hover { background-color: rgba(255,255,255,0.1); }
         .btn-close { filter: invert(1); }
         
-        @media (max-width: 768px) {
-            .app-wrapper { padding: 0; display: block; }
-            .dashboard-container {
-                border-radius: 0;
-                border: none;
-                min-height: 100%;
-                height: auto;
-                backdrop-filter: none;
-                background-color: rgba(18, 18, 18, 0.95);
-                padding-bottom: 20px;
-            }
-            .player-section { margin-bottom: 15px; padding: 15px; }
-            .queue-box { height: auto; max-height: 65vh; min-height: 400px; }
-            .controls button { width: 50px; height: 50px; font-size: 1.4rem; }
-            .controls .btn-play { width: 70px; height: 70px; }
-            .top-bar { flex-direction: row; flex-wrap: wrap; gap: 10px; }
-            .top-actions { display: flex; gap: 10px; justify-content: space-between; }
-            .top-actions select { flex-grow: 1; max-width: none !important; }
-            .queue-header { position: sticky; top: 0; background-color: var(--bg-color); z-index: 10; padding-top: 5px; padding-bottom: 10px; }
-            .queue-header button { padding: 8px 12px; font-size: 0.9rem !important; margin-left: 5px; }
-            .q-drag { width: 48px; height: 48px; }
-        }
+        
         
         .status-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 10px; background: rgba(255,255,255,0.1); color: #999; margin-left: 10px; display: inline-block;}
         .status-connected { background: rgba(29, 185, 84, 0.2); color: var(--accent); border: 1px solid var(--accent); }
@@ -291,7 +272,7 @@
             
             <div class="main-content">
                 <div class="row g-4">
-                    <div class="col-md-5 col-lg-5">
+                    <div class="col-4">
                         <div class="player-section">
                             <div class="art-box">
                                 <img id="trackArt" src="" class="art-img" alt="Album Art">
@@ -318,7 +299,7 @@
                         </div>
                     </div>
                     
-                    <div class="col-md-7 col-lg-7">
+                    <div class="col-8">
                         <div class="queue-header">
                             <h5><i class="fas fa-list-ul me-2 text-success"></i> Hàng đợi</h5>
                             <div>
