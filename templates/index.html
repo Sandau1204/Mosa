@@ -254,214 +254,67 @@
         </aside>
     </div>
 
+    <!-- NHẬN DỮ LIỆU TỪ FLASK (Dành cho Web Browser) -->
+    <script>
+        // Cú pháp Jinja2 để nhúng dữ liệu user từ Python vào JavaScript
+        const webUser = {{ user | tojson | safe if user else 'null' }};
+    </script>
+
+    <!-- SCRIPT CHÍNH -->
     <script type="module">
-        // ==========================================
-        // PHẦN 1: GIAO DIỆN & LOGIC TRÌNH PHÁT NHẠC
-        // ==========================================
-        
-        let isPlaying = false;
-        let progressInterval;
-        let currentProgress = 0;
-        let totalDuration = 0;
+        const debugLog = document.getElementById("debug-log");
+        const loadingTitle = document.getElementById("loading-title");
+        const spinner = document.getElementById("spinner");
+        const loadingScreen = document.getElementById("loading-screen");
 
-        // Dữ liệu mẫu (Mock Data) - Bạn sẽ thay thế bằng dữ liệu từ API Python của bạn
-        let currentSong = null;
-        let queue = [];
-
-        // Hệ thống Toast (Thay thế Alert)
-        window.showToast = function(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerText = message;
-            container.appendChild(toast);
-
-            setTimeout(() => {
-                toast.style.animation = 'slideOut 0.3s ease forwards';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        };
-
-        // Format giây thành phút:giây (VD: 200 -> 3:20)
-        function formatTime(seconds) {
-            const m = Math.floor(seconds / 60);
-            const s = Math.floor(seconds % 60);
-            return `${m}:${s < 10 ? '0' : ''}${s}`;
+        // Hàm in log báo lỗi
+        function log(msg, isError = false) {
+            if(debugLog) debugLog.innerHTML += `<span class="${isError ? 'err-text' : ''}">${msg}</span><br>`;
+            if (isError && loadingTitle) {
+                loadingTitle.innerText = "Kết nối thất bại!";
+                loadingTitle.style.color = "#ef4444";
+                if(spinner) spinner.style.display = "none";
+            }
         }
 
-        // Cập nhật giao diện Đang phát
-        function updateNowPlaying() {
-            const titleEl = document.getElementById('np-title');
-            const authorEl = document.getElementById('np-author');
-            const thumbEl = document.getElementById('np-thumbnail');
-            
-            if (currentSong) {
-                titleEl.innerText = currentSong.title;
-                authorEl.innerText = currentSong.author;
-                thumbEl.src = currentSong.thumbnail;
-                totalDuration = currentSong.durationSec;
-                document.getElementById('time-total').innerText = currentSong.duration;
-            } else {
-                titleEl.innerText = "Chưa có bài hát nào";
-                authorEl.innerText = "Hãy tìm kiếm để bắt đầu";
-                thumbEl.src = "https://images.unsplash.com/photo-1614680376573-df3480f0c6ff?q=80&w=800&auto=format&fit=crop";
-                document.getElementById('time-total').innerText = "0:00";
-            }
-            resetProgress();
-            renderQueue();
-        }
-
-        // Cập nhật giao diện Danh sách chờ
-        function renderQueue() {
-            const listEl = document.getElementById('queue-list');
-            listEl.innerHTML = ''; // Xóa cũ
-
-            if (queue.length === 0) {
-                listEl.innerHTML = '<div class="empty-queue">Chưa có bài hát nào trong hàng chờ.</div>';
-                return;
-            }
-
-            queue.forEach((song, index) => {
-                const item = document.createElement('div');
-                item.className = 'queue-item';
-                // Tạo giao diện cho 1 bài hát trong list
-                item.innerHTML = `
-                    <img src="${song.thumbnail}" class="q-thumb" alt="Thumb">
-                    <div class="q-info">
-                        <div class="q-title">${song.title}</div>
-                        <div class="q-author">${song.author}</div>
-                    </div>
-                    <div class="q-duration">${song.duration}</div>
-                `;
-                
-                // Nhấn vào bài trong queue để phát
-                item.onclick = () => {
-                    // Lấy bài đó ra làm bài hiện tại, xóa khỏi queue
-                    currentSong = queue.splice(index, 1)[0];
-                    updateNowPlaying();
-                    if(!isPlaying) window.togglePlay();
-                };
-                
-                listEl.appendChild(item);
-            });
-        }
-
-        // Các nút điều khiển
-        window.togglePlay = function() {
-            if (!currentSong) {
-                showToast("Vui lòng chọn bài hát trước!", "error");
-                return;
-            }
-            isPlaying = !isPlaying;
-            document.getElementById('icon-play').style.display = isPlaying ? 'none' : 'block';
-            document.getElementById('icon-pause').style.display = isPlaying ? 'block' : 'none';
-            
-            if (isPlaying) {
-                // Giả lập chạy thanh thời gian
-                progressInterval = setInterval(() => {
-                    if (currentProgress < totalDuration) {
-                        currentProgress++;
-                        document.getElementById('time-current').innerText = formatTime(currentProgress);
-                        document.getElementById('progress-fill').style.width = `${(currentProgress / totalDuration) * 100}%`;
-                    } else {
-                        window.playNext(); // Hết bài tự chuyển bài
-                    }
-                }, 1000);
-            } else {
-                clearInterval(progressInterval);
-            }
-            
-            // Gửi lệnh lên Python qua API ở đây:
-            // fetch('/api/pause-resume', { method: 'POST' });
-        };
-
-        window.playNext = function() {
-            if (queue.length > 0) {
-                currentSong = queue.shift();
-                updateNowPlaying();
-                showToast("Đang phát bài tiếp theo");
-                if (!isPlaying) window.togglePlay();
-            } else {
-                showToast("Đã hết danh sách phát", "info");
-                currentSong = null;
-                isPlaying = true; window.togglePlay(); // Ép tắt
-                updateNowPlaying();
-            }
-            // Lệnh lên Python: fetch('/api/skip', { method: 'POST' });
-        };
-
-        window.playPrev = function() {
-            showToast("Đã quay lại bài trước");
-        };
-
-        window.toggleAction = function(action) {
-            showToast(`Đã bật chế độ ${action === 'loop' ? 'Lặp lại' : 'Trộn bài'}`);
-        };
-
-        function resetProgress() {
-            currentProgress = 0;
-            document.getElementById('time-current').innerText = "0:00";
-            document.getElementById('progress-fill').style.width = "0%";
-        }
-
-        // Xử lý Form Tìm kiếm / Thêm link
-        document.getElementById('search-form').onsubmit = function(e) {
-            e.preventDefault();
-            const input = document.getElementById('search-input');
-            const query = input.value.trim();
-            if (!query) return;
-
-            // Giả lập Dữ liệu trả về từ Python (Bạn cần gọi fetch lên backend để lấy data thật)
-            const mockNewSong = {
-                title: query.length > 20 ? query : query + " (Official Audio)",
-                author: "Mosa Channel",
-                thumbnail: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=400&auto=format&fit=crop",
-                duration: "3:45",
-                durationSec: 225
-            };
-
-            if (!currentSong) {
-                // Nếu chưa có bài nào, phát luôn
-                currentSong = mockNewSong;
-                updateNowPlaying();
-                if(!isPlaying) window.togglePlay();
-            } else {
-                // Nếu đang phát, thêm vào hàng chờ
-                queue.push(mockNewSong);
-                renderQueue();
-                showToast("Đã thêm vào danh sách chờ");
-            }
-            
-            input.value = '';
-        };
-
-        // ==========================================
-        // PHẦN 2: DISCORD SDK (KẾT NỐI VÀ XÁC THỰC)
-        // ==========================================
-        async function initDiscordSDK() {
-            const loadingScreen = document.getElementById("loading-screen");
-            
-            // 1. Kiểm tra xem có đang chạy trong Discord không
+        async function init() {
+            // 1. KIỂM TRA MÔI TRƯỜNG CHẠY (WEB hay ACTIVITY)
             const urlParams = new URLSearchParams(window.location.search);
+            
             if (!urlParams.get('frame_id')) {
-                // Mở trên Web thường
-                loadingScreen.style.opacity = "0";
-                setTimeout(() => loadingScreen.style.display = "none", 500);
-                document.getElementById("user-name").innerText = "Chế độ Web Browser";
-                return;
+                // ============== LUỒNG 1: DÀNH CHO TRÌNH DUYỆT WEB ==============
+                if (webUser) {
+                    // Đã đăng nhập Web thành công -> Hiển thị thông tin
+                    document.getElementById("user-name").innerText = webUser.username;
+                    if(webUser.avatar) {
+                        document.getElementById("user-avatar").src = `https://cdn.discordapp.com/avatars/${webUser.id}/${webUser.avatar}.png`;
+                    }
+                    
+                    // Ẩn màn hình loading
+                    loadingScreen.style.opacity = "0";
+                    setTimeout(() => loadingScreen.style.display = "none", 500);
+                    return; // Kết thúc, không chạy SDK bên dưới nữa
+                } else {
+                    // Nếu lọt được vào đây mà chưa đăng nhập -> Ép đá về trang Login
+                    window.location.href = "/login";
+                    return;
+                }
             }
 
+            // ============== LUỒNG 2: DÀNH CHO DISCORD ACTIVITY ==============
             try {
-                // 2. Thay bằng CLIENT_ID của bot bạn
-                const CLIENT_ID = "1321104228361703424"; 
-                
-                // Tải thư viện
+                // ĐIỀN CLIENT ID CỦA BOT VÀO ĐÂY BẮT BUỘC
+                const CLIENT_ID = "1321104228361703424";
+
+                log("1. Đang tải SDK...");
                 const module = await import("/static/discord-sdk.mjs");
                 const DiscordSDK = module.DiscordSDK;
+                
+                log("2. Khởi tạo SDK...");
                 const discordSdk = new DiscordSDK(CLIENT_ID);
                 await discordSdk.ready();
 
-                // Xin quyền
+                log("3. Đang gọi hộp thoại Authorize...");
                 const { code } = await discordSdk.commands.authorize({
                     client_id: CLIENT_ID,
                     response_type: "code",
@@ -470,40 +323,41 @@
                     scope: ["identify", "guilds"]
                 });
 
-                // Đổi Token qua Backend Python của bạn
+                log("4. Đã lấy Code. Gửi tới Flask...");
                 const response = await fetch('/api/token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code: code })
                 });
                 
-                if (!response.ok) throw new Error("Lỗi API Token");
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`Server báo lỗi: ${errText}`);
+                }
+
                 const data = await response.json();
                 
-                // Xác thực
+                log("5. Có Token. Đang Authenticate...");
                 const auth = await discordSdk.commands.authenticate({ access_token: data.access_token });
                 
                 if (auth) {
+                    log("6. Đăng nhập HOÀN TẤT!");
                     document.getElementById("user-name").innerText = auth.user.username;
                     if(auth.user.avatar) {
                         document.getElementById("user-avatar").src = `https://cdn.discordapp.com/avatars/${auth.user.id}/${auth.user.avatar}.png`;
                     }
+                    
                     // Ẩn loading
                     loadingScreen.style.opacity = "0";
                     setTimeout(() => loadingScreen.style.display = "none", 500);
                 }
             } catch (error) {
-                console.error("SDK Error:", error);
-                document.getElementById("user-name").innerText = "Lỗi kết nối";
-                showToast("Lỗi kết nối Discord. Vui lòng thử lại.", "error");
-                loadingScreen.style.opacity = "0";
-                setTimeout(() => loadingScreen.style.display = "none", 500);
+                log(`Lỗi: ${error.message || error}`, true);
+                console.error(error);
             }
         }
 
-        // Khởi chạy khi load trang
-        initDiscordSDK();
-        
+        init();
     </script>
 </body>
 </html>
