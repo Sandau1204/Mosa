@@ -59,10 +59,15 @@
             background-color: var(--bg-color);
             color: var(--text-main);
             font-family: 'Lexend', sans-serif;
-            min-height: 100vh;
+            /* Xóa display: flex; align-items: center; justify-content: center; padding: 20px; và min-height */
+        }
+
+        /* Thêm class wrapper mới để xử lý việc căn giữa */
+        .app-wrapper {
             display: flex;
             align-items: center;
             justify-content: center;
+            min-height: 100vh;
             padding: 20px;
         }
         /* --- Main Layout --- */
@@ -74,7 +79,7 @@
             -webkit-backdrop-filter: blur(15px);
             border-radius: 16px;
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-            overflow: hidden;
+            overflow: visible;
             display: flex;
             flex-direction: column;
             border: 1px solid rgba(255,255,255,0.05);
@@ -164,7 +169,7 @@
             margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
         }
         .queue-header h5 { margin: 0; font-weight: 600; font-size: 1rem; }
-        .queue-box { height: 350px; overflow-y: auto; padding-right: 5px; }
+        .queue-box { height: 100%; max-height: 50vh; overflow-y: auto; padding-right: 5px; }
         .queue-box::-webkit-scrollbar { width: 6px; }
         .queue-box::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
         .queue-box::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
@@ -227,8 +232,12 @@
             .top-bar { flex-direction: column; gap: 10px; align-items: stretch; }
             .top-actions { display: flex; gap: 10px; justify-content: space-between; }
             .top-actions select { flex-grow: 1; max-width: none !important; }
-            body { padding: 0; display: block; }
-            .queue-header { position: sticky; top: 0; background-color: inherit; z-index: 10; padding-top: 5px; }
+            .app-wrapper { padding: 0; }
+            .dashboard-container {
+                border-radius: 0; border: none; min-height: 100vh; height: auto;
+                backdrop-filter: none; background-color: rgba(18, 18, 18, 0.95); padding-bottom: 20px;
+            }
+            .queue-header { position: sticky; top: 0; background-color: var(--bg-color); z-index: 10; padding-top: 5px; padding-bottom: 10px; }
             .queue-header button { padding: 8px 12px; font-size: 0.9rem !important; margin-left: 5px; }
             .q-drag { width: 48px; height: 48px; }
         }
@@ -239,112 +248,113 @@
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
-        <div class="top-bar">
-            <div class="brand-logo">
-                <i class="fas fa-music"></i> MOSA DASHBOARD <span id="trackChannel" class="status-badge">Chưa kết nối</span>
-            </div>
-            
-            <div class="top-actions d-flex gap-2 align-items-center">
-                <select id="guildSelect" class="form-select form-select-sm" onchange="loadChannels()" style="max-width: 150px;">
-                    <option value="" disabled selected>Server...</option>
-                </select>
-                <select id="channelSelect" class="form-select form-select-sm" style="max-width: 130px;">
-                    <option value="" disabled selected>Kênh...</option>
-                </select>
-                
-                <button onclick="joinChannel()" class="btn btn-sm btn-outline-success" title="Join"><i class="fas fa-link"></i></button>
-                <button onclick="leaveChannel()" class="btn btn-sm btn-outline-danger me-2" title="Leave"><i class="fas fa-power-off"></i></button>
-                
-                {% if user %}
-                <div class="dropdown">
-                    <button class="user-dropdown-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <img src="{% if user.avatar %}https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png{% else %}https://cdn.discordapp.com/embed/avatars/0.png{% endif %}" 
-                             class="user-avatar" alt="User">
-                        <span class="d-none d-md-inline fw-bold" style="font-size: 0.9rem;">
-                            {{ user.global_name or user.username }}
-                        </span>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-dark-custom dropdown-menu-end mt-2">
-                        <li><h6 class="dropdown-header">Xin chào, {{ user.username }}!</h6></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li>
-                            <a class="dropdown-item text-danger" href="/logout">
-                                <i class="fas fa-sign-out-alt me-2"></i> Đăng xuất
-                            </a>
-                        </li>
-                    </ul>
+    <div class="app-wrapper">
+        <div class="dashboard-container">
+            <div class="top-bar">
+                <div class="brand-logo">
+                    <i class="fas fa-music"></i> MOSA DASHBOARD <span id="trackChannel" class="status-badge">Chưa kết nối</span>
                 </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="main-content">
-            <div class="row g-4">
-                <!-- Cột Player -->
-                <div class="col-lg-5">
-                    <div class="player-section">
-                        <div class="art-box">
-                            <img id="trackArt" src="" class="art-img" alt="Album Art">
-                            <div id="noMusicPlaceholder" class="no-music-placeholder">
-                                <i class="fas fa-compact-disc fa-spin" style="animation-duration: 3s;"></i>
-                            </div>
-                        </div>
-                        <div class="track-info">
-                            <h4 id="trackTitle" class="text-truncate">Sẵn sàng</h4>
-                            <p id="trackArtist">Vui lòng chọn bài hát</p>
-                        </div>
-                        <div class="progress-container">
-                            <span id="timeCurrent">00:00</span>
-                            <input type="range" id="progressBar" class="progress-bar-slider" value="0" min="0" max="100" onchange="seekAudio(this.value)" oninput="isSeeking=true; updateSliderStyle(this)">
-                            <span id="timeTotal">00:00</span>
-                        </div>
-                        <div class="controls">
-                            <button onclick="cmd('loop')" id="btnLoop" title="Lặp lại"><i class="fas fa-repeat"></i></button>
-                            <button onclick="cmd('vol_down')"><i class="fas fa-volume-low"></i></button>
-                            <button onclick="cmd('pause_resume')" class="btn-play"><i id="iconPlay" class="fas fa-play"></i></button>
-                            <button onclick="cmd('vol_up')"><i class="fas fa-volume-high"></i></button>
-                            <button onclick="cmd('skip')"><i class="fas fa-forward-step"></i></button>
-                        </div>
+                
+                <div class="top-actions d-flex gap-2 align-items-center">
+                    <select id="guildSelect" class="form-select form-select-sm" onchange="loadChannels()" style="max-width: 150px;">
+                        <option value="" disabled selected>Server...</option>
+                    </select>
+                    <select id="channelSelect" class="form-select form-select-sm" style="max-width: 130px;">
+                        <option value="" disabled selected>Kênh...</option>
+                    </select>
+                    
+                    <button onclick="joinChannel()" class="btn btn-sm btn-outline-success" title="Join"><i class="fas fa-link"></i></button>
+                    <button onclick="leaveChannel()" class="btn btn-sm btn-outline-danger me-2" title="Leave"><i class="fas fa-power-off"></i></button>
+                    
+                    {% if user %}
+                    <div class="dropdown">
+                        <button class="user-dropdown-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <img src="{% if user.avatar %}https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png{% else %}https://cdn.discordapp.com/embed/avatars/0.png{% endif %}" 
+                                 class="user-avatar" alt="User">
+                            <span class="d-none d-md-inline fw-bold" style="font-size: 0.9rem;">
+                                {{ user.global_name or user.username }}
+                            </span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-dark-custom dropdown-menu-end mt-2">
+                            <li><h6 class="dropdown-header">Xin chào, {{ user.username }}!</h6></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="/logout">
+                                    <i class="fas fa-sign-out-alt me-2"></i> Đăng xuất
+                                </a>
+                            </li>
+                        </ul>
                     </div>
+                    {% endif %}
                 </div>
-
-                <!-- Cột Queue & Tìm kiếm -->
-                <div class="col-lg-7">
-                    <div class="queue-header">
-                        <h5><i class="fas fa-list-ul me-2 text-success"></i> Hàng đợi</h5>
-                        <div>
-                            <button onclick="cmd('shuffle')" class="btn btn-sm btn-outline-success" style="font-size: 0.8rem; margin-right: 5px;" title="Trộn bài">
-                                <i class="fas fa-shuffle"></i> Trộn
-                            </button>
-                            <button onclick="cmd('stop')" class="btn btn-sm btn-outline-secondary" style="font-size: 0.8rem;">Xóa hàng đợi</button>
-                        </div>
-                    </div>
-                    <div class="queue-box" id="queueList">
-                        <div class="text-center text-muted py-5">
-                            <i class="fas fa-music mb-2" style="font-size: 2rem; opacity: 0.3;"></i><br>
-                            Hàng đợi trống
-                        </div>
-                    </div>
-                    <div class="bottom-actions mt-3">
-                        <div class="row g-2">
-                            <div class="col-8">
-                                <div class="search-group">
-                                    <input type="text" id="searchQuery" class="form-control" placeholder="Tên bài hoặc link..." onkeypress="handleEnter(event)">
-                                    <button onclick="handleSearchOrPlay()" class="search-btn"><i class="fas fa-search"></i></button>
+            </div>
+        
+            <div class="main-content">
+                <div class="row g-4">
+                    <!-- Cột Player -->
+                    <div class="col-lg-5">
+                        <div class="player-section">
+                            <div class="art-box">
+                                <img id="trackArt" src="" class="art-img" alt="Album Art">
+                                <div id="noMusicPlaceholder" class="no-music-placeholder">
+                                    <i class="fas fa-compact-disc fa-spin" style="animation-duration: 3s;"></i>
                                 </div>
                             </div>
-                            <div class="col-4">
-                                <button onclick="openPlaylists()" class="btn btn-outline-light w-100 h-100" style="background: rgba(255,255,255,0.1); border:none; color: #fff;">
-                                    <i class="fas fa-bookmark text-success"></i> Playlist
+                            <div class="track-info">
+                                <h4 id="trackTitle" class="text-truncate">Sẵn sàng</h4>
+                                <p id="trackArtist">Vui lòng chọn bài hát</p>
+                            </div>
+                            <div class="progress-container">
+                                <span id="timeCurrent">00:00</span>
+                                <input type="range" id="progressBar" class="progress-bar-slider" value="0" min="0" max="100" onchange="seekAudio(this.value)" oninput="isSeeking=true; updateSliderStyle(this)">
+                                <span id="timeTotal">00:00</span>
+                            </div>
+                            <div class="controls">
+                                <button onclick="cmd('loop')" id="btnLoop" title="Lặp lại"><i class="fas fa-repeat"></i></button>
+                                <button onclick="cmd('vol_down')"><i class="fas fa-volume-low"></i></button>
+                                <button onclick="cmd('pause_resume')" class="btn-play"><i id="iconPlay" class="fas fa-play"></i></button>
+                                <button onclick="cmd('vol_up')"><i class="fas fa-volume-high"></i></button>
+                                <button onclick="cmd('skip')"><i class="fas fa-forward-step"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                
+                    <!-- Cột Queue & Tìm kiếm -->
+                    <div class="col-lg-7">
+                        <div class="queue-header">
+                            <h5><i class="fas fa-list-ul me-2 text-success"></i> Hàng đợi</h5>
+                            <div>
+                                <button onclick="cmd('shuffle')" class="btn btn-sm btn-outline-success" style="font-size: 0.8rem; margin-right: 5px;" title="Trộn bài">
+                                    <i class="fas fa-shuffle"></i> Trộn
                                 </button>
+                                <button onclick="cmd('stop')" class="btn btn-sm btn-outline-secondary" style="font-size: 0.8rem;">Xóa hàng đợi</button>
+                            </div>
+                        </div>
+                        <div class="queue-box" id="queueList">
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-music mb-2" style="font-size: 2rem; opacity: 0.3;"></i><br>
+                                Hàng đợi trống
+                            </div>
+                        </div>
+                        <div class="bottom-actions mt-3">
+                            <div class="row g-2">
+                                <div class="col-8">
+                                    <div class="search-group">
+                                        <input type="text" id="searchQuery" class="form-control" placeholder="Tên bài hoặc link..." onkeypress="handleEnter(event)">
+                                        <button onclick="handleSearchOrPlay()" class="search-btn"><i class="fas fa-search"></i></button>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <button onclick="openPlaylists()" class="btn btn-outline-light w-100 h-100" style="background: rgba(255,255,255,0.1); border:none; color: #fff;">
+                                        <i class="fas fa-bookmark text-success"></i> Playlist
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
     <!-- Modal Search -->
     <div class="modal fade" id="searchModal" tabindex="-1" aria-hidden="true">
