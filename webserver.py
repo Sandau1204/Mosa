@@ -145,3 +145,84 @@ def get_status(guild_id):
         "is_playing": guild.voice_client.is_playing(),
         "is_paused": guild.voice_client.is_paused()
     })
+    
+# --- THÊM VÀO WEBSERVER.PY ---
+
+@app.route("/api/connect", methods=["POST"])
+def connect_bot():
+    data = request.json
+    user_id = int(data.get("user_id"))
+
+    bot = bot_instance
+    if bot is None:
+        return jsonify({"error": "Bot chưa sẵn sàng"}), 500
+
+    target_voice_channel = None
+    # Tự động tìm xem người dùng đang ở kênh thoại nào trong tất cả server bot tham gia
+    for guild in bot.guilds:
+        member = guild.get_member(user_id)
+        if member and member.voice and member.voice.channel:
+            target_voice_channel = member.voice.channel
+            break
+
+    if not target_voice_channel:
+        return jsonify({"error": "Bạn phải tham gia một kênh thoại trên Discord trước khi kết nối bot!"}), 400
+
+    # Khai báo hàm bất đồng bộ để bot vào kênh
+    async def join_vc(vc):
+        guild = vc.guild
+        if guild.voice_client:
+            await guild.voice_client.move_to(vc)
+        else:
+            await vc.connect()
+
+    # Đẩy lệnh vào event loop của Bot
+    asyncio.run_coroutine_threadsafe(join_vc(target_voice_channel), bot.loop)
+
+    return jsonify({
+        "success": True, 
+        "channel_name": target_voice_channel.name,
+        "guild_name": target_voice_channel.guild.name
+    })
+
+@app.route("/api/disconnect", methods=["POST"])
+def disconnect_bot():
+    data = request.json
+    user_id = int(data.get("user_id"))
+
+    if bot_instance is None:
+        return jsonify({"error": "Bot chưa sẵn sàng"}), 500
+
+    target_guild = None
+    for guild in bot_instance.guilds:
+        member = guild.get_member(user_id)
+        if member and member.voice and member.voice.channel:
+            target_guild = guild
+            break
+
+    if not target_guild or not target_guild.voice_client:
+        return jsonify({"error": "Bot không ở trong kênh thoại cùng bạn"}), 400
+
+    async def leave_vc(guild):
+        await guild.voice_client.disconnect()
+
+    asyncio.run_coroutine_threadsafe(leave_vc(target_guild), bot_instance.loop)
+    return jsonify({"success": True})
+
+@app.route("/api/connection_status", methods=["POST"])
+def check_connection_status():
+    data = request.json
+    user_id = int(data.get("user_id"))
+
+    if bot_instance is None:
+        return jsonify({"connected": False})
+
+    for guild in bot_instance.guilds:
+        member = guild.get_member(user_id)
+        if member and member.voice and member.voice.channel:
+            vc = guild.voice_client
+            # Kiểm tra xem bot có đang ở cùng phòng với user không
+            if vc and vc.is_connected() and vc.channel.id == member.voice.channel.id:
+                return jsonify({"connected": True, "channel_name": vc.channel.name})
+
+    return jsonify({"connected": False})
