@@ -294,6 +294,27 @@
                 });
                 const data = await res.json();
                 updateConnectionUI(data.connected, data.channel_name);
+                if (data.connected && data.title) {
+                    document.getElementById('np-title').innerText = data.title;
+                    document.getElementById('np-author').innerText = data.author;
+
+                    if (data.thumbnail) {
+                        document.getElementById('np-thumbnail').src = data.thumbnail;
+                        document.getElementById('np-thumbnail').style.display = 'block';
+                        document.getElementById('np-svg').style.display = 'none';
+                    }
+                
+                    // Đồng bộ nút Play/Pause
+                    isPlaying = data.is_playing;
+                    document.getElementById('icon-play').style.display = isPlaying ? 'none' : 'block';
+                    document.getElementById('icon-pause').style.display = isPlaying ? 'block' : 'none';
+
+                    if (isPlaying) {
+                        document.getElementById('np-svg').classList.remove('spin-paused');
+                    } else {
+                        document.getElementById('np-svg').classList.add('spin-paused');
+                    }
+                }     
             } catch (e) {}
         }
 

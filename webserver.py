@@ -213,6 +213,27 @@ def disconnect_bot():
 def check_connection_status():
     data = request.json
     user_id = int(data.get("user_id"))
+    if bot_instance is None:
+        return jsonify({"connected": False})
+    
+    for guild in bot_instance.guilds:
+        member = guild.get_member(user_id)
+        if member and member.voice and member.voice.channel:
+            vc = guild.voice_client
+            if vc and vc.is_connected() and vc.channel.id == member.voice.channel.id:
+                # Lấy thông tin bài hát từ Music cog
+                music_cog = bot_instance.get_cog("Music")
+                # Giả định bot lưu bài hát hiện tại trong dictionary current_songs theo guild.id
+                current_song = getattr(music_cog, 'current_songs', {}).get(guild.id)
+                
+                return jsonify({
+                    "connected": True, 
+                    "channel_name": vc.channel.name,
+                    "is_playing": vc.is_playing(),
+                    "title": current_song["title"] if current_song else "Chưa có bài hát",
+                    "author": current_song.get("uploader", "Không rõ") if current_song else "",
+                    "thumbnail": current_song["thumbnail"] if current_song else ""
+                })
 
     if bot_instance is None:
         return jsonify({"connected": False})
