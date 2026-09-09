@@ -4,6 +4,10 @@ import asyncio
 import requests
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from dotenv import load_dotenv
+import logging
+
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 load_dotenv()
 
@@ -148,27 +152,62 @@ def get_status(guild_id):
     
 # --- THÊM VÀO WEBSERVER.PY ---
 
+@app.route("/api/user_guilds/<user_id>")
+def get_user_guilds(user_id):
+    user_id = int(user_id)
+    if bot_instance is None:
+        return jsonify([])
+    
+    user_guilds = []
+    # Lọc tất cả server thỏa điều kiện người dùng có mặt trong server
+    for guild in bot_instance.guilds:
+        if guild.get_member(user_id):
+            user_guilds.append({"id": str(guild.id), "name": guild.name})
+            
+    return jsonify(user_guilds)
+
+@app.route("/api/channels/<guild_id>")
+def get_voice_channels(guild_id):
+    if bot_instance is None:
+        return jsonify([])
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild:
+        return jsonify([])
+    
+    channels = []
+    # Chỉ lấy các kênh thoại (voice channels)
+    for vc in guild.voice_channels:
+        channels.append({"id": str(vc.id), "name": vc.name})
+    return jsonify(channels)
+
+# --- THAY THẾ API KẾT NỐI (/api/connect) HIỆN TẠI ---
 @app.route("/api/connect", methods=["POST"])
 def connect_bot():
     data = request.json
     user_id = int(data.get("user_id"))
+    guild_id = data.get("guild_id")
+    channel_id = data.get("channel_id")
 
-    bot = bot_instance
-    if bot is None:
+    if bot_instance is None:
         return jsonify({"error": "Bot chưa sẵn sàng"}), 500
 
-    target_voice_channel = None
-    # Tự động tìm xem người dùng đang ở kênh thoại nào trong tất cả server bot tham gia
-    for guild in bot.guilds:
-        member = guild.get_member(user_id)
-        if member and member.voice and member.voice.channel:
-            target_voice_channel = member.voice.channel
-            break
+    if not guild_id or not channel_id:
+        return jsonify({"error": "Vui lòng chọn Server và Kênh thoại!"}), 400
 
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild:
+        return jsonify({"error": "Không tìm thấy Server này!"}), 404
+
+    target_voice_channel = guild.get_channel(int(channel_id))
     if not target_voice_channel:
-        return jsonify({"error": "Bạn phải tham gia một kênh thoại trên Discord trước khi kết nối bot!"}), 400
+        return jsonify({"error": "Không tìm thấy Kênh thoại này!"}), 404
 
-    # Khai báo hàm bất đồng bộ để bot vào kênh
+    # YÊU CẦU: Kiểm tra người dùng có đang ở đúng trong kênh thoại được chọn hay không
+    member = guild.get_member(user_id)
+    if not member or not member.voice or member.voice.channel.id != target_voice_channel.id:
+        return jsonify({"error": f"Bạn phải kết nối vào kênh '{target_voice_channel.name}' trên Discord trước!"}), 400
+
+    # Khai báo hàm bất đồng bộ cho bot vào voice
     async def join_vc(vc):
         guild = vc.guild
         if guild.voice_client:
@@ -176,9 +215,10 @@ def connect_bot():
         else:
             await vc.connect()
 
-    # Đẩy lệnh vào event loop của Bot
-    asyncio.run_coroutine_threadsafe(join_vc(target_voice_channel), bot.loop)
-
+    # Chèn vào event loop của Bot
+    import asyncio
+    asyncio.run_coroutine_threadsafe(join_vc(target_voice_channel), bot_instance.loop)
+    
     return jsonify({
         "success": True, 
         "channel_name": target_voice_channel.name,

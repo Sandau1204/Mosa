@@ -113,6 +113,20 @@
     <div class="app-container">
         
         <main class="panel player-section">
+            <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                <div style="flex: 1;">
+                    <label class="block text-sm mb-1 text-gray-400 font-semibold">Chọn Server</label>
+                    <select id="guild-select" class="search-input w-full" onchange="fetchChannels()">
+                        <option value="">-- Chọn Server --</option>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label class="block text-sm mb-1 text-gray-400 font-semibold">Chọn Kênh Thoại</label>
+                    <select id="channel-select" class="search-input w-full">
+                        <option value="">-- Chọn Kênh Thoại --</option>
+                    </select>
+                </div>
+            </div>
             <!-- THANH TRẠNG THÁI KẾT NỐI -->
             <div class="status-bar">
                 <div class="status-indicator">
@@ -251,6 +265,35 @@
             setTimeout(() => s.style.display = "none", 500);
         }
 
+        // --- LOAD DANH SÁCH SERVER ---
+        window.fetchGuilds = async function() {
+            if (!globalUserId) return;
+            try {
+                const res = await fetch(`/api/user_guilds/${globalUserId}`);
+                const guilds = await res.json();
+                const guildSelect = document.getElementById('guild-select');
+                guildSelect.innerHTML = '<option value="">-- Chọn Server --</option>';
+                guilds.forEach(g => {
+                    guildSelect.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+                });
+            } catch (e) { console.error("Lỗi lấy danh sách Server", e); }
+        }
+
+        // --- LOAD KÊNH THOẠI KHI ĐỔI SERVER ---
+        window.fetchChannels = async function() {
+            const guildId = document.getElementById('guild-select').value;
+            const channelSelect = document.getElementById('channel-select');
+            channelSelect.innerHTML = '<option value="">-- Chọn Kênh Thoại --</option>';
+
+            if (!guildId) return;
+            try {
+                const res = await fetch(`/api/channels/${guildId}`);
+                const channels = await res.json();
+                channels.forEach(c => {
+                    channelSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+                });
+            } catch (e) { console.error("Lỗi lấy danh sách Kênh thoại", e); }
+        }
         // --- API CALLS (VOICE CHANNEL) ---
         window.connectBot = async function() {
             if (!globalUserId) return;
