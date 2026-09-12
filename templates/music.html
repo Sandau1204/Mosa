@@ -82,7 +82,7 @@
         <aside class="w-72 bg-discord-panel flex flex-col flex-shrink-0 border-r border-discord-bg">
             <!-- User Profile & Logout -->
             <div class="h-14 border-b border-discord-bg flex items-center px-4 transition-colors shadow-sm">
-                <img id="user-avatar" src="https://placehold.co/100x100/5865F2/FFFFFF?text=U" alt="User Avatar" class="w-8 h-8 rounded-full object-cover">
+                <img id="user-avatar" src="..." onerror="this.src='https://cdn.discordapp.com/embed/avatars/0.png'" class="w-8 h-8 rounded-full object-cover">
                 <div id="user-username" class="ml-3 font-semibold text-white truncate flex-1 text-xs">Đang tải...</div>
                 <a href="/logout" class="text-discord-muted hover:text-discord-danger transition-colors p-1" title="Đăng xuất">
                     <i class="ph ph-sign-out text-lg"></i>
@@ -191,7 +191,7 @@
                     <i class="ph-fill ph-skip-back text-2xl"></i>
                 </button>
                 <button onclick="togglePlay()" class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-discord-bg hover:scale-105 transition-transform" title="Phát/Tạm dừng">
-                    <i id="play-pause-icon" class="ph-fill ph-play text-xl ml-1"></i>
+                    <i id="play-pause-icon" class="ph-fill ph-play text-xl"></i>
                 </button>
                 <button class="text-discord-muted hover:text-white transition-colors" title="Bỏ qua" onclick="skipSong()">
                     <i class="ph-fill ph-skip-forward text-2xl"></i>
@@ -340,7 +340,7 @@
 
             const playIcon = document.getElementById('play-pause-icon');
             const isPlayingState = state.is_playing && !state.is_paused;
-            playIcon.className = isPlayingState ? 'ph-fill ph-pause text-xl' : 'ph-fill ph-play text-xl ml-1';
+            playIcon.className = isPlayingState ? 'ph-fill ph-pause text-xl' : 'ph-fill ph-play text-xl';
 
             // Xử lý Thumbnail bài hát đang phát thực tế thay cho chữ Music cũ
             const npThumb = document.getElementById('np-thumbnail');

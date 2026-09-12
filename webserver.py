@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 import discord
 from typing import Optional
 import datetime
-import yt_dlp
 
 load_dotenv()
 
@@ -25,22 +24,27 @@ OWNER_ID = os.getenv('OWNER_ID') # ID tài khoản Discord được phép truy c
 bot_instance: Optional[discord.Client] = None  # Báo cho VSCode biết đây là Discord Client hoặc None
 bot_loop = None
 
-# Cấu trúc lưu trữ mở rộng cho từng Server
-music_state = {} 
 
 def get_music_state(guild_id):
-    if guild_id not in music_state:
-        music_state[guild_id] = {
+    # Dùng setattr và getattr để "bịt mắt" Pylance, tránh báo lỗi thuộc tính ảo
+    if not hasattr(bot_instance, 'music_state'):
+        setattr(bot_instance, 'music_state', {})
+
+    # Trích xuất state ra một biến tạm để thao tác
+    m_state = getattr(bot_instance, 'music_state')
+
+    if guild_id not in m_state:
+        m_state[guild_id] = {
             'queue': [], 
             'now_playing': None,
             'volume': 100,
-            'is_loop': 0, # 0: off, 1: all, 2: single
-            'playlists': [ # Playlist mẫu (có thể lưu cứng hoặc tùy chỉnh)
+            'is_loop': 0,
+            'playlists': [
                 {'id': 1, 'name': "Chill Lofi Vibes", 'count': 4, 'icon': "ph-headphones"},
                 {'id': 2, 'name': "Coding Focus", 'count': 2, 'icon': "ph-code"}
             ]
         }
-    return music_state[guild_id]
+    return m_state[guild_id]
 
 def run_web(bot):
     global bot_instance, bot_loop
@@ -148,11 +152,18 @@ def callback():
     
     # BỎ KIỂM TRA OWNER_ID Ở ĐÂY ĐỂ AI CŨNG CÓ THỂ ĐĂNG NHẬP!
     
+    avatar_hash = user_data.get('avatar')
+    if avatar_hash:
+        avatar_url = f"https://cdn.discordapp.com/avatars/{user_data.get('id')}/{avatar_hash}.png"
+    else:
+        # Nếu không có avatar, dùng avatar mặc định màu xám của Discord
+        avatar_url = "https://cdn.discordapp.com/embed/avatars/0.png"
+
     session['user'] = {
         'id': user_data.get('id'),
         'username': user_data.get('username'),
         'discriminator': user_data.get('discriminator', '0'),
-        'avatar': f"https://cdn.discordapp.com/avatars/{user_data.get('id')}/{user_data.get('avatar')}.png" if user_data.get('avatar') else "https://placehold.co/100x100/5865F2/FFFFFF?text=U"
+        'avatar': avatar_url
     }
     
     # Chuyển hướng về trang mà người dùng vừa truy cập (mặc định là music nếu không có)
@@ -568,155 +579,27 @@ def api_music_action():
     user_id = session['user']['id']
     data = request.json or {}
     
-    # --- SỬA LỖI: Ép kiểu an toàn cho guild_id tránh giá trị None/Unknown ---
     raw_guild_id = data.get('guild_id')
     if not raw_guild_id:
         return jsonify({'success': False, 'error': 'Thiếu ID Server.'})
     guild_id_int = int(raw_guild_id)
-    # -----------------------------------------------------------------------
     
     action = data.get('action')
     
     guild = bot_instance.get_guild(guild_id_int)
     if not guild:
         return jsonify({'success': False, 'error': 'Không tìm thấy Server.'})
-    
-    raw_vc = guild.voice_client
-    vc = raw_vc if isinstance(raw_vc, discord.VoiceClient) else None
-    
-    # Dùng luôn biến int đã kiểm tra an toàn
-    server_data = get_music_state(guild_id_int)
 
-    async def execute_action():
-        if action == 'join':
-            channel_id = data.get('channel_id')
-            if not channel_id: raise Exception("Vui lòng chọn kênh thoại.")
-            
-            member = guild.get_member(int(user_id))
-            if not member:
-                try: member = await guild.fetch_member(int(user_id))
-                except: raise Exception("Không tìm thấy bạn trong server này.")
-            
-            if not member.voice or not member.voice.channel or str(member.voice.channel.id) != str(channel_id):
-                raise Exception("Bạn phải vào kênh thoại này trên Discord trước khi mời Bot!")
-                
-            voice_channel = guild.get_channel(int(channel_id))
-            if not voice_channel or not isinstance(voice_channel, (discord.VoiceChannel, discord.StageChannel)):
-                raise Exception("Kênh thoại không hợp lệ.")
-                
-            if vc and vc.is_connected():
-                if vc.channel.id != voice_channel.id:
-                    await vc.move_to(voice_channel)
-            else:
-                await voice_channel.connect()
-            return True
-            
-        elif action == 'play':
-            query = data.get('query')
-            if not query: raise Exception("Vui lòng cung cấp link hoặc tên bài hát.")
-            if not vc or not vc.is_connected():
-                raise Exception("Bot chưa tham gia kênh thoại!")
-
-            ydl_opts = {'format': 'bestaudio/best', 'extract_flat': 'in_playlist', 'quiet': True}
-            def extract():
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl: # type: ignore
-                    search_query = str(query) if str(query).startswith('http') else f"ytsearch:{query}"
-                    info = ydl.extract_info(search_query, download=False)
-                    if not isinstance(info, dict): return []
-                    
-                    entries = info.get('entries')
-                    if entries:
-                        songs = []
-                        for entry in entries:
-                            dur_sec = int(entry.get('duration', 0) or 0)
-                            songs.append({
-                                'id': str(entry.get('id', 's_id')),
-                                'title': str(entry.get('title', 'Unknown')),
-                                'author': str(entry.get('uploader', 'Unknown')),
-                                'duration': f"{dur_sec // 60}:{dur_sec % 60:02d}",
-                                'duration_sec': dur_sec,
-                                'thumb': str(entry.get('thumbnail', '')),
-                                'url': f"https://www.youtube.com/watch?v={entry.get('id')}" if entry.get('id') else str(entry.get('url', ''))
-                            })
-                        return songs
-                    else:
-                        dur_sec = int(info.get('duration', 0) or 0)
-                        return [{
-                            'id': str(info.get('id', 's_id')),
-                            'title': str(info.get('title', 'Unknown')),
-                            'author': str(info.get('uploader', 'Unknown')),
-                            'duration': f"{dur_sec // 60}:{dur_sec % 60:02d}",
-                            'duration_sec': dur_sec,
-                            'thumb': str(info.get('thumbnail', '')),
-                            'url': str(info.get('url', ''))
-                        }]
-
-            loop = asyncio.get_running_loop()
-            songs_list = await loop.run_in_executor(None, extract)
-            if not songs_list: raise Exception("Không tìm thấy bài hát hoặc playlist.")
-            
-            def play_next(err):
-                if not isinstance(vc, discord.VoiceClient): return
-                if err: print(f"Lỗi phát nhạc: {err}")
-                
-                if server_data['is_loop'] == 2 and server_data['now_playing']:
-                    current_song = server_data['now_playing']
-                    source = discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=current_song['url'], before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', options='-vn')
-                    vc.play(source, after=play_next)
-                    return
-
-                if len(server_data['queue']) > 0:
-                    next_song = server_data['queue'].pop(0)
-                    server_data['now_playing'] = next_song
-                    source = discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=next_song['url'], before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', options='-vn')
-                    vc.play(source, after=play_next)
-                else:
-                    server_data['now_playing'] = None
-
-            for song_data in songs_list:
-                if (vc.is_playing() or vc.is_paused()) and server_data['now_playing'] is not None:
-                    server_data['queue'].append(song_data)
-                else:
-                    if server_data['now_playing'] is None:
-                        server_data['now_playing'] = song_data
-                        source = discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=song_data['url'], before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', options='-vn')
-                        # SỬA LỖI: Loại bỏ tham số error= không hợp lệ, đưa biến err vào callback play_next
-                        vc.play(source, after=play_next)
-                    else:
-                        server_data['queue'].append(song_data)
-            
-            return True
-            
-        elif action == 'toggle_play' and vc:
-            if vc.is_playing(): vc.pause()
-            elif vc.is_paused(): vc.resume()
-            return True
-            
-        elif action == 'skip' and vc:
-            if vc.is_playing() or vc.is_paused(): vc.stop()
-            return True
-            
-        elif action == 'clear':
-            server_data['queue'] = []
-            return True
-            
-        elif action == 'remove':
-            song_id = data.get('song_id')
-            server_data['queue'] = [s for s in server_data['queue'] if s['id'] != song_id]
-            return True
-
-        elif action == 'volume':
-            server_data['volume'] = int(data.get('level', 100))
-            return True
-
-        elif action == 'loop':
-            server_data['is_loop'] = (server_data['is_loop'] + 1) % 3
-            return True
-
-        return False
-
+    # Ủy quyền toàn bộ xử lý âm nhạc cho music.py thông qua Event 'web_music_action'
     try:
-        success = run_coro(execute_action())
-        return jsonify({'success': success})
+        bot_instance.loop.call_soon_threadsafe(
+            bot_instance.dispatch,
+            'web_music_action',
+            guild_id_int,
+            user_id,
+            action,
+            data
+        )
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
