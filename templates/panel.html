@@ -904,7 +904,26 @@
                         </div>
                     `).join('');
                 }
+                let attachmentsHTML = '';
+                if (msg.attachments && msg.attachments.length > 0) {
+                    attachmentsHTML = msg.attachments.map(att => {
+                        if (att.is_image) {
+                            // Hiển thị trực tiếp Ảnh/GIF
+                            return `<div class="mt-2"><img src="${att.url}" alt="${att.filename}" class="rounded-lg max-w-sm object-cover max-h-64 border border-gray-700/50 cursor-pointer hover:opacity-90 transition-opacity" onclick="window.open('${att.url}', '_blank')"></div>`;
+                        } else {
+                            // Hiển thị khung tải xuống cho các tệp khác (.zip, .txt...)
+                            return `<div class="mt-2 flex items-center gap-3 bg-gray-800 p-3 rounded-lg border border-gray-700 max-w-sm hover:bg-gray-700 transition-colors">
+                                        <i class="ph-fill ph-file-arrow-down text-2xl text-indigo-400"></i>
+                                        <div class="flex-1 min-w-0">
+                                            <a href="${att.url}" target="_blank" class="text-sm font-medium text-indigo-400 hover:underline truncate block" title="${att.filename}">${att.filename}</a>
+                                            <span class="text-[11px] text-gray-500">Tệp đính kèm</span>
+                                        </div>
+                                    </div>`;
+                        }
+                    }).join('');
+                }
 
+                // 3. Ráp toàn bộ lại
                 // 3. Ráp toàn bộ lại
                 return `
                     <div class="group flex flex-col hover:bg-gray-700/20 py-2 px-2 rounded-lg transition-colors -mx-2">
@@ -918,6 +937,10 @@
                                     <span class="text-xs text-gray-500 ml-2">${msg.time}</span>
                                 </div>
                                 ${safeContent ? `<div class="text-sm text-gray-200 break-words whitespace-pre-wrap">${safeContent}</div>` : ''}
+                                
+                                <!-- SỬA Ở ĐÂY: Thêm biến chứa ảnh đính kèm -->
+                                ${attachmentsHTML}
+                                
                                 ${embedsHTML}
                             </div>
                             <!-- Nút Reply hiện khi hover -->

@@ -154,9 +154,11 @@ def callback():
     
     avatar_hash = user_data.get('avatar')
     if avatar_hash:
-        avatar_url = f"https://cdn.discordapp.com/avatars/{user_data.get('id')}/{avatar_hash}.png"
+        # Kiểm tra nếu hash bắt đầu bằng "a_" thì đó là ảnh GIF động
+        ext = "gif" if avatar_hash.startswith("a_") else "png"
+        avatar_url = f"https://cdn.discordapp.com/avatars/{user_data.get('id')}/{avatar_hash}.{ext}?size=1024"
     else:
-        # Nếu không có avatar, dùng avatar mặc định màu xám của Discord
+        # Nếu không có avatar, dùng avatar mặc định
         avatar_url = "https://cdn.discordapp.com/embed/avatars/0.png"
 
     session['user'] = {
@@ -372,13 +374,15 @@ def api_channel_messages(channel_id):
                         before_msg = None
                     
                     async for m in channel.history(limit=30, before=before_msg):
-                        content = str(m.content) if m.content else ""
+                        # SỬA Ở ĐÂY: Dùng clean_content thay vì content để tự động đổi ID thành Tên (Mentions)
+                        content = str(m.clean_content) if m.clean_content else ""
                         
                         # Xử lý Reply an toàn tuyệt đối
                         reply_info = None
                         if m.reference and hasattr(m.reference, 'resolved') and isinstance(m.reference.resolved, discord.Message):
                             ref = m.reference.resolved
-                            ref_raw_content = str(ref.content) if ref.content else ""
+                            # Dùng clean_content cho cả tin nhắn reply
+                            ref_raw_content = str(ref.clean_content) if ref.clean_content else ""
                             ref_content = ref_raw_content[:50] + "..." if len(ref_raw_content) > 50 else ref_raw_content
                             
                             if not ref_content:
@@ -417,9 +421,19 @@ def api_channel_messages(channel_id):
                                 'image': image_url
                             })
 
-                        if not content and m.attachments:
-                            content = f"[Đính kèm ảnh/file: {m.attachments[0].filename}]"
-                            
+                        # SỬA Ở ĐÂY: Lấy danh sách file đính kèm (ảnh, gif, video, tài liệu...)
+                        attachments_data = []
+                        for att in m.attachments:
+                            is_image = False
+                            if att.content_type and att.content_type.startswith(('image/', 'video/')):
+                                is_image = True # Đánh dấu là ảnh hoặc gif để frontend hiển thị
+
+                            attachments_data.append({
+                                'filename': att.filename,
+                                'url': att.url,
+                                'is_image': is_image
+                            })
+
                         msgs.append({
                             'id': str(m.id),
                             'author': str(m.author.display_name),
@@ -428,8 +442,10 @@ def api_channel_messages(channel_id):
                             'bot': bool(m.author.bot),
                             'time': m.created_at.strftime('%H:%M') if m.created_at else "",
                             'reply_info': reply_info,
-                            'embeds': embeds_data
+                            'embeds': embeds_data,
+                            'attachments': attachments_data # <-- Truyền thêm cục này xuống UI
                         })
+                        
                 except discord.errors.Forbidden:
                     if not before_id:
                         msgs.append({
