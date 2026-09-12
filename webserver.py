@@ -1,228 +1,722 @@
 import os
-import json
 import asyncio
-import requests
+import logging
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from dotenv import load_dotenv
+import discord
+from typing import Optional
+import datetime
+import yt_dlp
 
 load_dotenv()
 
-app = Flask(__name__, static_url_path='/static')
-app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(24))
+app = Flask(__name__)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'super_secret_key_mosa')
 
-DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
-CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
-CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://localhost:5000/callback")
-API_ENDPOINT = "https://discord.com/api/v10"
-SETTINGS_FILE = os.path.join(DATA_FOLDER, "settings.json")
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
-bot_instance = None
+# Cấu hình Discord OAuth2
+
+CLIENT_ID = os.getenv('DISCORD_CLIENT_ID')
+CLIENT_SECRET = os.getenv('DISCORD_CLIENT_SECRET')
+REDIRECT_URI = os.getenv('DISCORD_REDIRECT_URI', 'http://localhost:5000/callback')
+OWNER_ID = os.getenv('OWNER_ID') # ID tài khoản Discord được phép truy cập panel
+
+bot_instance: Optional[discord.Client] = None  # Báo cho VSCode biết đây là Discord Client hoặc None
+bot_loop = None
+
+# Cấu trúc lưu trữ mở rộng cho từng Server
+music_state = {} 
+
+def get_music_state(guild_id):
+    if guild_id not in music_state:
+        music_state[guild_id] = {
+            'queue': [], 
+            'now_playing': None,
+            'volume': 100,
+            'is_loop': 0, # 0: off, 1: all, 2: single
+            'playlists': [ # Playlist mẫu (có thể lưu cứng hoặc tùy chỉnh)
+                {'id': 1, 'name': "Chill Lofi Vibes", 'count': 4, 'icon': "ph-headphones"},
+                {'id': 2, 'name': "Coding Focus", 'count': 2, 'icon': "ph-code"}
+            ]
+        }
+    return music_state[guild_id]
 
 def run_web(bot):
-    global bot_instance
+    global bot_instance, bot_loop
     bot_instance = bot
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    # Lấy event loop của bot để chạy các coro bất đồng bộ từ Flask thread safely
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
-def check_auth():
-    return "token" in session
+def run_coro(coro):
+    if bot_instance is None or not hasattr(bot_instance, 'loop') or bot_instance.loop is None:
+        raise RuntimeError('Bot is not running yet.')
 
-@app.route("/api/token", methods=["POST"])
-def get_activity_token():
-    data = request.json
-    code = data.get("code")
-    
-    if not code:
-        return jsonify({"error": "No code provided"}), 400
+    future = asyncio.run_coroutine_threadsafe(coro, bot_instance.loop)
+    return future.result()
 
-    # Dùng code đổi lấy access_token từ Discord
-    token_data = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": REDIRECT_URI # Phải khớp hoàn toàn với redirect uri trong portal (không cần tồn tại thật nếu dùng activity)
-    }
-    
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    resp = requests.post(f"{API_ENDPOINT}/oauth2/token", data=token_data, headers=headers)
-    
-    if resp.status_code != 200:
-        return jsonify({"error": resp.text}), 400
-        
-    return jsonify(resp.json()) # Trả access_token về cho Frontend
+# Bộ nhớ log thời gian thực
+realtime_logs = [
+    {"time": datetime.datetime.now().strftime("%H:%M:%S"), "msg": "Web Panel đã được khởi động. Đang chờ kết nối với Bot...", "level": "info"}
+]
 
-# --- AUTH ROUTES ---
-@app.route("/login")
-def login():
-    oauth_url = (
-        f"{API_ENDPOINT}/oauth2/authorize?client_id={CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
-    )
-    return redirect(oauth_url)
+def add_log(message, level="info"):
+    time_str = datetime.datetime.now().strftime("%H:%M:%S")
+    realtime_logs.append({"time": time_str, "msg": message, "level": level})
+    if len(realtime_logs) > 100:
+        realtime_logs.pop(0)
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("index"))
-
-@app.route("/callback")
-def callback():
-    code = request.args.get("code")
-    if not code:
-        return "Lỗi: Không tìm thấy authorization code", 400
-
-    data = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": REDIRECT_URI
-    }
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    token_resp = requests.post(f"{API_ENDPOINT}/oauth2/token", data=data, headers=headers)
-    if token_resp.status_code != 200:
-        return f"Lỗi lấy Token: {token_resp.text}", 400
-
-    token_data = token_resp.json()
-    session["token"] = token_data["access_token"]
-    
-    # Lấy thông tin user
-    user_resp = requests.get(
-        f"{API_ENDPOINT}/users/@me", 
-        headers={"Authorization": f"Bearer {session['token']}"}
-    )
-    if user_resp.status_code == 200:
-        session["user"] = user_resp.json()
-    return redirect(url_for("index"))
-
-@app.route("/")
+@app.route('/')
 def index():
-    # 1. Nếu mở trong Discord Activity (sẽ có frame_id trên URL)
-    if request.args.get('frame_id'):
-        # Trả thẳng về trang index.html, việc đăng nhập sẽ do JavaScript SDK lo
-        return render_template("index.html", is_activity=True)
+    # Chuyển hướng người dùng từ trang chủ (/) sang (/panel)
+    return redirect(url_for('panel'))
+
+OWNER_ID = os.getenv('OWNER_ID')
+
+@app.route('/panel')
+def panel():
+    # 1. Nếu chưa đăng nhập: Cứ trả về trang panel (giao diện sẽ tự động hiện khung bắt đăng nhập)
+    if 'user' not in session:
+        return render_template('panel.html')
     
-    # 2. Nếu mở bằng trình duyệt Web bình thường
-    if not check_auth():
-        return render_template("login.html")
+    # Lấy OWNER_ID từ file .env
+    OWNER_ID = os.getenv('OWNER_ID')
     
-    return render_template("index.html", user=session.get("user"), is_activity=False)
+    # 2. Nếu ĐÃ đăng nhập nhưng KHÔNG PHẢI là Owner
+    if str(session['user']['id']) != str(OWNER_ID):
+        # Trả về giao diện báo lỗi kèm nút Đăng Xuất
+        unauthorized_html = """
+        <!DOCTYPE html>
+        <html lang="vi">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Không có quyền truy cập</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-gray-900 h-screen flex flex-col items-center justify-center selection:bg-[#5865F2] selection:text-white">
+            <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 max-w-md w-full text-center mx-4">
+                <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                    <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-white mb-2">Từ chối truy cập</h2>
+                <p class="text-gray-400 mb-6 text-sm">Tài khoản <b>{}</b> không có quyền truy cập vào bảng điều khiển này. Vui lòng đăng xuất và đăng nhập bằng tài khoản chỉ định.</p>
+                <a href="/logout" class="block w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2.5 rounded-lg transition-colors">
+                    Đăng Xuất
+                </a>
+            </div>
+        </body>
+        </html>
+        """.format(session['user']['username'])
+        
+        return unauthorized_html, 403
 
-# --- API ROUTES ---
-@app.route("/api/guilds")
-def get_guilds():
-    if not check_auth():
-        return jsonify({"error": "Unauthorized"}), 401
+    # 3. Nếu ĐÃ đăng nhập và LÀ Owner: Trả về trang panel bình thường
+    return render_template('panel.html')
+
+@app.route('/login')
+def login():
+    auth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
+    return redirect(auth_url)
+
+@app.route('/callback')
+def callback():
+    code = request.args.get('code')
+    if not code:
+        return redirect(url_for('panel'))
     
-    headers = {"Authorization": f"Bearer {session['token']}"}
-    user_guilds = requests.get(f"{API_ENDPOINT}/users/@me/guilds", headers=headers).json()
+    import requests
+    data = {
+        'client_id': CLIENT_ID,
+        'client_secret': CLIENT_SECRET,
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': REDIRECT_URI
+    }
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    r = requests.post('https://discord.com/api/oauth2/token', data=data, headers=headers)
+    token_data = r.json()
     
-    # Lọc server mà bot cũng có mặt
-    bot_guild_ids = [str(g.id) for g in (bot_instance.guilds if bot_instance else [])]
-    common_guilds = [
-        g for g in user_guilds 
-        if g["id"] in bot_guild_ids and (int(g["permissions"]) & 0x20) == 0x20 # Quyền MANAGE_GUILD
-    ]
-    return jsonify(common_guilds)
+    if 'access_token' not in token_data:
+        return "Xác thực thất bại!", 400
+        
+    access_token = token_data['access_token']
+    user_resp = requests.get('https://discord.com/api/users/@me', headers={'Authorization': f'Bearer {access_token}'})
+    user_data = user_resp.json()
+    
+    # BỎ KIỂM TRA OWNER_ID Ở ĐÂY ĐỂ AI CŨNG CÓ THỂ ĐĂNG NHẬP!
+    
+    session['user'] = {
+        'id': user_data.get('id'),
+        'username': user_data.get('username'),
+        'discriminator': user_data.get('discriminator', '0'),
+        'avatar': f"https://cdn.discordapp.com/avatars/{user_data.get('id')}/{user_data.get('avatar')}.png" if user_data.get('avatar') else "https://placehold.co/100x100/5865F2/FFFFFF?text=U"
+    }
+    
+    # Chuyển hướng về trang mà người dùng vừa truy cập (mặc định là music nếu không có)
+    next_url = session.pop('next_url', url_for('music'))
+    return redirect(next_url)
 
-@app.route("/api/status/<guild_id>")
-def get_status(guild_id):
-    gid = int(guild_id)
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    # Đăng xuất xong thì chuyển hướng về /panel (nơi sẽ hiện lại nút Login)
+    return redirect(url_for('panel'))
+@app.route('/api/user')
+def api_user():
+    if 'user' not in session:
+        return jsonify({'authenticated': False}), 401
+    return jsonify({'authenticated': True, 'user': session['user']})
 
-    if bot_instance is None:
-        return jsonify({"connected": False})
-
-    guild = bot_instance.get_guild(gid)
-    if not guild or not guild.voice_client:
-        return jsonify({"connected": False})
-
-    music_cog = bot_instance.get_cog("Music")
-    # Trả về thông tin phát nhạc từ cog nếu có
+# --- API Thống kê Bot ---
+@app.route('/api/stats')
+def api_stats():
+    if not bot_instance or not bot_instance.is_ready():
+        return jsonify({'error': 'Bot offline'}), 503
+    
+    total_guilds = len(bot_instance.guilds)
+    total_members = sum(g.member_count for g in bot_instance.guilds if g.member_count)
+    ping = round(bot_instance.latency * 1000)
+    
+    import psutil
+    process = psutil.Process(os.getpid())
+    ram_usage = round(process.memory_info().rss / 1024 / 1024, 2)
+    
     return jsonify({
-        "connected": True,
-        "channel": guild.voice_client.channel.name,
-        "is_playing": guild.voice_client.is_playing(),
-        "is_paused": guild.voice_client.is_paused()
+        'guilds': total_guilds,
+        'members': total_members,
+        'ping': ping,
+        'ram': ram_usage,
+        'discord_version': discord.__version__
     })
-    
-# --- THÊM VÀO WEBSERVER.PY ---
 
-@app.route("/api/connect", methods=["POST"])
-def connect_bot():
-    data = request.json
-    user_id = int(data.get("user_id"))
+# --- API Quản lý Server & Thành viên ---
+@app.route('/api/servers')
+def api_servers():
+    if not bot_instance:
+        return jsonify([])
+    servers = []
+    for g in bot_instance.guilds:
+        servers.append({
+            'id': str(g.id),
+            'name': g.name,
+            'members': g.member_count,
+            'icon': str(g.icon.url) if g.icon else "https://placehold.co/100/5865F2/fff?text=SV"
+        })
+    return jsonify(servers)
+
+@app.route('/api/servers/<guild_id>/voice_channels')
+def api_server_voice_channels(guild_id):
+    if not bot_instance:
+        return jsonify([])
+
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild:
+        return jsonify([])
+        
+    channels = []
+    # Chỉ lấy các kênh thoại (Voice Channels)
+    for vc in guild.voice_channels:
+        channels.append({
+            'id': str(vc.id),
+            'name': vc.name
+        })
+    return jsonify(channels)
+
+@app.route('/api/servers/<guild_id>/members')
+def api_server_members(guild_id):
+    if not bot_instance:
+        return jsonify([])
+
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild:
+        return jsonify([]), 404
+    members = []
+    for m in guild.members[:100]: # Giới hạn lấy 100 thành viên hiển thị
+        role_name = m.top_role.name if m.top_role else "Member"
+        members.append({
+            'id': str(m.id),
+            'name': m.display_name,
+            'avatar': str(m.display_avatar.url),
+            'role': role_name,
+            'bot': m.bot
+        })
+    return jsonify(members)
+
+@app.route('/api/servers/<guild_id>/members/<member_id>/action', methods=['POST'])
+def api_member_action(guild_id, member_id):
+    if not bot_instance:
+        return jsonify({'success': False, 'error': 'Bot not initialized'}), 503
+
+    data = request.json or {}
+    action = data.get('action') # ban, kick, timeout
+    reason = data.get('reason', 'Không có lý do')
+    
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild:
+        return jsonify({'success': False, 'error': 'Server not found'}), 404
+        
+    async def do_action():
+        member = guild.get_member(int(member_id))
+        if not member:
+            member = await guild.fetch_member(int(member_id))
+        if action == 'kick':
+            await member.kick(reason=reason)
+        elif action == 'ban':
+            await member.ban(reason=reason)
+        elif action == 'timeout':
+            duration = int(data.get('duration', 60))
+            import datetime
+            until = discord.utils.utcnow() + datetime.timedelta(seconds=duration)
+            await member.timeout(until, reason=reason)
+        return True
+
+    try:
+        run_coro(do_action())
+        add_log(f"Thực hiện {action} lên thành viên {member_id} tại server {guild.name}", "warn")
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/servers/<guild_id>/invite', methods=['POST'])
+def api_create_invite(guild_id):
+    if not bot_instance:
+        return jsonify({'error': 'Bot not initialized'}), 503
+
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild:
+        return jsonify({'error': 'Server not found'}), 404
+    async def create_inv():
+        for channel in guild.text_channels:
+            if channel.permissions_for(guild.me).create_instant_invite:
+                inv = await channel.create_invite(max_uses=1, max_age=3600)
+                return str(inv.url)
+        return None
+    try:
+        url = run_coro(create_inv())
+        if url:
+            return jsonify({'invite_url': url})
+        return jsonify({'error': 'Không tìm thấy kênh có quyền tạo invite'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/servers/<guild_id>/leave', methods=['POST'])
+def api_leave_server(guild_id):
+    if not bot_instance:
+        return jsonify({'error': 'Bot not initialized'}), 503
+
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild:
+        return jsonify({'error': 'Server not found'}), 404
+    run_coro(guild.leave())
+    return jsonify({'success': True})
+
+# --- API Kênh & Chat ---
+@app.route('/api/chat/servers')
+def api_chat_servers():
+    if not bot_instance:
+        return jsonify([])
+    result = []
+    for g in bot_instance.guilds:
+        channels = [{'id': str(c.id), 'name': c.name} for c in g.text_channels]
+        result.append({
+            'id': str(g.id),
+            'name': g.name,
+            'channels': channels
+        })
+    return jsonify(result)
+
+@app.route('/api/channels/<channel_id>/messages', methods=['GET', 'POST'])
+def api_channel_messages(channel_id):
+    try:
+        if bot_instance is None:
+            return jsonify({'error': 'Bot is not ready'}), 503
+
+        # 1. Bắt lỗi an toàn nếu Javascript gửi lên chữ 'null' hoặc 'undefined'
+        if channel_id in ("null", "undefined", "none", ""):
+            return jsonify([]), 400
+            
+        try:
+            channel_id_int = int(channel_id)
+        except ValueError:
+            return jsonify([]), 400
+
+        channel = bot_instance.get_channel(channel_id_int)
+        
+        if not channel or not isinstance(channel, discord.abc.Messageable):
+            return jsonify([]), 404
+
+        if request.method == 'GET':
+            before_id = request.args.get('before')
+            
+            async def fetch_msgs():
+                msgs = []
+                try:
+                    # 2. Xử lý an toàn ID tin nhắn cũ (tránh lỗi int("null"))
+                    if before_id and str(before_id).lower() not in ("null", "undefined", "none", ""):
+                        before_msg = discord.Object(id=int(before_id))
+                    else:
+                        before_msg = None
+                    
+                    async for m in channel.history(limit=30, before=before_msg):
+                        content = str(m.content) if m.content else ""
+                        
+                        # Xử lý Reply an toàn tuyệt đối
+                        reply_info = None
+                        if m.reference and hasattr(m.reference, 'resolved') and isinstance(m.reference.resolved, discord.Message):
+                            ref = m.reference.resolved
+                            ref_raw_content = str(ref.content) if ref.content else ""
+                            ref_content = ref_raw_content[:50] + "..." if len(ref_raw_content) > 50 else ref_raw_content
+                            
+                            if not ref_content:
+                                if ref.embeds: ref_content = "[Tin nhắn Embed]"
+                                elif ref.attachments: ref_content = "[Đính kèm File/Ảnh]"
+                                else: ref_content = "Tin nhắn không có nội dung"
+                                
+                            reply_info = {
+                                'author': str(ref.author.display_name) if hasattr(ref.author, 'display_name') else "Unknown",
+                                'content': ref_content
+                            }
+
+                        # Xử lý Embeds an toàn tuyệt đối (Chống lỗi JSON)
+                        embeds_data = []
+                        for emb in m.embeds:
+                            title = str(emb.title) if isinstance(emb.title, str) else ""
+                            description = str(emb.description) if isinstance(emb.description, str) else ""
+                            
+                            color = "#2B2D31"
+                            if hasattr(emb, 'color') and isinstance(emb.color, discord.Colour):
+                                color = f"#{emb.color.value:06x}"
+                            
+                            image_url = ""
+                            if hasattr(emb, 'image') and emb.image and hasattr(emb.image, 'url') and isinstance(emb.image.url, str):
+                                image_url = emb.image.url
+                            elif hasattr(emb, 'thumbnail') and emb.thumbnail and hasattr(emb.thumbnail, 'url') and isinstance(emb.thumbnail.url, str):
+                                image_url = emb.thumbnail.url
+
+                            if not title and not description and not image_url:
+                                continue
+                                
+                            embeds_data.append({
+                                'title': title,
+                                'description': description,
+                                'color': color,
+                                'image': image_url
+                            })
+
+                        if not content and m.attachments:
+                            content = f"[Đính kèm ảnh/file: {m.attachments[0].filename}]"
+                            
+                        msgs.append({
+                            'id': str(m.id),
+                            'author': str(m.author.display_name),
+                            'avatar': str(m.author.display_avatar.url) if m.author.display_avatar else "https://placehold.co/100/333/fff",
+                            'content': content,
+                            'bot': bool(m.author.bot),
+                            'time': m.created_at.strftime('%H:%M') if m.created_at else "",
+                            'reply_info': reply_info,
+                            'embeds': embeds_data
+                        })
+                except discord.errors.Forbidden:
+                    if not before_id:
+                        msgs.append({
+                            'id': 'error',
+                            'author': 'Hệ thống',
+                            'avatar': 'https://placehold.co/100/ED4245/fff?text=!',
+                            'content': 'Bot không có quyền Đọc Lịch Sử Tin Nhắn ở kênh này.',
+                            'bot': True,
+                            'time': 'Bây giờ'
+                        })
+                except Exception as e:
+                    print(f"Lỗi khi xử lý dữ liệu tin nhắn: {e}")
+                    
+                return msgs[::-1]
+            
+            return jsonify(run_coro(fetch_msgs()))
+            
+        elif request.method == 'POST':
+            data = request.json or {}
+            content = data.get('content')
+            reply_to = data.get('reply_to')
+            
+            async def send_msg():
+                if reply_to:
+                    ref_msg = await channel.fetch_message(int(reply_to))
+                    return await ref_msg.reply(content)
+                else:
+                    return await channel.send(content)
+            try:
+                m = run_coro(send_msg())
+                return jsonify({'success': True, 'id': str(m.id)})
+            except Exception as e:
+                print(f"Lỗi khi gửi tin nhắn: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+            
+        return jsonify({'error': 'Method Not Allowed'}), 405
+
+    except Exception as e:
+        import traceback
+        # Bắt toàn bộ lỗi sập Flask và ép nó in ra màn hình console (để Panel nhìn thấy)
+        print(f"LỖI NGHIÊM TRỌNG (API Messages): {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+        
+# --- API Trạng thái Bot ---
+@app.route('/api/bot/status', methods=['POST'])
+def api_update_status():
+    if not bot_instance:
+        return jsonify({'success': False, 'error': 'Bot not initialized'}), 503
+
+    data = request.json or {}
+    status_type = data.get('status', 'online') # online, idle, dnd, invisible
+    activity_type = data.get('activity_type', 'playing') # playing, watching, listening, competing
+    activity_name = data.get('activity_name', '')
+    
+    status_map = {
+        'online': discord.Status.online,
+        'idle': discord.Status.idle,
+        'dnd': discord.Status.dnd,
+        'invisible': discord.Status.invisible
+    }
+    act_map = {
+        'playing': discord.ActivityType.playing,
+        'watching': discord.ActivityType.watching,
+        'listening': discord.ActivityType.listening,
+        'competing': discord.ActivityType.competing
+    }
 
     bot = bot_instance
-    if bot is None:
-        return jsonify({"error": "Bot chưa sẵn sàng"}), 500
+    
+    async def change_pres():
+        st = status_map.get(status_type, discord.Status.online)
+        act = discord.Activity(type=act_map.get(activity_type, discord.ActivityType.playing), name=activity_name)
+        await bot.change_presence(status=st, activity=act)
+        
+    try:
+        run_coro(change_pres())
+        add_log(f"Đã cập nhật trạng thái bot thành: {status_type} | {activity_type} {activity_name}")
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-    target_voice_channel = None
-    # Tự động tìm xem người dùng đang ở kênh thoại nào trong tất cả server bot tham gia
-    for guild in bot.guilds:
-        member = guild.get_member(user_id)
-        if member and member.voice and member.voice.channel:
-            target_voice_channel = member.voice.channel
-            break
+# --- API Logs thời gian thực ---
+@app.route('/api/logs')
+def api_logs():
+    return jsonify(realtime_logs)
 
-    if not target_voice_channel:
-        return jsonify({"error": "Bạn phải tham gia một kênh thoại trên Discord trước khi kết nối bot!"}), 400
+#--- Trang Music Player ---
 
-    # Khai báo hàm bất đồng bộ để bot vào kênh
-    async def join_vc(vc):
-        guild = vc.guild
-        if guild.voice_client:
-            await guild.voice_client.move_to(vc)
-        else:
-            await vc.connect()
+@app.route('/music')
+def music():
+    # Lưu lại trang hiện tại để callback chuyển hướng về đúng chỗ
+    session['next_url'] = url_for('music') 
+    return render_template('music.html')
 
-    # Đẩy lệnh vào event loop của Bot
-    asyncio.run_coroutine_threadsafe(join_vc(target_voice_channel), bot.loop)
+# ==========================================
+# 1. LẤY TRẠNG THÁI VÀ HÀNG CHỜ HIỂN THỊ LÊN WEB
+# ==========================================
+@app.route('/api/music/state', methods=['GET'])
+def api_music_state():
+    if not bot_instance or not bot_instance.is_ready():
+        return jsonify({'error': 'Bot offline'}), 503
+        
+    guild_id = request.args.get('guild_id')
+    if not guild_id:
+        return jsonify({'error': 'Missing guild_id'}), 400
 
-    return jsonify({
-        "success": True, 
-        "channel_name": target_voice_channel.name,
-        "guild_name": target_voice_channel.guild.name
-    })
+    guild = bot_instance.get_guild(int(guild_id))
+    if not guild or not guild.voice_client:
+        return jsonify({'connected': False, 'queue': [], 'playlists': [], 'now_playing': None})
 
-@app.route("/api/disconnect", methods=["POST"])
-def disconnect_bot():
-    data = request.json
-    user_id = int(data.get("user_id"))
+    raw_vc = guild.voice_client
+    if not isinstance(raw_vc, discord.VoiceClient):
+        return jsonify({'connected': False, 'queue': [], 'playlists': [], 'now_playing': None})
+    vc = raw_vc
+    
+    channel_name = getattr(vc.channel, 'name', 'Voice Channel')
+    state_data = get_music_state(int(guild_id))
+    
+    if not vc.is_playing() and not vc.is_paused():
+        state_data['now_playing'] = None
 
-    if bot_instance is None:
-        return jsonify({"error": "Bot chưa sẵn sàng"}), 500
+    state = {
+        'connected': True,
+        'channel_name': channel_name,
+        'is_playing': vc.is_playing(),
+        'is_paused': vc.is_paused(),
+        'volume': state_data['volume'],
+        'loop_mode': state_data['is_loop'],
+        'now_playing': state_data['now_playing'],
+        'queue': state_data['queue'],
+        'playlists': state_data['playlists']
+    }
+    return jsonify(state)
 
-    target_guild = None
-    for guild in bot_instance.guilds:
-        member = guild.get_member(user_id)
-        if member and member.voice and member.voice.channel:
-            target_guild = guild
-            break
+# ==========================================
+# 2. XỬ LÝ LỆNH PHÁT NHẠC, SKIP, TẠM DỪNG
+# ==========================================
+@app.route('/api/music/action', methods=['POST'])
+def api_music_action():
+    if not bot_instance:
+        return jsonify({'success': False, 'error': 'Bot offline'})
+        
+    if 'user' not in session:
+        return jsonify({'success': False, 'error': 'Vui lòng đăng nhập lại.'})
+        
+    user_id = session['user']['id']
+    data = request.json or {}
+    
+    # --- SỬA LỖI: Ép kiểu an toàn cho guild_id tránh giá trị None/Unknown ---
+    raw_guild_id = data.get('guild_id')
+    if not raw_guild_id:
+        return jsonify({'success': False, 'error': 'Thiếu ID Server.'})
+    guild_id_int = int(raw_guild_id)
+    # -----------------------------------------------------------------------
+    
+    action = data.get('action')
+    
+    guild = bot_instance.get_guild(guild_id_int)
+    if not guild:
+        return jsonify({'success': False, 'error': 'Không tìm thấy Server.'})
+    
+    raw_vc = guild.voice_client
+    vc = raw_vc if isinstance(raw_vc, discord.VoiceClient) else None
+    
+    # Dùng luôn biến int đã kiểm tra an toàn
+    server_data = get_music_state(guild_id_int)
 
-    if not target_guild or not target_guild.voice_client:
-        return jsonify({"error": "Bot không ở trong kênh thoại cùng bạn"}), 400
+    async def execute_action():
+        if action == 'join':
+            channel_id = data.get('channel_id')
+            if not channel_id: raise Exception("Vui lòng chọn kênh thoại.")
+            
+            member = guild.get_member(int(user_id))
+            if not member:
+                try: member = await guild.fetch_member(int(user_id))
+                except: raise Exception("Không tìm thấy bạn trong server này.")
+            
+            if not member.voice or not member.voice.channel or str(member.voice.channel.id) != str(channel_id):
+                raise Exception("Bạn phải vào kênh thoại này trên Discord trước khi mời Bot!")
+                
+            voice_channel = guild.get_channel(int(channel_id))
+            if not voice_channel or not isinstance(voice_channel, (discord.VoiceChannel, discord.StageChannel)):
+                raise Exception("Kênh thoại không hợp lệ.")
+                
+            if vc and vc.is_connected():
+                if vc.channel.id != voice_channel.id:
+                    await vc.move_to(voice_channel)
+            else:
+                await voice_channel.connect()
+            return True
+            
+        elif action == 'play':
+            query = data.get('query')
+            if not query: raise Exception("Vui lòng cung cấp link hoặc tên bài hát.")
+            if not vc or not vc.is_connected():
+                raise Exception("Bot chưa tham gia kênh thoại!")
 
-    async def leave_vc(guild):
-        await guild.voice_client.disconnect()
+            ydl_opts = {'format': 'bestaudio/best', 'extract_flat': 'in_playlist', 'quiet': True}
+            def extract():
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl: # type: ignore
+                    search_query = str(query) if str(query).startswith('http') else f"ytsearch:{query}"
+                    info = ydl.extract_info(search_query, download=False)
+                    if not isinstance(info, dict): return []
+                    
+                    entries = info.get('entries')
+                    if entries:
+                        songs = []
+                        for entry in entries:
+                            dur_sec = int(entry.get('duration', 0) or 0)
+                            songs.append({
+                                'id': str(entry.get('id', 's_id')),
+                                'title': str(entry.get('title', 'Unknown')),
+                                'author': str(entry.get('uploader', 'Unknown')),
+                                'duration': f"{dur_sec // 60}:{dur_sec % 60:02d}",
+                                'duration_sec': dur_sec,
+                                'thumb': str(entry.get('thumbnail', '')),
+                                'url': f"https://www.youtube.com/watch?v={entry.get('id')}" if entry.get('id') else str(entry.get('url', ''))
+                            })
+                        return songs
+                    else:
+                        dur_sec = int(info.get('duration', 0) or 0)
+                        return [{
+                            'id': str(info.get('id', 's_id')),
+                            'title': str(info.get('title', 'Unknown')),
+                            'author': str(info.get('uploader', 'Unknown')),
+                            'duration': f"{dur_sec // 60}:{dur_sec % 60:02d}",
+                            'duration_sec': dur_sec,
+                            'thumb': str(info.get('thumbnail', '')),
+                            'url': str(info.get('url', ''))
+                        }]
 
-    asyncio.run_coroutine_threadsafe(leave_vc(target_guild), bot_instance.loop)
-    return jsonify({"success": True})
+            loop = asyncio.get_running_loop()
+            songs_list = await loop.run_in_executor(None, extract)
+            if not songs_list: raise Exception("Không tìm thấy bài hát hoặc playlist.")
+            
+            def play_next(err):
+                if not isinstance(vc, discord.VoiceClient): return
+                if err: print(f"Lỗi phát nhạc: {err}")
+                
+                if server_data['is_loop'] == 2 and server_data['now_playing']:
+                    current_song = server_data['now_playing']
+                    source = discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=current_song['url'], before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', options='-vn')
+                    vc.play(source, after=play_next)
+                    return
 
-@app.route("/api/connection_status", methods=["POST"])
-def check_connection_status():
-    data = request.json
-    user_id = int(data.get("user_id"))
+                if len(server_data['queue']) > 0:
+                    next_song = server_data['queue'].pop(0)
+                    server_data['now_playing'] = next_song
+                    source = discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=next_song['url'], before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', options='-vn')
+                    vc.play(source, after=play_next)
+                else:
+                    server_data['now_playing'] = None
 
-    if bot_instance is None:
-        return jsonify({"connected": False})
+            for song_data in songs_list:
+                if (vc.is_playing() or vc.is_paused()) and server_data['now_playing'] is not None:
+                    server_data['queue'].append(song_data)
+                else:
+                    if server_data['now_playing'] is None:
+                        server_data['now_playing'] = song_data
+                        source = discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=song_data['url'], before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', options='-vn')
+                        # SỬA LỖI: Loại bỏ tham số error= không hợp lệ, đưa biến err vào callback play_next
+                        vc.play(source, after=play_next)
+                    else:
+                        server_data['queue'].append(song_data)
+            
+            return True
+            
+        elif action == 'toggle_play' and vc:
+            if vc.is_playing(): vc.pause()
+            elif vc.is_paused(): vc.resume()
+            return True
+            
+        elif action == 'skip' and vc:
+            if vc.is_playing() or vc.is_paused(): vc.stop()
+            return True
+            
+        elif action == 'clear':
+            server_data['queue'] = []
+            return True
+            
+        elif action == 'remove':
+            song_id = data.get('song_id')
+            server_data['queue'] = [s for s in server_data['queue'] if s['id'] != song_id]
+            return True
 
-    for guild in bot_instance.guilds:
-        member = guild.get_member(user_id)
-        if member and member.voice and member.voice.channel:
-            vc = guild.voice_client
-            # Kiểm tra xem bot có đang ở cùng phòng với user không
-            if vc and vc.is_connected() and vc.channel.id == member.voice.channel.id:
-                return jsonify({"connected": True, "channel_name": vc.channel.name})
+        elif action == 'volume':
+            server_data['volume'] = int(data.get('level', 100))
+            return True
 
-    return jsonify({"connected": False})
+        elif action == 'loop':
+            server_data['is_loop'] = (server_data['is_loop'] + 1) % 3
+            return True
+
+        return False
+
+    try:
+        success = run_coro(execute_action())
+        return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})

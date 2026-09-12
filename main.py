@@ -3,11 +3,14 @@ import os
 import asyncio
 import threading
 import requests
+import sys
+import logging
 from typing import Optional
 from discord.ext import commands
 from dotenv import load_dotenv
 from flask import ctx
 from webserver import run_web 
+from webserver import run_web, add_log
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -18,6 +21,40 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
+class PanelPrintRedirector:
+    def __init__(self):
+        self.terminal = sys.stdout
+
+    def write(self, message):
+        self.terminal.write(message) # Vẫn in ra console bình thường
+        msg_clean = message.strip()
+        if msg_clean:
+            add_log(msg_clean, "info")
+
+    def flush(self):
+        self.terminal.flush()
+
+sys.stdout = PanelPrintRedirector()
+
+# 2. Hứng cảnh báo/lỗi từ chính thư viện discord.py
+class PanelLogHandler(logging.Handler):
+    def emit(self, record):
+        msg = self.format(record)
+        level = "info"
+        if record.levelno >= logging.ERROR:
+            level = "error"
+        elif record.levelno >= logging.WARNING:
+            level = "warn"
+        add_log(msg, level)
+
+discord_logger = logging.getLogger('discord')
+discord_logger.setLevel(logging.INFO)
+panel_handler = PanelLogHandler()
+panel_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
+discord_logger.addHandler(panel_handler)
+# ====================================================================
+
+load_dotenv()
 class MyBot(commands.Bot):
     
     def __init__(self):

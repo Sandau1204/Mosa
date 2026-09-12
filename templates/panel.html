@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Panel - Quản trị Discord Bot</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Phosphor Icons (Minimalist Icons) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        discord: '#5865F2',
+                        discordHover: '#4752C4',
+                        gray: {
+                            850: '#1f2937',
+                            900: '#111827',
+                            950: '#030712',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar for a clean look */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+        
+        /* Logs smooth scrolling */
+        #log-container {
+            scroll-behavior: smooth;
+        }
+        /* Hide elements utility */
+        .hidden-tab { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 font-sans h-screen overflow-hidden flex selection:bg-discord selection:text-white">
+
+    <!-- Màn hình đăng nhập -->
+    <div id="login-screen" class="fixed inset-0 bg-gray-950 z-50 flex flex-col items-center justify-center transition-opacity duration-300">
+        <div class="bg-gray-800 p-10 rounded-2xl shadow-2xl border border-gray-700 max-w-md w-full text-center">
+            <div class="w-20 h-20 bg-gray-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                <i class="ph-fill ph-robot text-4xl text-discord"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-white mb-2">Quản Trị Bot</h1>
+            <p class="text-gray-400 mb-8 text-sm">Vui lòng xác thực tài khoản Discord của bạn để vào Panel.</p>
+            <button onclick="app.login()" class="w-full bg-discord hover:bg-discordHover text-white font-medium py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors">
+                <i class="ph-fill ph-discord-logo text-xl"></i> Đăng nhập với Discord
+            </button>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-950 border-r border-gray-800 flex flex-col hidden md:flex z-10 shrink-0">
+        <!-- Logo -->
+        <div class="h-16 flex items-center px-6 border-b border-gray-800 gap-3">
+            <div class="w-8 h-8 bg-discord rounded-lg flex items-center justify-center">
+                <i class="ph-fill ph-robot text-white text-lg"></i>
+            </div>
+            <span class="font-bold text-white tracking-wide">Mosa Panel</span>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+            <button onclick="app.switchTab('overview')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all active-nav" data-target="overview">
+                <i class="ph ph-squares-four text-lg"></i> <span class="font-medium text-sm">Tổng quan</span>
+            </button>
+            <button onclick="app.switchTab('servers')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all" data-target="servers">
+                <i class="ph ph-hard-drives text-lg"></i> <span class="font-medium text-sm">Máy chủ</span>
+            </button>
+            <button onclick="app.switchTab('chat')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all" data-target="chat">
+                <i class="ph ph-chat-teardrop-text text-lg"></i> <span class="font-medium text-sm">Bảng tin nhắn</span>
+            </button>
+            <button onclick="app.switchTab('welcome')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all" data-target="welcome">
+                <i class="ph ph-hand-waving text-lg"></i> <span class="font-medium text-sm">Tin nhắn chào mừng</span>
+            </button>
+            <button onclick="app.switchTab('settings')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all" data-target="settings">
+                <i class="ph ph-sliders-horizontal text-lg"></i> <span class="font-medium text-sm">Trạng thái Bot</span>
+            </button>
+            <button onclick="app.switchTab('logs')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-gray-800/50 transition-all" data-target="logs">
+                <i class="ph ph-terminal-window text-lg"></i> <span class="font-medium text-sm">Nhật ký (Logs)</span>
+            </button>
+        </nav>
+
+        <!-- User Profile -->
+        <div class="p-4 border-t border-gray-800">
+            <div class="flex items-center gap-3 bg-gray-900 p-3 rounded-xl border border-gray-800">
+                <img id="user-avatar" src="https://placehold.co/100x100/5865F2/FFFFFF?text=?" alt="User" class="w-9 h-9 rounded-full object-cover">
+                <div class="flex-1 min-w-0">
+                    <p id="user-username" class="text-sm font-semibold text-white truncate">Đang tải...</p>
+                    <p id="user-discriminator" class="text-xs text-gray-500 truncate"></p>
+                </div>
+                <button onclick="app.logout()" class="text-gray-400 hover:text-red-400 transition-colors" title="Đăng xuất">
+                    <i class="ph ph-sign-out text-lg"></i>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden bg-gray-900 relative">
+        <!-- Header -->
+        <header class="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-gray-900/80 backdrop-blur-md z-10 shrink-0">
+            <h2 id="page-title" class="text-lg font-semibold text-white">Tổng quan</h2>
+            <button onclick="app.openModal('inviteBotModal')" class="bg-gray-800 hover:bg-gray-700 text-white border border-gray-700 text-sm font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-colors">
+                <i class="ph ph-user-plus text-base"></i> Mời Bot
+            </button>
+        </header>
+
+        <!-- Container for all tabs -->
+        <div class="flex-1 overflow-y-auto p-6 relative">
+            
+            <!-- TỔNG QUAN -->
+            <div id="tab-overview" class="tab-content block space-y-6 max-w-5xl mx-auto">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 flex flex-col">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                                <i class="ph ph-hard-drives text-xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-400 text-sm font-medium">Tổng Máy Chủ</h3>
+                        <p id="stat-guilds" class="text-3xl font-bold text-white mt-1">...</p>
+                    </div>
+                    <div class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 flex flex-col">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="w-10 h-10 rounded-lg bg-green-500/10 text-green-400 flex items-center justify-center">
+                                <i class="ph ph-users text-xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-400 text-sm font-medium">Tổng Người Dùng</h3>
+                        <p id="stat-members" class="text-3xl font-bold text-white mt-1">...</p>
+                    </div>
+                    <div class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 flex flex-col">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="w-10 h-10 rounded-lg bg-yellow-500/10 text-yellow-400 flex items-center justify-center">
+                                <i class="ph ph-activity text-xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-400 text-sm font-medium">Độ Trễ (Ping)</h3>
+                        <p id="stat-ping" class="text-3xl font-bold text-white mt-1">...<span class="text-sm font-normal text-gray-500 ml-1">ms</span></p>
+                    </div>
+                    <div class="bg-gray-800/50 border border-gray-700 rounded-2xl p-5 flex flex-col">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                                <i class="ph ph-cpu text-xl"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-gray-400 text-sm font-medium">Sử Dụng RAM</h3>
+                        <p id="stat-ram" class="text-3xl font-bold text-white mt-1">...<span class="text-sm font-normal text-gray-500 ml-1">MB</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QUẢN LÝ MÁY CHỦ -->
+            <div id="tab-servers" class="tab-content hidden-tab space-y-6 max-w-5xl mx-auto h-full flex flex-col">
+                <!-- Server List View -->
+                <div id="server-list-view" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Render by JS -->
+                </div>
+
+                <!-- Server Detail View -->
+                <div id="server-detail-view" class="hidden-tab bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden flex-1 flex flex-col">
+                    <div class="p-4 border-b border-gray-700 flex items-center justify-between bg-gray-800/80">
+                        <div class="flex items-center gap-3">
+                            <button onclick="app.showServerList()" class="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors">
+                                <i class="ph ph-arrow-left"></i>
+                            </button>
+                            <h3 id="detail-server-name" class="font-semibold text-white">Tên Server</h3>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="app.openServerInviteModal()" class="bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-medium py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors">
+                                <i class="ph ph-link"></i> Tạo Link Mời
+                            </button>
+                            <button onclick="app.leaveServer()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-medium py-1.5 px-3 rounded-lg border border-red-500/20 flex items-center gap-1.5 transition-colors">
+                                <i class="ph ph-sign-out"></i> Rời Server
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto p-4">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="text-gray-400 text-xs uppercase border-b border-gray-800">
+                                    <th class="pb-2 font-medium">Thành viên</th>
+                                    <th class="pb-2 font-medium">Vai trò Top</th>
+                                    <th class="pb-2 font-medium text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="member-list-tbody" class="text-sm divide-y divide-gray-800/50">
+                                <!-- Render by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BẢNG NHẮN TIN -->
+            <div id="tab-chat" class="tab-content hidden-tab h-[calc(100vh-8rem)] flex gap-4 max-w-6xl mx-auto">
+                <!-- Sidebar Chat -->
+                <div class="w-64 flex flex-col gap-2 shrink-0">
+                    <div class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden flex-1 flex flex-col">
+                        <div class="p-3 border-b border-gray-700 bg-gray-800/80 font-medium text-sm text-gray-300">
+                            Chọn Máy Chủ
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-2 space-y-1" id="chat-server-list">
+                            <!-- Render via JS -->
+                        </div>
+                    </div>
+                    <div class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden flex-1 flex flex-col">
+                        <div class="p-3 border-b border-gray-700 bg-gray-800/80 font-medium text-sm text-gray-300">
+                            Kênh Văn Bản
+                        </div>
+                        <div class="flex-1 overflow-y-auto p-2 space-y-1" id="chat-channel-list">
+                            <!-- Render via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Chat Area -->
+                <div class="flex-1 bg-gray-800 border border-gray-700 rounded-xl flex flex-col relative overflow-hidden">
+                    <div class="h-14 border-b border-gray-700 flex items-center px-4 gap-2 bg-gray-800/80 shrink-0">
+                        <i class="ph ph-hash text-gray-400"></i>
+                        <span class="font-medium text-white" id="current-chat-channel">Chưa chọn kênh</span>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto p-4 space-y-4" id="chat-messages">
+                        <!-- Render via JS -->
+                    </div>
+
+                    <!-- Replying Indicator -->
+                    <div id="reply-indicator" class="hidden-tab bg-gray-700/50 border-t border-gray-700 px-4 py-2 flex items-center justify-between text-xs text-gray-300">
+                        <div class="flex items-center gap-2">
+                            <i class="ph ph-arrow-u-up-left"></i> Đang trả lời <span id="reply-target-name" class="font-semibold text-white">...</span>
+                        </div>
+                        <button onclick="app.cancelReply()" class="text-gray-400 hover:text-white"><i class="ph ph-x"></i></button>
+                    </div>
+
+                    <!-- Input -->
+                    <div class="p-4 bg-gray-900/50 border-t border-gray-700 shrink-0">
+                        <form onsubmit="app.sendMessage(event)" class="relative flex items-center">
+                            <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." class="w-full bg-gray-950 border border-gray-700 rounded-lg pl-4 pr-12 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors">
+                            <button type="submit" class="absolute right-2 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-indigo-400 transition-colors">
+                                <i class="ph-fill ph-paper-plane-right text-lg"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TIN NHẮN CHÀO MỪNG -->
+            <div id="tab-welcome" class="tab-content hidden-tab max-w-5xl mx-auto h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-6">
+                <!-- Settings Form -->
+                <div class="flex-1 bg-gray-800 border border-gray-700 rounded-2xl p-6 overflow-y-auto">
+                    <h3 class="text-lg font-semibold text-white mb-6">Cài Đặt Embed Chào Mừng</h3>
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1.5">Tiêu đề (Title)</label>
+                            <input type="text" id="em-title" value="Chào mừng đến với Server!" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none" oninput="app.updateEmbedPreview()">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1.5">Mô tả (Description)</label>
+                            <textarea id="em-desc" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none resize-none" oninput="app.updateEmbedPreview()">Rất vui khi bạn tham gia server. 🌟 Vui lòng đọc luật và chọn role để nhận thông báo.</textarea>
+                            <p class="text-xs text-gray-500 mt-1">Sử dụng emoji thay cho gạch đầu dòng.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1.5">Màu sắc (Color Hex)</label>
+                            <div class="flex gap-2">
+                                <input type="color" id="em-color-picker" value="#5865F2" class="h-10 w-10 rounded cursor-pointer border-0 p-0" oninput="document.getElementById('em-color').value = this.value; app.updateEmbedPreview()">
+                                <input type="text" id="em-color" value="#5865F2" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none uppercase" oninput="document.getElementById('em-color-picker').value = this.value; app.updateEmbedPreview()">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1.5">Hình Ảnh (URL)</label>
+                            <input type="text" id="em-image" placeholder="https://..." value="https://placehold.co/600x200/2d3748/ffffff?text=Welcome+Banner" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 outline-none" oninput="app.updateEmbedPreview()">
+                        </div>
+                        <button onclick="window.alert('Đã lưu cấu hình Welcome thành công!')" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-lg transition-colors">
+                            Lưu Cấu Hình
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Embed Preview -->
+                <div class="w-full md:w-96 flex flex-col">
+                    <h3 class="text-sm font-medium text-gray-400 mb-3 uppercase tracking-wider">Xem Trước (Preview)</h3>
+                    <div class="bg-gray-800 rounded-xl p-4 border border-gray-700 flex-1">
+                        <div class="flex gap-3 mb-1">
+                            <div class="w-10 h-10 rounded-full bg-discord flex items-center justify-center shrink-0">
+                                <i class="ph-fill ph-robot text-white"></i>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-medium text-white hover:underline cursor-pointer">Bot</span>
+                                    <span class="bg-indigo-500 text-[10px] font-bold px-1 rounded text-white flex items-center gap-0.5"><i class="ph-fill ph-check-circle"></i> BOT</span>
+                                </div>
+                                <div id="preview-embed" class="mt-1 flex max-w-full">
+                                    <div id="pv-color" class="w-1 rounded-l" style="background-color: #5865F2;"></div>
+                                    <div class="bg-[#2B2D31] rounded-r p-3 w-full border border-gray-700/50">
+                                        <div id="pv-title" class="font-bold text-white mb-2 cursor-pointer hover:underline">Chào mừng đến với Server!</div>
+                                        <div id="pv-desc" class="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed mb-3">Rất vui khi bạn tham gia server. 🌟 Vui lòng đọc luật và chọn role để nhận thông báo.</div>
+                                        <img id="pv-img" src="https://placehold.co/600x200/2d3748/ffffff?text=Welcome+Banner" class="rounded-lg max-w-full w-full object-cover max-h-48" alt="Banner">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CÀI ĐẶT TRẠNG THÁI -->
+            <div id="tab-settings" class="tab-content hidden-tab max-w-2xl mx-auto">
+                <div class="bg-gray-800 border border-gray-700 rounded-2xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-6">Trạng Thái & Hoạt Động</h3>
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1.5">Trạng thái (Status)</label>
+                            <!-- Custom Status Dropdown -->
+                            <div class="relative" id="status-dropdown-container">
+                                <!-- Input ẩn để lưu giá trị cho hàm API -->
+                                <input type="hidden" id="bot-status-select" value="online">
+                                
+                                <!-- Nút chọn (Hiển thị trạng thái hiện tại) -->
+                                <button type="button" onclick="app.toggleStatusDropdown()" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white flex items-center justify-between focus:outline-none focus:border-indigo-500 transition-colors">
+                                    <div class="flex items-center gap-2" id="selected-status-display">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#23a559"/></svg>
+                                        <span>Trực tuyến (Online)</span>
+                                    </div>
+                                    <i class="ph ph-caret-down text-gray-400"></i>
+                                </button>
+                    
+                                <!-- Menu xổ xuống chứa 4 trạng thái -->
+                                <div id="status-dropdown-menu" class="hidden absolute top-full left-0 w-full mt-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 py-1 overflow-hidden">
+                                    <button type="button" onclick="app.selectStatus('online', 'Trực tuyến (Online)')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#23a559"/></svg>
+                                        Trực tuyến (Online)
+                                    </button>
+                                    <button type="button" onclick="app.selectStatus('idle', 'Đang chờ (Idle)')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#f0b232" d="M21.026 14.223A9.458 9.458 0 0 1 12 21.5a9.5 9.5 0 0 1-9.5-9.5 9.458 9.458 0 0 1 7.277-9.026c.264-.055.498.156.452.418a7.07 7.07 0 0 0 4.148 7.73 7.07 7.07 0 0 0 7.73-4.148c.08-.204.342-.258.463-.08a9.492 9.492 0 0 1 1.456 7.329z"/></svg>
+                                        Đang chờ (Idle)
+                                    </button>
+                                    <button type="button" onclick="app.selectStatus('dnd', 'Không làm phiền (DND)')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#f23f43" fill-rule="evenodd" clip-rule="evenodd" d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12Zm-7-10h14v-4H5v4Z"/></svg>
+                                        Không làm phiền (DND)
+                                    </button>
+                                    <button type="button" onclick="app.selectStatus('invisible', 'Ẩn (Invisible)')" class="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 flex items-center gap-2">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#80848e" fill-rule="evenodd" clip-rule="evenodd" d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12Zm0-5.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Z"/></svg>
+                                        Ẩn (Invisible)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-gray-400 mb-1.5">Loại hoạt động</label>
+                                <div class="relative">
+                                    <select id="bot-act-type" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white appearance-none focus:outline-none focus:border-indigo-500">
+                                        <option value="playing">Chơi (Playing)</option>
+                                        <option value="watching">Xem (Watching)</option>
+                                        <option value="listening">Nghe (Listening)</option>
+                                        <option value="competing">Thi đấu (Competing)</option>
+                                    </select>
+                                    <i class="ph ph-caret-down absolute right-3 top-3 text-gray-400 pointer-events-none"></i>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-sm font-medium text-gray-400 mb-1.5">Tên hoạt động</label>
+                                <input type="text" id="bot-act-name" placeholder="VD: Minecraft, Spotify..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500">
+                            </div>
+                        </div>
+                        <div class="pt-4 border-t border-gray-700">
+                            <button onclick="app.updateBotStatus()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-6 rounded-lg transition-colors">
+                                Cập nhật trạng thái
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NHẬT KÝ LOGS -->
+            <div id="tab-logs" class="tab-content hidden-tab max-w-5xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
+                <div class="flex items-center justify-between mb-4 shrink-0">
+                    <h3 class="text-lg font-semibold text-white">Nhật Ký Trực Tuyến</h3>
+                    <div class="flex gap-2">
+                        <button onclick="app.clearLogs()" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm py-1.5 px-3 rounded-lg border border-gray-700 transition-colors">
+                            Xóa Console
+                        </button>
+                        <div class="bg-green-500/10 text-green-400 text-sm py-1.5 px-3 rounded-lg border border-green-500/20 flex items-center gap-2">
+                            <span class="relative flex h-2 w-2">
+                              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                              <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                            </span> Đang kết nối
+                        </div>
+                    </div>
+                </div>
+                <div id="log-container" class="flex-1 bg-[#0d1117] border border-gray-800 rounded-xl p-4 font-mono text-xs overflow-y-auto shadow-inner space-y-1.5">
+                    <!-- Logs injected via JS -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODALS -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden-tab transition-opacity" onclick="app.closeAllModals()"></div>
+    
+    <!-- Mời Bot Modal -->
+    <div id="inviteBotModal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md hidden-tab flex flex-col overflow-hidden">
+        <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80">
+            <h3 class="font-semibold text-white">Mời Bot Vào Server</h3>
+            <button onclick="app.closeAllModals()" class="text-gray-400 hover:text-white"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="p-6 flex flex-col items-center">
+            <div class="w-16 h-16 bg-discord rounded-xl flex items-center justify-center mb-4">
+                <i class="ph-fill ph-robot text-3xl text-white"></i>
+            </div>
+            <p class="text-gray-300 text-sm text-center mb-6">Bạn có thể mời bot vào server bất kỳ bằng link dưới đây (Cần quyền quản trị bot).</p>
+            <div class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 flex items-center justify-between gap-2 mb-4">
+                <span class="text-xs text-gray-400 truncate flex-1 font-mono">https://discord.com/api/oauth2/authorize?...</span>
+            </div>
+            <button onclick="window.open('https://discord.com/api/oauth2/authorize?client_id=YOUR_BOT_ID&permissions=8&scope=bot', '_blank')" class="w-full bg-discord hover:bg-discordHover text-white font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center gap-2">
+                <i class="ph ph-arrow-square-out"></i> Lấy Link Thực Tế
+            </button>
+        </div>
+    </div>
+
+    <!-- Invite Server Modal -->
+    <div id="serverInviteModal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md hidden-tab flex flex-col overflow-hidden">
+        <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80">
+            <h3 class="font-semibold text-white">Link tham gia server</h3>
+            <button onclick="app.closeAllModals()" class="text-gray-400 hover:text-white"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="p-6">
+            <p class="text-gray-300 text-sm mb-4">Gửi link này cho bạn bè để mời vào server.</p>
+            <div class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 flex items-center justify-between gap-2 mb-4">
+                <span id="server-invite-link" class="text-xs text-gray-400 truncate flex-1 font-mono">Đang tạo link...</span>
+                <button onclick="app.copyText(document.getElementById('server-invite-link').innerText)" class="text-gray-400 hover:text-white" title="Copy"><i class="ph ph-copy"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Member Action Modal (Ban/Kick/Mute) -->
+    <div id="memberActionModal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md hidden-tab flex flex-col overflow-hidden">
+        <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80">
+            <h3 class="font-semibold text-white" id="action-title">Thao tác thành viên</h3>
+            <button onclick="app.closeAllModals()" class="text-gray-400 hover:text-white"><i class="ph ph-x"></i></button>
+        </div>
+        <div class="p-6">
+            <div class="flex items-center gap-3 mb-6 bg-gray-900 p-3 rounded-xl border border-gray-700">
+                <img src="https://placehold.co/100/333/fff" id="action-avatar" class="w-10 h-10 rounded-full">
+                <div>
+                    <div class="text-white font-medium" id="action-username">User</div>
+                    <div class="text-xs text-gray-400" id="action-id">ID: ...</div>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <div id="timeout-duration-wrap" class="hidden-tab">
+                    <label class="block text-sm font-medium text-gray-400 mb-1.5">Thời hạn (Timeout)</label>
+                    <select id="action-duration" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white outline-none">
+                        <option value="60">60 Giây</option>
+                        <option value="300">5 Phút</option>
+                        <option value="600">10 Phút</option>
+                        <option value="3600">1 Giờ</option>
+                        <option value="86400">1 Ngày</option>
+                        <option value="604800">1 Tuần</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1.5">Lý do</label>
+                    <input type="text" id="action-reason" placeholder="Nhập lý do..." class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                </div>
+                <button onclick="app.submitMemberAction()" class="w-full mt-2 font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center text-white" id="action-submit-btn">
+                    Xác nhận
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APP LOGIC (Real API Integration) -->
+    <script>
+        const app = {
+            data: {
+                currentGuildId: null,
+                currentChannelId: null,
+                replyingToMsgId: null,
+                replyingToUser: null,
+                actionTarget: null, // Lưu thông tin người dùng đang bị chọn để ban/kick
+                chatServers: [],
+                chatChannels: [],
+                chatMessages: [],
+                oldestMessageId: null,
+                isLoadingMore: false,
+                hasMoreMessages: true,
+                statusIcons: {
+                    online: `<svg class="w-4 h-4" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#23a559"/></svg>`,
+                    idle: `<svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#f0b232" d="M21.026 14.223A9.458 9.458 0 0 1 12 21.5a9.5 9.5 0 0 1-9.5-9.5 9.458 9.458 0 0 1 7.277-9.026c.264-.055.498.156.452.418a7.07 7.07 0 0 0 4.148 7.73 7.07 7.07 0 0 0 7.73-4.148c.08-.204.342-.258.463-.08a9.492 9.492 0 0 1 1.456 7.329z"/></svg>`,
+                    dnd: `<svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#f23f43" fill-rule="evenodd" clip-rule="evenodd" d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12Zm-7-10h14v-4H5v4Z"/></svg>`,
+                    invisible: `<svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#80848e" fill-rule="evenodd" clip-rule="evenodd" d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12Zm0-5.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Z"/></svg>`
+                }
+            },
+
+            async init() {
+                // Kiểm tra đăng nhập
+                try {
+                    const res = await fetch('/api/user');
+                    const authData = await res.json();
+                    
+                    if(authData.authenticated) {
+                        document.getElementById('login-screen').style.display = 'none';
+                        document.getElementById('user-username').innerText = authData.user.username;
+                        document.getElementById('user-discriminator').innerText = authData.user.discriminator !== '0' ? `#${authData.user.discriminator}` : '';
+                        document.getElementById('user-avatar').src = authData.user.avatar;
+                        
+                        // Load dữ liệu
+                        this.loadStats();
+                        this.loadServers();
+                        this.loadChatData();
+                        this.startLogPolling();
+                    }
+                } catch(e) {
+                    console.error("Chưa đăng nhập", e);
+                }
+
+                // Lắng nghe thao tác bấm chuột để đóng menu trạng thái nếu click ra ngoài
+                document.addEventListener('click', (event) => {
+                    const dropdown = document.getElementById('status-dropdown-container');
+                    if (dropdown && !dropdown.contains(event.target)) {
+                        document.getElementById('status-dropdown-menu')?.classList.add('hidden');
+                    }
+                });
+            },
+
+            login() {
+                window.location.href = '/login';
+            },
+
+            logout() {
+                window.location.href = '/logout';
+            },
+
+            // Cập nhật tab hiển thị
+            switchTab(tabId) {
+                document.querySelectorAll('.nav-btn').forEach(btn => {
+                    btn.classList.remove('text-white', 'bg-gray-800/50');
+                    btn.classList.add('text-gray-400');
+                });
+                
+                const activeBtn = document.querySelector(`.nav-btn[data-target="${tabId}"]`);
+                if(activeBtn) {
+                    activeBtn.classList.add('text-white', 'bg-gray-800/50');
+                    activeBtn.classList.remove('text-gray-400');
+                    document.getElementById('page-title').innerText = activeBtn.querySelector('span').innerText;
+                }
+
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.add('hidden-tab');
+                });
+                
+                const target = document.getElementById(`tab-${tabId}`);
+                if (target) {
+                    target.classList.remove('hidden-tab');
+                    if(tabId === 'servers') {
+                        this.showServerList();
+                        this.loadServers(); // Reload danh sách server
+                    }
+                }
+            },
+
+            // --- TỔNG QUAN ---
+            async loadStats() {
+                try {
+                    const res = await fetch('/api/stats');
+                    if(!res.ok) return;
+                    const data = await res.json();
+                    document.getElementById('stat-guilds').innerText = data.guilds;
+                    document.getElementById('stat-members').innerText = data.members.toLocaleString();
+                    document.getElementById('stat-ping').innerHTML = `${data.ping}<span class="text-sm font-normal text-gray-500 ml-1">ms</span>`;
+                    document.getElementById('stat-ram').innerHTML = `${data.ram}<span class="text-sm font-normal text-gray-500 ml-1">MB</span>`;
+                } catch(e) { console.error("Lỗi lấy thống kê", e); }
+            },
+
+            // --- MÁY CHỦ ---
+            async loadServers() {
+                try {
+                    const res = await fetch('/api/servers');
+                    if(!res.ok) return;
+                    const servers = await res.json();
+                    const container = document.getElementById('server-list-view');
+                    container.innerHTML = '';
+                    servers.forEach(server => {
+                        container.innerHTML += `
+                            <div class="bg-gray-800 border border-gray-700 rounded-2xl p-4 flex flex-col hover:border-gray-600 transition-colors">
+                                <div class="flex items-center gap-4 mb-4">
+                                    <img src="${server.icon}" onerror="this.src='https://placehold.co/100/5865F2/fff?text=SV'" class="w-14 h-14 rounded-xl object-cover border border-gray-700">
+                                    <div>
+                                        <h4 class="text-white font-medium truncate w-40">${server.name}</h4>
+                                        <p class="text-xs text-gray-400">${server.members} thành viên</p>
+                                    </div>
+                                </div>
+                                <div class="mt-auto grid grid-cols-2 gap-2">
+                                    <button onclick="app.viewServer('${server.id}', '${server.name.replace(/'/g, "\\'")}')" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-medium py-2 rounded-lg transition-colors">
+                                        Quản lý
+                                    </button>
+                                    <button onclick="app.leaveServer('${server.id}')" class="bg-gray-900 border border-gray-700 hover:border-red-500 hover:text-red-400 text-gray-400 text-xs font-medium py-2 rounded-lg transition-colors">
+                                        Rời
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } catch(e) { console.error("Lỗi lấy danh sách máy chủ", e); }
+            },
+
+            // --- HÀM CHO CUSTOM STATUS DROPDOWN ---
+            toggleStatusDropdown() {
+                document.getElementById('status-dropdown-menu').classList.toggle('hidden');
+            },
+
+            selectStatus(value, text) {
+                // Đổi giá trị của thẻ input ẩn
+                document.getElementById('bot-status-select').value = value;
+                // Cập nhật lại UI nút bấm
+                document.getElementById('selected-status-display').innerHTML = `
+                    ${this.data.statusIcons[value]}
+                    <span>${text}</span>
+                `;
+                // Đóng menu
+                document.getElementById('status-dropdown-menu').classList.add('hidden');
+            },
+
+            showServerList() {
+                document.getElementById('server-detail-view').classList.add('hidden-tab');
+                document.getElementById('server-list-view').classList.remove('hidden-tab');
+                this.data.currentGuildId = null;
+            },
+
+            async viewServer(id, name) {
+                this.data.currentGuildId = id;
+                document.getElementById('server-list-view').classList.add('hidden-tab');
+                document.getElementById('server-detail-view').classList.remove('hidden-tab');
+                document.getElementById('detail-server-name').innerText = name;
+                
+                try {
+                    const res = await fetch(`/api/servers/${id}/members`);
+                    if(!res.ok) return;
+                    const members = await res.json();
+                    const tbody = document.getElementById('member-list-tbody');
+                    tbody.innerHTML = '';
+                    
+                    members.forEach(m => {
+                        const botBadge = m.bot ? `<span class="bg-indigo-500 text-[10px] font-bold px-1 rounded text-white ml-2">BOT</span>` : '';
+                        tbody.innerHTML += `
+                            <tr>
+                                <td class="py-3">
+                                    <div class="flex items-center gap-3">
+                                        <img src="${m.avatar}" onerror="this.src='https://placehold.co/100/333/fff'" class="w-8 h-8 rounded-full">
+                                        <span class="font-medium text-gray-200 truncate w-32">${m.name} ${botBadge}</span>
+                                    </div>
+                                </td>
+                                <td class="py-3 text-gray-400"><span class="bg-gray-700/50 px-2 py-0.5 rounded text-xs border border-gray-700">${m.role}</span></td>
+                                <td class="py-3 text-right">
+                                    <div class="relative inline-block text-left group">
+                                        <button class="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors">
+                                            <i class="ph-bold ph-dots-three-vertical"></i>
+                                        </button>
+                                        <div class="absolute right-0 mt-1 w-32 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 overflow-hidden">
+                                            <button onclick="app.openMemberAction('timeout', '${m.name.replace(/'/g, "\\'")}', '${m.avatar}', '${m.id}')" class="w-full text-left px-4 py-2 text-xs text-yellow-400 hover:bg-gray-700">Hạn chế (Mute)</button>
+                                            <button onclick="app.openMemberAction('kick', '${m.name.replace(/'/g, "\\'")}', '${m.avatar}', '${m.id}')" class="w-full text-left px-4 py-2 text-xs text-orange-400 hover:bg-gray-700">Kick</button>
+                                            <button onclick="app.openMemberAction('ban', '${m.name.replace(/'/g, "\\'")}', '${m.avatar}', '${m.id}')" class="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-gray-700">Ban</button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                } catch(e) { console.error("Lỗi lấy thành viên", e); }
+            },
+
+            async leaveServer(guildId) {
+                if(!guildId) guildId = this.data.currentGuildId;
+                if(!confirm("Bạn có chắc muốn Bot rời khỏi máy chủ này?")) return;
+                
+                try {
+                    const res = await fetch(`/api/servers/${guildId}/leave`, { method: 'POST' });
+                    const data = await res.json();
+                    if(data.success) {
+                        window.alert("Bot đã rời máy chủ.");
+                        this.showServerList();
+                        this.loadServers();
+                    } else {
+                        window.alert("Lỗi: " + data.error);
+                    }
+                } catch(e) { window.alert("Có lỗi xảy ra khi rời server"); }
+            },
+
+            async openServerInviteModal() {
+                if(!this.data.currentGuildId) return;
+                document.getElementById('server-invite-link').innerText = "Đang tạo link...";
+                this.openModal('serverInviteModal');
+                
+                try {
+                    const res = await fetch(`/api/servers/${this.data.currentGuildId}/invite`, { method: 'POST' });
+                    const data = await res.json();
+                    if(data.invite_url) {
+                        document.getElementById('server-invite-link').innerText = data.invite_url;
+                    } else {
+                        document.getElementById('server-invite-link').innerText = "Không thể tạo link (Thiếu quyền)";
+                    }
+                } catch(e) {
+                    document.getElementById('server-invite-link').innerText = "Lỗi kết nối";
+                }
+            },
+
+            openMemberAction(actionType, name, avatar, id) {
+                this.closeAllModals();
+                this.data.actionTarget = { actionType, id };
+                
+                document.getElementById('action-username').innerText = name;
+                document.getElementById('action-avatar').src = avatar;
+                document.getElementById('action-id').innerText = `ID: ${id}`;
+                document.getElementById('action-reason').value = '';
+                
+                const titleEl = document.getElementById('action-title');
+                const btnEl = document.getElementById('action-submit-btn');
+                const timeoutWrap = document.getElementById('timeout-duration-wrap');
+                timeoutWrap.classList.add('hidden-tab');
+                
+                btnEl.className = "w-full mt-2 font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center text-white";
+                
+                if(actionType === 'timeout') {
+                    titleEl.innerText = "Hạn chế thành viên";
+                    btnEl.innerText = "Áp dụng hạn chế";
+                    btnEl.classList.add('bg-yellow-600', 'hover:bg-yellow-500');
+                    timeoutWrap.classList.remove('hidden-tab');
+                } else if (actionType === 'kick') {
+                    titleEl.innerText = "Đuổi thành viên";
+                    btnEl.innerText = "Kick thành viên";
+                    btnEl.classList.add('bg-orange-600', 'hover:bg-orange-500');
+                } else if (actionType === 'ban') {
+                    titleEl.innerText = "Cấm thành viên";
+                    btnEl.innerText = "Ban thành viên";
+                    btnEl.classList.add('bg-red-600', 'hover:bg-red-500');
+                }
+                
+                this.openModal('memberActionModal');
+            },
+
+            async submitMemberAction() {
+                if(!this.data.actionTarget || !this.data.currentGuildId) return;
+                
+                const { actionType, id } = this.data.actionTarget;
+                const reason = document.getElementById('action-reason').value.trim() || "Không có lý do";
+                const payload = { action: actionType, reason: reason };
+                
+                if(actionType === 'timeout') {
+                    payload.duration = parseInt(document.getElementById('action-duration').value);
+                }
+
+                try {
+                    const res = await fetch(`/api/servers/${this.data.currentGuildId}/members/${id}/action`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if(data.success) {
+                        window.alert("Thực hiện thành công!");
+                        this.closeAllModals();
+                        this.viewServer(this.data.currentGuildId, document.getElementById('detail-server-name').innerText); // Reload list
+                    } else {
+                        window.alert("Lỗi: " + data.error);
+                    }
+                } catch(e) { window.alert("Lỗi kết nối khi gửi yêu cầu."); }
+            },
+
+            // --- BẢNG NHẮN TIN (CHAT) ---
+            async loadChatData() {
+                try {
+                    const res = await fetch('/api/chat/servers');
+                    if(!res.ok) return;
+                    this.data.chatServers = await res.json();
+                    
+                    const srvContainer = document.getElementById('chat-server-list');
+                    srvContainer.innerHTML = '';
+                    
+                    this.data.chatServers.forEach((s) => {
+                        srvContainer.innerHTML += `
+                            <button onclick="app.selectChatServer('${s.id}')" class="w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2 text-gray-400 hover:bg-gray-700/30 focus:text-white focus:bg-gray-700/50">
+                                <div class="w-6 h-6 rounded bg-gray-700 flex items-center justify-center text-xs shrink-0 uppercase">${s.name.charAt(0)}</div>
+                                <span class="truncate">${s.name}</span>
+                            </button>
+                        `;
+                    });
+
+                    if(this.data.chatServers.length > 0) {
+                        this.selectChatServer(this.data.chatServers[0].id);
+                    }
+                } catch(e) {}
+            },
+
+            selectChatServer(serverId) {
+                const srv = this.data.chatServers.find(s => s.id === serverId);
+                if(!srv) return;
+                
+                const chContainer = document.getElementById('chat-channel-list');
+                chContainer.innerHTML = '';
+                
+                srv.channels.forEach((c) => {
+                    chContainer.innerHTML += `
+                        <button onclick="app.selectChannel('${c.id}', '${c.name.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2 text-gray-400 hover:bg-gray-700/30 focus:text-white focus:bg-gray-700/50">
+                            <i class="ph ph-hash"></i> <span class="truncate">${c.name}</span>
+                        </button>
+                    `;
+                });
+
+                if(srv.channels.length > 0) {
+                    this.selectChannel(srv.channels[0].id, srv.channels[0].name);
+                }
+            },
+
+            async selectChannel(channelId, channelName) {
+                this.data.currentChannelId = channelId;
+                document.getElementById('current-chat-channel').innerText = channelName;
+                this.cancelReply();
+                
+                this.data.oldestMessageId = null;
+                this.data.hasMoreMessages = true;
+                const container = document.getElementById('chat-messages');
+                container.innerHTML = '<div class="text-center text-gray-500 my-4 text-xs">Đang tải tin nhắn...</div>';
+                
+                try {
+                    const res = await fetch(`/api/channels/${channelId}/messages`);
+                    if(!res.ok) {
+                        // SỬA Ở ĐÂY: Hiển thị lỗi rõ ràng nếu API chết thay vì kẹt chữ Đang tải
+                        container.innerHTML = '<div class="text-center text-red-500 my-4 text-xs">Lỗi: Không thể tải tin nhắn. Hãy kiểm tra lại console bot.</div>';
+                        return;
+                    }
+                    const msgs = await res.json();
+                    this.data.chatMessages = msgs;
+                    
+                    if (msgs.length > 0) {
+                        this.data.oldestMessageId = msgs[0].id;
+                        if (msgs.length < 30) this.data.hasMoreMessages = false;
+                    }
+
+                    this.renderChatMessages(true);
+                    this.setupChatScrollListener();
+                } catch(e) {
+                    container.innerHTML = '<div class="text-center text-red-500 my-4 text-xs">Mất kết nối với Bot.</div>';
+                }
+            },
+            // sinh html chung tin nhắn
+            generateMessageHTML(msg) {
+                const botBadge = msg.bot ? `<span class="bg-indigo-500 text-[10px] font-bold px-1 rounded text-white flex items-center gap-0.5 ml-2"><i class="ph-fill ph-check-circle"></i> BOT</span>` : '';
+                const safeContent = msg.content ? msg.content.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+                
+                // 1. Render HTML cho Reply
+                let replyHTML = '';
+                if (msg.reply_info) {
+                    const safeReplyContent = msg.reply_info.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    replyHTML = `
+                        <div class="flex items-center gap-2 text-xs text-gray-400 mb-1 ml-10 relative">
+                            <!-- Đường kẻ cong của Reply -->
+                            <div class="absolute left-[-26px] top-[50%] w-6 h-[14px] border-l-2 border-t-2 border-gray-600 rounded-tl-lg -mt-[14px]"></div>
+                            <img src="https://placehold.co/20/333/fff" class="w-4 h-4 rounded-full opacity-60">
+                            <span class="font-medium text-gray-300">@${msg.reply_info.author}</span>
+                            <span class="truncate max-w-[250px] opacity-80 cursor-default hover:text-white transition-colors" title="${safeReplyContent}">${safeReplyContent}</span>
+                        </div>
+                    `;
+                }
+
+                // 2. Render HTML cho Embeds
+                let embedsHTML = '';
+                if (msg.embeds && msg.embeds.length > 0) {
+                    embedsHTML = msg.embeds.map(emb => `
+                        <div class="mt-1.5 flex max-w-sm">
+                            <div class="w-1 rounded-l shrink-0" style="background-color: ${emb.color};"></div>
+                            <div class="bg-gray-900/60 rounded-r p-3 w-full border border-gray-700/30">
+                                ${emb.title ? `<div class="font-bold text-white mb-1.5 text-sm">${emb.title}</div>` : ''}
+                                ${emb.description ? `<div class="text-[13px] text-gray-300 whitespace-pre-wrap leading-relaxed">${emb.description.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>` : ''}
+                                ${emb.image ? `<img src="${emb.image}" class="mt-2 rounded-lg max-w-full object-cover max-h-48 border border-gray-700/50">` : ''}
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                // 3. Ráp toàn bộ lại
+                return `
+                    <div class="group flex flex-col hover:bg-gray-700/20 py-2 px-2 rounded-lg transition-colors -mx-2">
+                        ${replyHTML}
+                        <div class="flex gap-3">
+                            <img src="${msg.avatar}" onerror="this.src='https://placehold.co/100/333/fff'" class="w-10 h-10 rounded-full shrink-0 mt-0.5">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center mb-0.5">
+                                    <span class="font-medium text-white">${msg.author}</span>
+                                    ${botBadge}
+                                    <span class="text-xs text-gray-500 ml-2">${msg.time}</span>
+                                </div>
+                                ${safeContent ? `<div class="text-sm text-gray-200 break-words whitespace-pre-wrap">${safeContent}</div>` : ''}
+                                ${embedsHTML}
+                            </div>
+                            <!-- Nút Reply hiện khi hover -->
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-start">
+                                <button onclick="app.setReply('${msg.id}', '${msg.author.replace(/'/g, "\\'")}')" class="w-8 h-8 rounded bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-gray-300 transition-colors shadow-sm" title="Trả lời">
+                                    <i class="ph ph-arrow-u-up-left"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderChatMessages(scrollToBottom = false) {
+                const container = document.getElementById('chat-messages');
+                const html = this.data.chatMessages.map(msg => this.generateMessageHTML(msg)).join('');
+                container.innerHTML = html;
+                
+                if (scrollToBottom) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            },
+            // Lắng nghe sự kiện cuộn chuột
+            setupChatScrollListener() {
+                const container = document.getElementById('chat-messages');
+                container.onscroll = () => {
+                    // Nếu cuộn chạm mép trên cùng (scrollTop === 0)
+                    if (container.scrollTop === 0) {
+                        this.loadOlderMessages();
+                    }
+                };
+            },
+
+            // Tải thêm tin nhắn cũ
+            async loadOlderMessages() {
+                // Nếu đang load, hoặc đã hết tin, hoặc không có ID tin nhắn cũ nhất thì thoát
+                if (this.data.isLoadingMore || !this.data.hasMoreMessages || !this.data.oldestMessageId) return;
+                
+                this.data.isLoadingMore = true;
+                const container = document.getElementById('chat-messages');
+                
+                // Thêm icon báo đang tải ở trên cùng
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = 'chat-loading-older';
+                loadingDiv.className = 'text-center text-gray-500 my-2 text-xs';
+                loadingDiv.innerText = 'Đang tải tin nhắn cũ...';
+                container.prepend(loadingDiv);
+
+                // Lưu lại chiều cao hiện tại để giữ vị trí màn hình không bị giật
+                const oldScrollHeight = container.scrollHeight;
+
+                try {
+                    const res = await fetch(`/api/channels/${this.data.currentChannelId}/messages?before=${this.data.oldestMessageId}`);
+                    if (!res.ok) return;
+                    const olderMsgs = await res.json();
+                    
+                    document.getElementById('chat-loading-older')?.remove();
+
+                    if (olderMsgs.length === 0) {
+                        this.data.hasMoreMessages = false;
+                        return;
+                    }
+
+                    if (olderMsgs.length < 30) this.data.hasMoreMessages = false;
+                    this.data.oldestMessageId = olderMsgs[0].id; // Cập nhật lại ID cũ nhất
+
+                    // Ghép tin nhắn cũ vào đầu mảng
+                    this.data.chatMessages = [...olderMsgs, ...this.data.chatMessages];
+                    
+                    // Render lại, KHÔNG cuộn xuống dưới cùng
+                    this.renderChatMessages(false);
+                    
+                    // Tính toán và bù trừ scrollTop để giữ nguyên tầm nhìn của người dùng (không bị đẩy lên trên cùng)
+                    const newScrollHeight = container.scrollHeight;
+                    container.scrollTop = newScrollHeight - oldScrollHeight;
+
+                } catch (e) {
+                    document.getElementById('chat-loading-older')?.remove();
+                } finally {
+                    this.data.isLoadingMore = false;
+                }
+            },
+
+            setReply(msgId, author) {
+                this.data.replyingToMsgId = msgId;
+                this.data.replyingToUser = author;
+                document.getElementById('reply-indicator').classList.remove('hidden-tab');
+                document.getElementById('reply-target-name').innerText = `@${author}`;
+                document.getElementById('chat-input').focus();
+            },
+
+            cancelReply() {
+                this.data.replyingToMsgId = null;
+                this.data.replyingToUser = null;
+                document.getElementById('reply-indicator').classList.add('hidden-tab');
+            },
+
+            async sendMessage(e) {
+                e.preventDefault();
+                const input = document.getElementById('chat-input');
+                const content = input.value.trim();
+                
+                if (!content || !this.data.currentChannelId) return;
+
+                const payload = { content: content };
+                if (this.data.replyingToMsgId) {
+                    payload.reply_to = this.data.replyingToMsgId;
+                }
+
+                input.disabled = true;
+                
+                try {
+                    const res = await fetch(`/api/channels/${this.data.currentChannelId}/messages`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if(res.ok) {
+                        input.value = '';
+                        this.cancelReply();
+                        // Gọi API tải lại toàn bộ và cuộn xuống dưới cùng
+                        this.selectChannel(this.data.currentChannelId, document.getElementById('current-chat-channel').innerText);
+                    } else {
+                        window.alert("Lỗi khi gửi tin nhắn");
+                    }
+                } catch(err) {
+                    window.alert("Mất kết nối");
+                } finally {
+                    input.disabled = false;
+                    input.focus();
+                }
+            },
+
+            // --- WELCOME EMBED PREVIEW ---
+            updateEmbedPreview() {
+                const title = document.getElementById('em-title').value || 'Tiêu đề trống';
+                const desc = document.getElementById('em-desc').value || 'Mô tả trống';
+                const color = document.getElementById('em-color').value || '#2B2D31';
+                const img = document.getElementById('em-image').value;
+                
+                document.getElementById('pv-title').innerText = title;
+                document.getElementById('pv-desc').innerText = desc;
+                document.getElementById('pv-color').style.backgroundColor = color;
+                
+                const imgEl = document.getElementById('pv-img');
+                if(img) {
+                    imgEl.src = img;
+                    imgEl.style.display = 'block';
+                } else {
+                    imgEl.style.display = 'none';
+                }
+            },
+
+            // --- TRẠNG THÁI BOT ---
+            async updateBotStatus() {
+                const status = document.getElementById('bot-status-select').value;
+                const activityType = document.getElementById('bot-act-type').value;
+                const activityName = document.getElementById('bot-act-name').value.trim();
+
+                try {
+                    const res = await fetch('/api/bot/status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            status: status,
+                            activity_type: activityType,
+                            activity_name: activityName
+                        })
+                    });
+                    const data = await res.json();
+                    if(data.success) {
+                        window.alert("Đã cập nhật trạng thái thành công!");
+                    } else {
+                        window.alert("Lỗi: " + data.error);
+                    }
+                } catch(e) { window.alert("Lỗi kết nối"); }
+            },
+
+            // --- LOGS ---
+            logInterval: null,
+            startLogPolling() {
+                if(this.logInterval) clearInterval(this.logInterval);
+                this.logInterval = setInterval(async () => {
+                    try {
+                        const res = await fetch('/api/logs');
+                        if(!res.ok) return;
+                        const logs = await res.json();
+                        const container = document.getElementById('log-container');
+                        
+                        // Nếu mảng log rỗng, hiển thị thông báo chờ thay vì xóa trắng
+                        if(logs.length === 0) {
+                            container.innerHTML = '<div class="text-gray-500">[System] Đang chờ dữ liệu log...</div>';
+                            return;
+                        }
+
+                        container.innerHTML = logs.map(l => {
+                            let color = 'text-gray-300';
+                            if(l.level === 'warn') color = 'text-yellow-400';
+                            if(l.level === 'error') color = 'text-red-400';
+                            return `<div class="${color}">[${l.time}] ${l.msg}</div>`;
+                        }).join('');
+                        
+                        // Auto scroll to bottom
+                        container.scrollTop = container.scrollHeight;
+                    } catch(e) {}
+                }, 2000); 
+            },
+
+            clearLogs() {
+                document.getElementById('log-container').innerHTML = '<div class="text-indigo-400">[System] Logs cleared (UI only).</div>';
+            },
+
+            // --- UTILITIES ---
+            openModal(modalId) {
+                document.getElementById('modal-backdrop').classList.remove('hidden-tab');
+                document.getElementById(modalId).classList.remove('hidden-tab');
+            },
+            
+            closeAllModals() {
+                document.getElementById('modal-backdrop').classList.add('hidden-tab');
+                document.querySelectorAll('div[id$="Modal"]').forEach(m => m.classList.add('hidden-tab'));
+                this.data.actionTarget = null;
+            },
+
+            copyText(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    window.alert("Đã sao chép link!");
+                }).catch(() => {
+                    const temp = document.createElement("input");
+                    document.body.appendChild(temp);
+                    temp.value = text;
+                    temp.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(temp);
+                    window.alert("Đã sao chép link!");
+                });
+            }
+        };
+
+        // Custom alert (Toast)
+        window.alert = function(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-4 right-4 bg-gray-800 border border-gray-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-[100] transform transition-all translate-y-10 opacity-0';
+            toast.innerHTML = `<i class="ph-fill ph-check-circle text-green-400 text-xl"></i> <span>${message}</span>`;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+
+        // Khởi động panel khi tải trang xong
+        window.onload = () => app.init();
+    </script>
+</body>
+</html>

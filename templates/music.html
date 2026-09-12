@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Music Bot Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- SortableJS for Drag and Drop -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        discord: {
+                            bg: '#313338',
+                            panel: '#2B2D31',
+                            hover: '#3F4147',
+                            hover_light: '#4E5058',
+                            active: '#404249',
+                            blurple: '#5865F2',
+                            blurple_hover: '#4752C4',
+                            text: '#DBDEE1',
+                            muted: '#949BA4',
+                            danger: '#DA373C'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['gg sans', 'Noto Sans', 'Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans', sans-serif;
+            background-color: #313338;
+            color: #DBDEE1;
+            overflow: hidden;
+        }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #2B2D31; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #1A1B1E; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4E5058; }
+
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+        .sortable-ghost { opacity: 0.4; background-color: #3F4147 !important; }
+        
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; }
+        input[type=range]:focus { outline: none; }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col text-sm antialiased selection:bg-discord-blurple selection:text-white">
+
+    <div id="auth-overlay" class="fixed inset-0 z-50 bg-discord-bg flex items-center justify-center transition-opacity duration-300">
+        <div class="bg-discord-panel p-8 rounded-lg shadow-2xl w-full max-w-md text-center">
+            <div class="w-20 h-20 bg-discord-blurple rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                <i class="ph-fill ph-robot text-4xl text-white"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-white mb-2">Chào mừng trở lại!</h1>
+            <p class="text-discord-muted mb-8">Vui lòng đăng nhập để điều khiển bot phát nhạc.</p>
+            <button onclick="handleLogin()" class="w-full bg-discord-blurple hover:bg-discord-blurple_hover text-white font-semibold py-3 px-4 rounded transition-colors flex items-center justify-center gap-2">
+                <i class="ph ph-discord-logo text-xl"></i>
+                Đăng nhập bằng Discord
+            </button>
+        </div>
+    </div>
+
+    <div id="app-container" class="flex-1 flex overflow-hidden opacity-0 pointer-events-none transition-opacity duration-300">
+        
+        <!-- Sidebar: Servers & Playlists -->
+        <aside class="w-72 bg-discord-panel flex flex-col flex-shrink-0 border-r border-discord-bg">
+            <!-- User Profile & Logout -->
+            <div class="h-14 border-b border-discord-bg flex items-center px-4 transition-colors shadow-sm">
+                <img id="user-avatar" src="https://placehold.co/100x100/5865F2/FFFFFF?text=U" alt="User Avatar" class="w-8 h-8 rounded-full object-cover">
+                <div id="user-username" class="ml-3 font-semibold text-white truncate flex-1 text-xs">Đang tải...</div>
+                <a href="/logout" class="text-discord-muted hover:text-discord-danger transition-colors p-1" title="Đăng xuất">
+                    <i class="ph ph-sign-out text-lg"></i>
+                </a>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-3">
+                <!-- Cấu hình Bot & Kênh thoại -->
+                <div class="mb-6 bg-discord-bg p-3 rounded-lg border border-[#1E1F22]">
+                    <div class="mb-3">
+                        <label class="block text-xs font-bold text-discord-muted uppercase tracking-wider mb-1.5">Chọn Server</label>
+                        <div class="relative">
+                            <select id="server-select" class="w-full bg-discord-panel border-none text-discord-text rounded p-2 appearance-none focus:ring-2 focus:ring-discord-blurple outline-none cursor-pointer text-sm">
+                            </select>
+                            <i class="ph ph-caret-down absolute right-3 top-1/2 -translate-y-1/2 text-discord-muted pointer-events-none"></i>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-xs font-bold text-discord-muted uppercase tracking-wider">Kênh Thoại</label>
+                            <div id="bot-status" class="flex items-center gap-1 text-[10px] uppercase font-bold text-discord-danger">
+                                <div class="w-2 h-2 rounded-full bg-discord-danger" id="bot-status-dot"></div>
+                                <span id="bot-status-text">Ngắt kết nối</span>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <select id="channel-select" class="w-full bg-discord-panel border-none text-discord-text rounded p-2 appearance-none focus:ring-2 focus:ring-discord-blurple outline-none cursor-pointer text-sm">
+                            </select>
+                            <i class="ph ph-caret-down absolute right-3 top-1/2 -translate-y-1/2 text-discord-muted pointer-events-none"></i>
+                        </div>
+                    </div>
+
+                    <button id="btn-invite" onclick="inviteBot()" class="w-full bg-[#23A559] hover:bg-[#1A7C43] text-white font-medium py-2 px-4 rounded transition-colors flex items-center justify-center gap-2 text-sm">
+                        <i class="ph ph-plugs"></i>
+                        Mời Bot
+                    </button>
+                </div>
+
+                <!-- Section: Saved Playlists -->
+                <div class="mb-6">
+                    <h2 class="text-xs font-bold text-discord-muted uppercase tracking-wider mb-2 px-1">Playlist Đã Lưu</h2>
+                    <ul class="space-y-[2px]" id="playlist-container">
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col min-w-0 bg-discord-bg relative">
+            <header class="p-6 pb-4 shadow-sm z-10 flex flex-col gap-4">
+                <div class="relative flex items-center">
+                    <div class="absolute left-4 flex items-center justify-center">
+                        <i class="ph ph-youtube-logo text-2xl text-red-500"></i>
+                    </div>
+                    <input type="text" id="youtube-input" placeholder="Nhập link YouTube hoặc Playlist..." class="w-full bg-discord-panel border-none text-discord-text rounded-lg py-3 pl-12 pr-24 focus:ring-2 focus:ring-discord-blurple outline-none transition-all placeholder:text-discord-muted">
+                    <button onclick="addFromInput()" class="absolute right-2 bg-discord-blurple hover:bg-discord-blurple_hover text-white px-4 py-1.5 rounded transition-colors text-sm font-medium">
+                        Thêm
+                    </button>
+                </div>
+            </header>
+
+            <div class="flex-1 flex flex-col overflow-hidden px-6 pb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-lg font-bold text-white">Hàng Chờ</h2>
+                        <span id="queue-count" class="bg-discord-panel text-discord-muted text-xs font-bold px-2 py-0.5 rounded-full">0 bài</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="clearQueue()" class="bg-discord-panel hover:bg-discord-hover text-discord-danger hover:text-red-400 px-3 py-1.5 rounded transition-colors flex items-center gap-2 text-sm">
+                            <i class="ph ph-trash"></i>
+                            Xóa hết
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto pr-2 rounded-lg bg-discord-bg" id="queue-scroll-area">
+                    <ul id="queue-list" class="space-y-1 pb-4">
+                    </ul>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="player-bar" class="h-24 bg-discord-panel border-t border-[#1E1F22] flex items-center px-4 justify-between z-20 flex-shrink-0 opacity-0 pointer-events-none transition-opacity duration-300">
+        
+        <!-- Now Playing Info & Biểu tượng trực quan thay thế chữ Music -->
+        <div class="flex items-center w-1/3 min-w-[250px]">
+            <div class="relative group cursor-pointer rounded-md overflow-hidden mr-3 bg-[#1E1F22] w-16 h-12 flex items-center justify-center flex-shrink-0">
+                <img id="np-thumbnail" src="" alt="Thumbnail" class="w-full h-full object-cover hidden">
+                <i id="np-icon-fallback" class="ph-fill ph-music-notes text-2xl text-discord-muted"></i>
+            </div>
+            <div class="flex flex-col overflow-hidden">
+                <div id="np-title" class="text-white font-medium truncate cursor-pointer">Chưa có bài hát nào</div>
+                <div id="np-author" class="text-discord-muted text-xs truncate">...</div>
+            </div>
+        </div>
+
+        <!-- Controls & Progress -->
+        <div class="flex flex-col items-center flex-1 max-w-2xl px-4">
+            <div class="flex items-center gap-5 mb-2">
+                <button class="text-discord-muted hover:text-white transition-colors" title="Bật/Tắt Trộn">
+                    <i class="ph ph-shuffle text-lg"></i>
+                </button>
+                <button class="text-discord-muted hover:text-white transition-colors" title="Bài trước">
+                    <i class="ph-fill ph-skip-back text-2xl"></i>
+                </button>
+                <button onclick="togglePlay()" class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-discord-bg hover:scale-105 transition-transform" title="Phát/Tạm dừng">
+                    <i id="play-pause-icon" class="ph-fill ph-play text-xl ml-1"></i>
+                </button>
+                <button class="text-discord-muted hover:text-white transition-colors" title="Bỏ qua" onclick="skipSong()">
+                    <i class="ph-fill ph-skip-forward text-2xl"></i>
+                </button>
+                <button class="text-discord-muted hover:text-white transition-colors" title="Lặp lại" id="loop-btn" onclick="toggleLoop()">
+                    <i class="ph ph-repeat text-lg"></i>
+                </button>
+            </div>
+            
+            <div class="flex items-center w-full gap-3 text-xs text-discord-muted font-medium">
+                <span id="time-current">0:00</span>
+                <div class="group relative flex-1 h-1 bg-[#4E5058] rounded-full cursor-pointer flex items-center">
+                    <div id="progress-bar-fill" class="h-full bg-discord-blurple rounded-full w-0 relative group-hover:bg-[#5865F2]">
+                        <div class="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    </div>
+                </div>
+                <span id="time-total">0:00</span>
+            </div>
+        </div>
+
+        <!-- Extra Controls (Volume) -->
+        <div class="flex items-center justify-end w-1/3 gap-3 pr-2">
+            <i class="ph ph-speaker-high text-discord-muted text-xl" id="volume-icon"></i>
+            <div class="group relative w-24 h-1 bg-[#4E5058] rounded-full cursor-pointer flex items-center">
+                <div id="volume-fill" class="h-full bg-discord-text rounded-full w-[100%] group-hover:bg-discord-blurple relative">
+                     <div class="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </div>
+                <input type="range" min="0" max="100" value="100" class="absolute inset-0 w-full opacity-0 cursor-pointer" id="volume-slider" oninput="changeVolume(this.value)">
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
+
+    <script>
+        let currentGuildId = null;
+        let pollingInterval = null;
+
+        async function init() {
+            try {
+                // Tự động giải quyết vấn đề nhúng iframe Discord bằng cách set chính sách tương thích
+                document.cookie = "sameSite=None; secure";
+
+                const res = await fetch('/api/user');
+                const authData = await res.json();
+                
+                if(authData.authenticated) {
+                    document.getElementById('auth-overlay').classList.add('opacity-0', 'pointer-events-none');
+                    document.getElementById('app-container').classList.remove('opacity-0', 'pointer-events-none');
+                    document.getElementById('player-bar').classList.remove('opacity-0', 'pointer-events-none');
+                    
+                    // Cập nhật đúng username thực tế của tài khoản Discord
+                    document.getElementById('user-username').innerText = authData.user.username;
+                    if(authData.user.avatar) {
+                        document.getElementById('user-avatar').src = authData.user.avatar;
+                    }
+                    
+                    await loadServers();
+                    startPolling();
+                } else {
+                    document.getElementById('auth-overlay').style.display = 'flex';
+                    document.getElementById('auth-overlay').classList.remove('opacity-0');
+                }
+            } catch (e) {
+                console.error("Lỗi khởi tạo", e);
+            }
+        }
+
+        function handleLogin() { window.location.href = '/login'; }
+
+        async function loadServers() {
+            try {
+                const res = await fetch('/api/servers');
+                const servers = await res.json();
+                const serverSelect = document.getElementById('server-select');
+                
+                serverSelect.innerHTML = servers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+                if(servers.length > 0) {
+                    currentGuildId = servers[0].id;
+                    await loadVoiceChannels(currentGuildId);
+                    serverSelect.addEventListener('change', async (e) => {
+                        currentGuildId = e.target.value;
+                        await loadVoiceChannels(currentGuildId);
+                        fetchMusicState();
+                    });
+                }
+            } catch(e) { console.error("Lỗi load server", e); }
+        }
+
+        async function loadVoiceChannels(guildId) {
+            try {
+                const res = await fetch(`/api/servers/${guildId}/voice_channels`);
+                const channels = await res.json();
+                const channelSelect = document.getElementById('channel-select');
+                channelSelect.innerHTML = channels.length === 0 ? '<option value="">Không có kênh thoại</option>' : 
+                    channels.map(c => `<option value="${c.id}">🔊 ${c.name}</option>`).join('');
+            } catch (e) { console.error("Lỗi load kênh thoại", e); }
+        }
+
+        function startPolling() {
+            if(pollingInterval) clearInterval(pollingInterval);
+            fetchMusicState();
+            pollingInterval = setInterval(fetchMusicState, 2000);
+        }
+
+        async function fetchMusicState() {
+            if(!currentGuildId) return;
+            try {
+                const res = await fetch(`/api/music/state?guild_id=${currentGuildId}`);
+                if(!res.ok) return;
+                const data = await res.json();
+                updateUI(data);
+            } catch (e) { console.error("Lỗi đồng bộ trạng thái", e); }
+        }
+
+        async function sendAction(action, payload = {}) {
+            if(!currentGuildId) return showToast('Chưa chọn server', 'error');
+            try {
+                const res = await fetch('/api/music/action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ guild_id: currentGuildId, action, ...payload })
+                });
+                const data = await res.json();
+                if(data.success) fetchMusicState();
+                else showToast(data.error || 'Lỗi thao tác', 'error');
+            } catch (e) { showToast('Mất kết nối server', 'error'); }
+        }
+
+        function updateUI(state) {
+            const dot = document.getElementById('bot-status-dot');
+            const txt = document.getElementById('bot-status-text');
+            const btnInvite = document.getElementById('btn-invite');
+
+            if(state.connected) {
+                dot.className = "w-2 h-2 rounded-full bg-[#23A559]";
+                txt.innerText = state.channel_name;
+                btnInvite.innerHTML = `<i class="ph ph-plugs-connected"></i> Đã tham gia`;
+                btnInvite.className = "w-full bg-discord-hover text-white font-medium py-2 px-4 rounded transition-colors flex items-center justify-center gap-2 text-sm border border-[#1E1F22]";
+            } else {
+                dot.className = "w-2 h-2 rounded-full bg-discord-danger";
+                txt.innerText = "Ngắt kết nối";
+                btnInvite.innerHTML = `<i class="ph ph-plugs"></i> Mời Bot`;
+                btnInvite.className = "w-full bg-[#23A559] hover:bg-[#1A7C43] text-white font-medium py-2 px-4 rounded transition-colors flex items-center justify-center gap-2 text-sm";
+            }
+
+            const playIcon = document.getElementById('play-pause-icon');
+            const isPlayingState = state.is_playing && !state.is_paused;
+            playIcon.className = isPlayingState ? 'ph-fill ph-pause text-xl' : 'ph-fill ph-play text-xl ml-1';
+
+            // Xử lý Thumbnail bài hát đang phát thực tế thay cho chữ Music cũ
+            const npThumb = document.getElementById('np-thumbnail');
+            const npFallback = document.getElementById('np-icon-fallback');
+            
+            if(state.now_playing && state.now_playing.thumb) {
+                npThumb.src = state.now_playing.thumb;
+                npThumb.classList.remove('hidden');
+                npFallback.classList.add('hidden');
+                document.getElementById('np-title').innerText = state.now_playing.title;
+                document.getElementById('np-author').innerText = state.now_playing.author;
+                document.getElementById('time-total').innerText = state.now_playing.duration;
+            } else {
+                npThumb.classList.add('hidden');
+                npFallback.classList.remove('hidden');
+                document.getElementById('np-title').innerText = "Chưa có bài hát nào";
+                document.getElementById('np-author').innerText = "...";
+                document.getElementById('time-current').innerText = "0:00";
+                document.getElementById('time-total').innerText = "0:00";
+                document.getElementById('progress-bar-fill').style.width = "0%";
+            }
+
+            if(state.playlists) {
+                document.getElementById('playlist-container').innerHTML = state.playlists.map(pl => `
+                    <li>
+                        <a href="#" onclick="sendAction('play', {query: '${pl.name}'})" class="flex items-center py-2 px-2 rounded hover:bg-discord-hover text-discord-muted hover:text-discord-text transition-colors group">
+                            <i class="ph ${pl.icon} text-lg mr-3 group-hover:text-white transition-colors"></i>
+                            <span class="flex-1 truncate">${pl.name}</span>
+                        </a>
+                    </li>
+                `).join('');
+            }
+
+            const qList = document.getElementById('queue-list');
+            document.getElementById('queue-count').innerText = `${state.queue.length} bài`;
+            if(state.queue.length === 0) {
+                qList.innerHTML = `<div class="flex flex-col items-center justify-center py-10 text-discord-muted"><i class="ph ph-ghost text-4xl mb-2"></i><p>Hàng chờ trống</p></div>`;
+            } else {
+                qList.innerHTML = state.queue.map((song, i) => `
+                    <li class="group flex items-center p-2 rounded-md hover:bg-discord-hover transition-colors">
+                        <span class="w-8 text-center text-xs text-discord-muted">${i + 1}</span>
+                        <div class="flex-1 min-w-0 flex flex-col pl-2">
+                            <div class="text-sm font-medium text-discord-text truncate">${song.title}</div>
+                            <div class="text-xs text-discord-muted truncate">${song.author}</div>
+                        </div>
+                        <span class="text-xs text-discord-muted mx-4 font-mono">${song.duration}</span>
+                        <button onclick="sendAction('remove', {song_id: '${song.id}'})" class="opacity-0 group-hover:opacity-100 text-discord-muted hover:text-discord-danger p-1"><i class="ph ph-trash"></i></button>
+                    </li>
+                `).join('');
+            }
+
+            const loopBtn = document.getElementById('loop-btn');
+            const loopIcon = loopBtn.querySelector('i');
+            loopBtn.className = state.loop_mode > 0 ? "text-discord-blurple transition-colors" : "text-discord-muted hover:text-white transition-colors";
+            loopIcon.className = state.loop_mode === 2 ? "ph ph-repeat-once text-lg" : "ph ph-repeat text-lg";
+        }
+
+        function addFromInput() {
+            const inp = document.getElementById('youtube-input');
+            if(!inp.value.trim()) return;
+            sendAction('play', { query: inp.value.trim() });
+            inp.value = '';
+            showToast('Đang thêm bài hát/playlist...', 'success');
+        }
+
+        function togglePlay() { sendAction('toggle_play'); }
+        function skipSong() { sendAction('skip'); }
+        function clearQueue() { sendAction('clear'); }
+        function inviteBot() {
+            const cid = document.getElementById('channel-select').value;
+            if(!cid) return showToast('Chọn kênh thoại trước', 'error');
+            sendAction('join', { channel_id: cid });
+        }
+        function toggleLoop() { sendAction('loop'); }
+        function changeVolume(val) { sendAction('volume', { level: val }); document.getElementById('volume-fill').style.width = `${val}%`; }
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = `bg-discord-panel border border-discord-bg text-white px-4 py-3 rounded shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-x-full opacity-0`;
+            t.innerHTML = `<i class="ph-fill ph-info text-xl text-discord-blurple"></i><span class="text-sm font-medium">${msg}</span>`;
+            container.appendChild(t);
+            requestAnimationFrame(() => t.classList.remove('translate-x-full', 'opacity-0'));
+            setTimeout(() => { t.classList.add('translate-x-full', 'opacity-0'); setTimeout(() => t.remove(), 300); }, 3000);
+        }
+
+        document.getElementById('youtube-input').addEventListener('keypress', e => { if(e.key === 'Enter') addFromInput(); });
+        window.onload = init;
+    </script>
+</body>
+</html>
