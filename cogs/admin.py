@@ -8,26 +8,60 @@ class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         
+    # 1. Hàm tạo danh sách gợi ý (Autocomplete)
+    async def banned_users_autocomplete(
+        self, 
+        interaction: discord.Interaction, 
+        current: str
+    ) -> list[app_commands.Choice[str]]:
+        if not interaction.guild:
+            return []
+            
+        try:
+            choices = []
+            # Duyệt qua danh sách ban của server (giới hạn 200 để tránh bot bị lag nếu server ban quá nhiều)
+            async for ban_entry in interaction.guild.bans(limit=200):
+                user = ban_entry.user
+                # Tìm kiếm dựa trên tên hoặc ID do admin đang nhập
+                if current.lower() in user.name.lower() or current in str(user.id):
+                    choices.append(app_commands.Choice(name=f"{user.name} ({user.id})", value=str(user.id)))
+                
+                # Discord giới hạn tối đa 25 lựa chọn cho autocomplete
+                if len(choices) >= 25:
+                    break
+            return choices
+        except discord.Forbidden:
+            return []
+        
     @app_commands.command(name="unban", description="[Admin] Gỡ lệnh cấm cho thành viên")
-    @app_commands.describe(user="Người dùng cần gỡ ban (Nhập ID của người dùng)", reason="Lý do gỡ ban")
+    @app_commands.describe(user_id="Chọn người dùng từ danh sách bị cấm", reason="Lý do gỡ ban")
+    @app_commands.autocomplete(user_id=banned_users_autocomplete) # Gắn hàm gợi ý vào biến user_id
     @app_commands.checks.has_permissions(ban_members=True)
-    async def unban(self, interaction: discord.Interaction, user: discord.User, reason: str = "Không có lý do"):
+    async def unban(self, interaction: discord.Interaction, user_id: str, reason: str = "Không có lý do"):
         await interaction.response.defer(ephemeral=True)
+        
         if interaction.guild is None:
             await interaction.followup.send("❌ Lệnh này chỉ có thể sử dụng trong server!")
             return
+        
         try:
-            # Thực hiện gỡ ban ở phạm vi server (guild)
-            await interaction.guild.unban(user, reason=reason)
-            await interaction.followup.send(f"✅ Đã gỡ lệnh cấm cho {user.mention}. Lý do: {reason}")
+            # Ép kiểu ID từ chuỗi về số nguyên và dùng discord.Object để unban (nhanh hơn việc fetch_user)
+            user_obj = discord.Object(id=int(user_id))
+            
+            await interaction.guild.unban(user_obj, reason=reason)
+            await interaction.followup.send(f"✅ Đã gỡ lệnh cấm cho <@{user_id}>. Lý do: {reason}")
+            
+        except ValueError:
+            await interaction.followup.send("❌ ID người dùng không hợp lệ.")
         except discord.NotFound:
-            await interaction.followup.send(f"❌ Người dùng {user.name} không nằm trong danh sách bị cấm của server.")
+            await interaction.followup.send("❌ Người dùng này không nằm trong danh sách bị cấm của server.")
         except discord.Forbidden:
             await interaction.followup.send("❌ Bot không đủ quyền để gỡ lệnh cấm.")
         except discord.HTTPException as e:
             await interaction.followup.send(f"❌ Có lỗi kết nối xảy ra: {str(e)}")
         except Exception as e:
             await interaction.followup.send(f"❌ Có lỗi xảy ra: {str(e)}")
+            
     @app_commands.command(name="clear", description="[Admin] Xóa tin nhắn")
     @app_commands.describe(amount="Nhập số lượng cần xóa hoặc 'all' để xóa hết")
     @app_commands.checks.has_permissions(manage_messages=True)
