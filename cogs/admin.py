@@ -7,7 +7,27 @@ from discord.ext import commands
 class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
+        
+    @app_commands.command(name="unban", description="[Admin] Gỡ lệnh cấm cho thành viên")
+    @app_commands.describe(user="Người dùng cần gỡ ban (Nhập ID của người dùng)", reason="Lý do gỡ ban")
+    @app_commands.checks.has_permissions(ban_members=True)
+    async def unban(self, interaction: discord.Interaction, user: discord.User, reason: str = "Không có lý do"):
+        await interaction.response.defer(ephemeral=True)
+        if interaction.guild is None:
+            await interaction.followup.send("❌ Lệnh này chỉ có thể sử dụng trong server!")
+            return
+        try:
+            # Thực hiện gỡ ban ở phạm vi server (guild)
+            await interaction.guild.unban(user, reason=reason)
+            await interaction.followup.send(f"✅ Đã gỡ lệnh cấm cho {user.mention}. Lý do: {reason}")
+        except discord.NotFound:
+            await interaction.followup.send(f"❌ Người dùng {user.name} không nằm trong danh sách bị cấm của server.")
+        except discord.Forbidden:
+            await interaction.followup.send("❌ Bot không đủ quyền để gỡ lệnh cấm.")
+        except discord.HTTPException as e:
+            await interaction.followup.send(f"❌ Có lỗi kết nối xảy ra: {str(e)}")
+        except Exception as e:
+            await interaction.followup.send(f"❌ Có lỗi xảy ra: {str(e)}")
     @app_commands.command(name="clear", description="[Admin] Xóa tin nhắn")
     @app_commands.describe(amount="Nhập số lượng cần xóa hoặc 'all' để xóa hết")
     @app_commands.checks.has_permissions(manage_messages=True)
@@ -144,6 +164,7 @@ class Admin(commands.Cog):
     @clear.error
     @kick.error
     @ban.error
+    @unban.error
     @cookies.error
     @msg.error
     @rep.error # Thêm xử lý lỗi cho lệnh rep
