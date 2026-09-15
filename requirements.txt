@@ -7,3 +7,4 @@ pyspellchecker
 requests
 flask
 nltk
+psutil

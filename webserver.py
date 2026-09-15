@@ -11,6 +11,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'super_secret_key_mosa')
+app.permanent_session_lifetime = datetime.timedelta(days=30)
 
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
@@ -139,6 +140,7 @@ def callback():
         'code': code,
         'redirect_uri': REDIRECT_URI
     }
+    
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     r = requests.post('https://discord.com/api/oauth2/token', data=data, headers=headers)
     token_data = r.json()
@@ -167,6 +169,7 @@ def callback():
         'discriminator': user_data.get('discriminator', '0'),
         'avatar': avatar_url
     }
+    session.permanent = True
     
     # Chuyển hướng về trang mà người dùng vừa truy cập (mặc định là music nếu không có)
     next_url = session.pop('next_url', url_for('music'))
