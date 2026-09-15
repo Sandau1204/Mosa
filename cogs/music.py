@@ -291,11 +291,25 @@ class Music(commands.Cog):
             if now_playing:
                 dur = now_playing.get('duration', 0)
                 dur_str = f"{dur // 60}:{dur % 60:02d}" if isinstance(dur, int) else str(dur)
+                
+                # --- THÊM MỚI: Tính toán thời gian đang phát ---
+                current_time = 0
+                if gid in self.start_times:
+                    if gid in self.pause_times:
+                        # Nếu đang tạm dừng
+                        current_time = (self.pause_times[gid] - self.start_times[gid]) + self.current_offsets.get(gid, 0)
+                    else:
+                        # Nếu đang phát bình thường
+                        current_time = (time.time() - self.start_times[gid]) + self.current_offsets.get(gid, 0)
+                # -----------------------------------------------
+
                 web_np = {
                     'id': now_playing.get('webpage_url', ''),
                     'title': now_playing.get('title', 'Unknown'),
                     'author': now_playing.get('channel', 'Unknown'),
                     'duration': dur_str,
+                    'duration_seconds': dur,       # Gửi kèm thời lượng dạng số nguyên
+                    'current_time': current_time,  # Gửi thời gian hiện tại
                     'thumb': now_playing.get('thumbnail', ''),
                     'url': now_playing.get('webpage_url', '')
                 }
@@ -343,6 +357,12 @@ class Music(commands.Cog):
                     if voice_channel:
                         if vc and vc.is_connected(): await vc.move_to(voice_channel)
                         else: await voice_channel.connect()
+            
+            elif action == 'leave':
+                if vc and vc.is_connected():
+                    await self.stop_player(guild_id) # Tắt nhạc và dọn dẹp hàng chờ
+                    await vc.disconnect(force=True)  # Rời kênh thoại
+                    await self.cleanup_on_disconnect(guild_id) # Xóa bộ đếm và trạng thái
 
             elif action == 'play':
                 query = data.get('query')
@@ -391,6 +411,12 @@ class Music(commands.Cog):
             elif action == 'loop':
                 self.loops[guild_id] = not self.loops.get(guild_id, False)
                 await self.update_ui(guild_id)
+            
+            elif action == 'seek':
+                position = data.get('position')
+                if position is not None:
+                    self.seek_song(guild_id, float(position))
+                    await self.update_ui(guild_id)
                 
         except Exception as e:
             print(f"Lỗi khi xử lý Web Music Action: {e}")
