@@ -234,6 +234,17 @@
 
     <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
 
+    <script type="module">
+        import { DiscordSDK } from "/static/discord-sdk.mjs";
+
+        // Khởi tạo với CLIENT_ID lấy từ file .env của bạn
+        window.discordSdk = new DiscordSDK('1541005812951162920');
+
+        window.discordSdk.ready().then(() => {
+            window.sdkReady = true;
+        }).catch(err => console.error("Lỗi khởi tạo SDK:", err));
+    </script>
+
     <script>
         let currentGuildId = null;
         let pollingInterval = null;
@@ -309,7 +320,60 @@
             }
         }
 
-        function handleLogin() { window.location.href = '/login'; }
+        async function handleLogin() {
+            if (!window.sdkReady) {
+                showToast('Discord SDK đang khởi tạo, vui lòng thử lại sau giây lát...', 'error');
+                return;
+            }
+        
+            try {
+                showToast('Đang kết nối với Discord...', 'info');
+            
+                // 1. Authorize qua Iframe/Popup của Discord SDK
+                const { code } = await window.discordSdk.commands.authorize({
+                    client_id: '1541005812951162920',
+                    response_type: 'code',
+                    state: '',
+                    prompt: 'none',
+                    scope: ['identify', 'guilds']
+                });
+            
+                // 2. Gửi Authorization code về Backend để đổi lấy access_token
+                const response = await fetch('/api/discord-auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                const data = await response.json();
+            
+                if (!response.ok) {
+                    throw new Error(data.error || 'Lỗi lấy token từ backend');
+                }
+            
+                // 3. Xác thực SDK (Bắt buộc để gọi các lệnh âm thanh/RPC trong iframe)
+                await window.discordSdk.commands.authenticate({
+                    access_token: data.access_token
+                });
+            
+                // 4. Xóa màn hình chờ và cập nhật Giao diện
+                document.getElementById('auth-overlay').classList.add('opacity-0', 'pointer-events-none');
+                document.getElementById('app-container').classList.remove('opacity-0', 'pointer-events-none');
+                document.getElementById('player-bar').classList.remove('opacity-0', 'pointer-events-none');
+            
+                document.getElementById('user-username').innerText = data.user.username;
+                if (data.user.avatar) {
+                    document.getElementById('user-avatar').src = data.user.avatar;
+                }
+            
+                await loadServers();
+                startPolling();
+                showToast('Xác thực thành công!', 'success');
+            
+            } catch (error) {
+                console.error("Login failed:", error);
+                showToast("Đăng nhập thất bại: " + error.message, "error");
+            }
+        }
 
         async function loadServers() {
             try {

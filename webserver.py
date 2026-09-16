@@ -175,6 +175,56 @@ def callback():
     next_url = session.pop('next_url', url_for('music'))
     return redirect(next_url)
 
+@app.route('/api/discord-auth', methods=['POST'])
+def api_discord_auth():
+    data = request.json or {}
+    code = data.get('code')
+    if not code:
+        return jsonify({'error': 'No code provided'}), 400
+
+    import requests
+    # Gửi request lấy token không cần redirect_uri cho Embedded SDK
+    token_data = {
+        'client_id': CLIENT_ID,
+        'client_secret': CLIENT_SECRET,
+        'grant_type': 'authorization_code',
+        'code': code
+    }
+    
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    r = requests.post('https://discord.com/api/oauth2/token', data=token_data, headers=headers)
+    token_resp = r.json()
+
+    if 'access_token' not in token_resp:
+        return jsonify({'error': 'Xác thực thất bại', 'details': token_resp}), 400
+
+    # Lấy thông tin user bằng access_token
+    access_token = token_resp['access_token']
+    user_resp = requests.get('https://discord.com/api/users/@me', headers={'Authorization': f'Bearer {access_token}'})
+    user_data = user_resp.json()
+
+    avatar_hash = user_data.get('avatar')
+    if avatar_hash:
+        ext = "gif" if avatar_hash.startswith("a_") else "png"
+        avatar_url = f"https://cdn.discordapp.com/avatars/{user_data.get('id')}/{avatar_hash}.{ext}?size=1024"
+    else:
+        avatar_url = "https://cdn.discordapp.com/embed/avatars/0.png"
+
+    # Cập nhật Flask session
+    session['user'] = {
+        'id': user_data.get('id'),
+        'username': user_data.get('username'),
+        'discriminator': user_data.get('discriminator', '0'),
+        'avatar': avatar_url
+    }
+    session.permanent = True
+
+    # Trả về cả access_token để client hoàn tất authenticate với SDK
+    return jsonify({
+        'access_token': access_token,
+        'user': session['user']
+    })
+
 @app.route('/logout')
 def logout():
     session.pop('user', None)
