@@ -46,7 +46,7 @@ YDL_OPTIONS = {
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    #'cookiefile': 'cookies.txt',
+    'cookiefile': 'cookies.txt',
     'nocheckcertificate': True,
     'cachedir': False,
     'extractor_args': {
@@ -56,9 +56,9 @@ YDL_OPTIONS = {
     }
 }
 
-if PROXY_URL:
-    YDL_OPTIONS['proxy'] = PROXY_URL
-    print(f"🌐 Đã kích hoạt proxy cho trình phát nhạc")
+#if PROXY_URL:
+#    YDL_OPTIONS['proxy'] = PROXY_URL
+#    print(f"🌐 Đã kích hoạt proxy cho trình phát nhạc")
 
 # --- CẤU HÌNH FFMPEG ---
 FFMPEG_OPTIONS = {
