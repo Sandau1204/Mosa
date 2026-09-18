@@ -49,11 +49,6 @@ YDL_OPTIONS = {
     'cookiefile': 'cookies.txt',
     'nocheckcertificate': True,
     'cachedir': False,
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['android', 'web_safari'] 
-        }
-    }
 }
 
 #if PROXY_URL:
