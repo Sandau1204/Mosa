@@ -8,6 +8,13 @@ let volumeDebounceTimer = null;
 let currentVolume = 100;
 let previousVolume = 100;
 
+function isRunningInDiscord() {
+    try {
+        return window.self !== window.top;
+    } catch (e) {
+        return true;
+    }
+}
 
 function formatTime(seconds) {
     if (!seconds || isNaN(seconds)) return "0:00";
@@ -28,26 +35,17 @@ function seekMusic(event) {
     if (!currentGuildId || globalDuration === 0) return;
     const container = document.getElementById('progress-bar-container');
     const rect = container.getBoundingClientRect();
-    // Tính toán vị trí click chuột (tỷ lệ %)
     const clickX = event.clientX - rect.left;
     const percentage = Math.max(0, Math.min(1, clickX / rect.width));
-    
-    // Tính toán thời gian tương ứng
     const targetTime = percentage * globalDuration;
-    
-    // Cập nhật UI ngay lập tức để người dùng thấy phản hồi
     currentPlaybackTime = targetTime;
     updateProgressBarUI();
-    
-    // Gửi API về bot
     sendAction('seek', { position: targetTime });
 }
 
 async function init() {
     try {
-        // Tự động giải quyết vấn đề nhúng iframe Discord bằng cách set chính sách tương thích
         document.cookie = "sameSite=None; secure";
-
         const res = await fetch('/api/user');
         const authData = await res.json();
         
@@ -56,7 +54,6 @@ async function init() {
             document.getElementById('app-container').classList.remove('opacity-0', 'pointer-events-none');
             document.getElementById('player-bar').classList.remove('opacity-0', 'pointer-events-none');
             
-            // Cập nhật đúng username thực tế của tài khoản Discord
             document.getElementById('user-username').innerText = authData.user.username;
             if(authData.user.avatar) {
                 document.getElementById('user-avatar').src = authData.user.avatar;
@@ -73,31 +70,18 @@ async function init() {
     }
 }
 
-// Hàm kiểm tra môi trường
-function isRunningInDiscord() {
-    try {
-        return window.self !== window.top;
-    } catch (e) {
-        return true;
-    }
-}
-
-// Hàm xử lý đăng nhập MỚI
-window.handleLogin = async function() {
+async function handleLogin() {
     if (!isRunningInDiscord()) {
         showToast('Đang chuyển hướng đến trang đăng nhập...', 'info');
         window.location.href = '/login'; 
         return;
     }
-
     if (!window.sdkReady) {
         showToast('Discord SDK đang khởi tạo, vui lòng thử lại sau giây lát...', 'error');
         return;
     }
-
     try {
         showToast('Đang kết nối Discord SDK...', 'info');
-
         const { code } = await window.discordSdk.commands.authorize({
             client_id: '1541005812951162920',
             response_type: 'code',
@@ -105,47 +89,39 @@ window.handleLogin = async function() {
             prompt: 'none',
             scope: ['identify', 'guilds']
         });
-
         const response = await fetch('/api/discord-auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code })
         });
         const data = await response.json();
-
         if (!response.ok) {
             throw new Error(data.error || 'Lỗi lấy token từ backend');
         }
-
         await window.discordSdk.commands.authenticate({
             access_token: data.access_token
         });
-
         document.getElementById('auth-overlay').classList.add('opacity-0', 'pointer-events-none');
         document.getElementById('app-container').classList.remove('opacity-0', 'pointer-events-none');
         document.getElementById('player-bar').classList.remove('opacity-0', 'pointer-events-none');
-
         document.getElementById('user-username').innerText = data.user.username;
         if (data.user.avatar) {
             document.getElementById('user-avatar').src = data.user.avatar;
         }
-
         await loadServers();
         startPolling();
         showToast('Xác thực SDK thành công!', 'success');
-
     } catch (error) {
         console.error("Login failed:", error);
         showToast("Đăng nhập thất bại: " + error.message, "error");
     }
-};
+}
 
 async function loadServers() {
     try {
         const res = await fetch('/api/servers');
         const servers = await res.json();
         const serverSelect = document.getElementById('server-select');
-        
         serverSelect.innerHTML = servers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
         if(servers.length > 0) {
             currentGuildId = servers[0].id;
@@ -164,8 +140,8 @@ async function loadVoiceChannels(guildId) {
         const res = await fetch(`/api/servers/${guildId}/voice_channels`);
         const channels = await res.json();
         const channelSelect = document.getElementById('channel-select');
-        channelSelect.innerHTML = channels.length === 0 ? '<option value="">Không có kênh thoại</option>' : 
-            channels.map(c => `<option value="${c.id}">🔊 ${c.name}</option>`).join('');
+        channelSelect.innerHTML = channels.length === 0 ? '<option value="">Không có kênh thoại</option>' :
+             channels.map(c => `<option value="${c.id}">🔊 ${c.name}</option>`).join('');
     } catch (e) { console.error("Lỗi load kênh thoại", e); }
 }
 
@@ -203,33 +179,24 @@ function updateUI(state) {
     const dot = document.getElementById('bot-status-dot');
     const txt = document.getElementById('bot-status-text');
     const btnInvite = document.getElementById('btn-invite');
-
     if(state.connected) {
         dot.className = "w-2 h-2 rounded-full bg-[#23A559]";
         txt.innerText = state.channel_name;
-        
-        // --- KHI ĐÃ KẾT NỐI: HIỆN NÚT NGẮT KẾT NỐI (MÀU ĐỎ) ---
         btnInvite.innerHTML = `<i class="ph ph-power"></i> Ngắt kết nối`;
         btnInvite.className = "w-full bg-discord-danger hover:bg-red-500 text-white font-medium py-2 px-4 rounded transition-colors flex items-center justify-center gap-2 text-sm";
         btnInvite.onclick = function() { sendAction('leave'); };
     } else {
         dot.className = "w-2 h-2 rounded-full bg-discord-danger";
         txt.innerText = "Ngắt kết nối";
-        
-        // --- KHI CHƯA KẾT NỐI: HIỆN NÚT KẾT NỐI (MÀU XANH) ---
-        btnInvite.innerHTML = `<i class="ph ph-plugs"></i> Kết nối`;
+        btnInvite.innerHTML = `<i class="ph ph-plugs"></i> Kết nối Bot`;
         btnInvite.className = "w-full bg-[#23A559] hover:bg-[#1A7C43] text-white font-medium py-2 px-4 rounded transition-colors flex items-center justify-center gap-2 text-sm";
         btnInvite.onclick = inviteBot;
     }
-
     const playIcon = document.getElementById('play-pause-icon');
     const isPlayingState = state.is_playing && !state.is_paused;
     playIcon.className = isPlayingState ? 'ph-fill ph-pause text-xl' : 'ph-fill ph-play text-xl';
-
-    // Xử lý Thumbnail bài hát đang phát thực tế thay cho chữ Music cũ
     const npThumb = document.getElementById('np-thumbnail');
     const npFallback = document.getElementById('np-icon-fallback');
-    
     if(state.now_playing && state.now_playing.thumb) {
         npThumb.src = state.now_playing.thumb;
         npThumb.classList.remove('hidden');
@@ -237,13 +204,9 @@ function updateUI(state) {
         document.getElementById('np-title').innerText = state.now_playing.title;
         document.getElementById('np-author').innerText = state.now_playing.author;
         document.getElementById('time-total').innerText = state.now_playing.duration;
-        
-        // --- Đồng bộ thời gian và kích hoạt thanh tiến trình ---
         globalDuration = state.now_playing.duration_seconds || 0;
         currentPlaybackTime = state.now_playing.current_time || 0;
-        
         updateProgressBarUI();
-        
         if (syncTimer) clearInterval(syncTimer);
         if (isPlayingState) {
             syncTimer = setInterval(() => {
@@ -252,21 +215,18 @@ function updateUI(state) {
                 updateProgressBarUI();
             }, 1000);
         }
-
     } else {
         npThumb.classList.add('hidden');
         npFallback.classList.remove('hidden');
-        document.getElementById('np-title').innerText = "Chưa có bài hát nào";
+        document.getElementById('np-title').innerText = "Chưa có bài hát";
         document.getElementById('np-author').innerText = "...";
         document.getElementById('time-current').innerText = "0:00";
         document.getElementById('time-total').innerText = "0:00";
         document.getElementById('progress-bar-fill').style.width = "0%";
-        
         globalDuration = 0;
         currentPlaybackTime = 0;
         if (syncTimer) clearInterval(syncTimer);
     }
-
     if(state.playlists) {
         document.getElementById('playlist-container').innerHTML = state.playlists.map(pl => `
             <li>
@@ -277,7 +237,6 @@ function updateUI(state) {
             </li>
         `).join('');
     }
-
     const qList = document.getElementById('queue-list');
     document.getElementById('queue-count').innerText = `${state.queue.length} bài`;
     if(state.queue.length === 0) {
@@ -295,19 +254,14 @@ function updateUI(state) {
             </li>
         `).join('');
     }
-
     const loopBtn = document.getElementById('loop-btn');
     const loopIcon = loopBtn.querySelector('i');
     loopBtn.className = state.loop_mode > 0 ? "text-discord-blurple transition-colors" : "text-discord-muted hover:text-white transition-colors";
     loopIcon.className = state.loop_mode === 2 ? "ph ph-repeat-once text-lg" : "ph ph-repeat text-lg";
-
-    // --- Đồng bộ Volume (Dạng nút bấm) ---
     if (state.volume !== undefined) {
         currentVolume = state.volume;
         if (currentVolume > 0) previousVolume = currentVolume;
-
         document.getElementById('volume-text').innerText = `${currentVolume}%`;
-        
         const volIcon = document.getElementById('volume-icon');
         if (currentVolume === 0) volIcon.className = "ph ph-speaker-x text-discord-muted text-lg";
         else if (currentVolume < 50) volIcon.className = "ph ph-speaker-low text-discord-muted text-lg";
@@ -333,13 +287,10 @@ function inviteBot() {
 }
 function toggleLoop() { sendAction('loop'); }
 
-// Xử lý nút cộng/trừ âm lượng
 function changeVolume(amount) {
     let newVol = currentVolume + amount;
-    
     if (newVol > 100) newVol = 100;
     if (newVol < 0) newVol = 0;
-    
     if (newVol !== currentVolume) {
         currentVolume = newVol;
         document.getElementById('volume-text').innerText = `${currentVolume}%`;
@@ -347,7 +298,6 @@ function changeVolume(amount) {
     }
 }
 
-// Xử lý bật/tắt nhanh âm thanh
 function toggleMute() {
     if (currentVolume > 0) {
         previousVolume = currentVolume;
@@ -355,7 +305,6 @@ function toggleMute() {
     } else {
         currentVolume = previousVolume > 0 ? previousVolume : 50;
     }
-    
     document.getElementById('volume-text').innerText = `${currentVolume}%`;
     sendAction('volume', { level: currentVolume });
 }
@@ -369,17 +318,6 @@ function showToast(msg, type = 'info') {
     requestAnimationFrame(() => t.classList.remove('translate-x-full', 'opacity-0'));
     setTimeout(() => { t.classList.add('translate-x-full', 'opacity-0'); setTimeout(() => t.remove(), 300); }, 3000);
 }
-
-window.handleLogin = handleLogin;
-window.togglePlay = togglePlay;
-window.skipSong = skipSong;
-window.clearQueue = clearQueue;
-window.inviteBot = inviteBot;
-window.toggleLoop = toggleLoop;
-window.changeVolume = changeVolume;
-window.toggleMute = toggleMute;
-window.addFromInput = addFromInput;
-window.seekMusic = seekMusic;
 
 document.addEventListener('DOMContentLoaded', () => {
     window.handleLogin = handleLogin;
