@@ -76,11 +76,17 @@ async function handleLogin() {
         window.location.href = '/login'; 
         return;
     }
-    if (!window.sdkReady) {
-        showToast('Discord SDK đang khởi tạo, vui lòng thử lại sau giây lát...', 'error');
-        return;
-    }
     try {
+        if (!window.discordSdk || !window.sdkReadyPromise) {
+            throw new Error('Discord SDK chưa được tải. Hãy tải lại trang.');
+        }
+        if (!window.sdkReady) {
+            showToast('Đang khởi tạo Discord SDK...', 'info');
+            await window.sdkReadyPromise;
+        }
+        if (!window.sdkReady) {
+            throw window.sdkError || new Error('Discord SDK không sẵn sàng.');
+        }
         showToast('Đang kết nối Discord SDK...', 'info');
         const { code } = await window.discordSdk.commands.authorize({
             client_id: '1541005812951162920',

@@ -118,7 +118,7 @@ def callback():
     }
     
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    r = requests.post('https://discord.com/api/oauth2/token', data=data, headers=headers)
+    r = requests.post('https://discord.com/api/oauth2/token', data=data, headers=headers, timeout=10)
     token_data = r.json()
     
     if 'access_token' not in token_data:
@@ -168,7 +168,7 @@ def api_discord_auth():
     }
     
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    r = requests.post('https://discord.com/api/oauth2/token', data=token_data, headers=headers)
+    r = requests.post('https://discord.com/api/oauth2/token', data=token_data, headers=headers, timeout=10)
     token_resp = r.json()
 
     if 'access_token' not in token_resp:
