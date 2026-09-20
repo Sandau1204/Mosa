@@ -675,5 +675,7 @@ window.alert = function(message) {
 };
 
 // Khởi động panel khi tải trang xong
-window.app = app;
-app.init();
+document.addEventListener('DOMContentLoaded', () => {
+    window.app = app;
+    app.init();
+});

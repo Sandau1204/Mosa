@@ -382,8 +382,19 @@ window.addFromInput = addFromInput;
 window.seekMusic = seekMusic;
 
 document.addEventListener('DOMContentLoaded', () => {
+    window.handleLogin = handleLogin;
+    window.togglePlay = togglePlay;
+    window.skipSong = skipSong;
+    window.clearQueue = clearQueue;
+    window.inviteBot = inviteBot;
+    window.toggleLoop = toggleLoop;
+    window.changeVolume = changeVolume;
+    window.toggleMute = toggleMute;
+    window.addFromInput = addFromInput;
+    window.seekMusic = seekMusic;
+
     document.getElementById('youtube-input').addEventListener('keypress', e => {
-         if(e.key === 'Enter') addFromInput();
+         if(e.key === 'Enter') addFromInput(); 
      });
     init();
 });
