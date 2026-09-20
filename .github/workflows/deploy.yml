@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted  # Bắt buộc phải là self-hosted để chạy trên server của bạn
+    runs-on: self-hosted  # Bắt buộc phải là self-hosted để chạy trên server của bạn[cite: 2]
 
     steps:
       - name: Checkout code
@@ -15,32 +15,39 @@ jobs:
         with:
           clean: false
 
+      # --- THÊM BƯỚC NÀY ĐỂ XỬ LÝ GIAO DIỆN VITE ---
+      - name: Cài đặt Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cài đặt thư viện JS và Build Giao diện
+        run: |
+          npm install
+          npm run build
+      # --------------------------------------------
+
       - name: Tạo file .env tự động
         run: |
-          echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" | Out-File -FilePath .env -Encoding ascii
-          echo "OWNER_ID=${{ secrets.OWNER_ID }}" | Out-File -FilePath .env -Encoding ascii -Append
-          echo "DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}" | Out-File -FilePath .env -Encoding ascii -Append
-          echo "DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}" | Out-File -FilePath .env -Encoding ascii -Append
-          echo "DISCORD_REDIRECT_URI=${{ secrets.DISCORD_REDIRECT_URI }}" | Out-File -FilePath .env -Encoding ascii -Append
-          echo "DATA_FOLDER=${{ secrets.DATA_FOLDER }}" | Out-File -FilePath .env -Encoding ascii -Append
-          echo "PROXY_URL=${{ secrets.PROXY_URL }}" | Out-File -FilePath .env -Encoding ascii -Append
-          echo "FLASK_SECRET_KEY=${{ secrets.FLASK_SECRET_KEY }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" | Out-File -FilePath .env -Encoding ascii[cite: 2]
+          echo "OWNER_ID=${{ secrets.OWNER_ID }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
+          echo "DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
+          echo "DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
+          echo "DISCORD_REDIRECT_URI=${{ secrets.DISCORD_REDIRECT_URI }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
+          echo "DATA_FOLDER=${{ secrets.DATA_FOLDER }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
+          echo "PROXY_URL=${{ secrets.PROXY_URL }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
+          echo "FLASK_SECRET_KEY=${{ secrets.FLASK_SECRET_KEY }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
           
       - name: Copy file cookies vào thư mục vận hành
-        # Lệnh này copy file từ vị trí lưu trữ trên server vào thư mục chứa code hiện tại
-        # Hãy đổi "C:\duong\dan\toi\cookies.txt" thành đường dẫn thật tới file cookies của bạn
         run: |
-          Copy-Item -Path "C:\Users\Administrator\Documents\cookies.txt" -Destination ".\cookies.txt" -Force
+          Copy-Item -Path "C:\Users\Administrator\Documents\cookies.txt" -Destination ".\cookies.txt" -Force[cite: 2]
           
-
       - name: Cài đặt/Cập nhật thư viện Python
-        # Lệnh này sẽ cài đặt các gói cần thiết như discord.py, flask, yt-dlp từ requirements.txt
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -U yt-dlp
+          python -m pip install --upgrade pip[cite: 2]
+          pip install -r requirements.txt[cite: 2]
+          pip install -U yt-dlp[cite: 2]
 
       - name: Khởi động lại Bot Service
-        # Dừng và khởi động lại bot để áp dụng code mới (Yêu cầu PowerShell chạy dưới quyền Admin)
         run: |
-          Restart-Service -Name "DiscordBot"
+          Restart-Service -Name "DiscordBot"[cite: 2]
