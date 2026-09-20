@@ -1,6 +1,6 @@
 let currentGuildId = null;
 let pollingInterval = null;
-let globalDuration = 0; 
+let globalDuration = 0;
 let currentPlaybackTime = 0;
 let syncTimer = null;
 let isDraggingVolume = false;
@@ -14,7 +14,7 @@ function isRunningInDiscord() {
         return window.self !== window.top;
     } catch (e) {
         // Nếu trình duyệt chặn truy cập cross-origin, chắc chắn là đang trong iframe
-        return true; 
+        return true;
     }
 }
 
@@ -388,8 +388,8 @@ window.addFromInput = addFromInput;
 window.seekMusic = seekMusic;
 
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('youtube-input').addEventListener('keypress', e => { 
-        if(e.key === 'Enter') addFromInput(); 
-    });
+    document.getElementById('youtube-input').addEventListener('keypress', e => {
+         if(e.key === 'Enter') addFromInput();
+     });
     init();
 });

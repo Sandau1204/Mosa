@@ -92,6 +92,11 @@ def panel():
 
     return send_from_directory('dist', 'panel.html')
 
+@app.route('/assets/<path:filename>')
+def serve_assets(filename):
+    # Trả về các file JS, CSS do Vite build ra nằm trong thư mục dist/assets
+    return send_from_directory('dist/assets', filename)
+
 @app.route('/login')
 def login():
     auth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
