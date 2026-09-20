@@ -213,14 +213,14 @@
 
     <!-- Discord SDK Loader -->
     <script type="module">
-        import { DiscordSDK } from "/static/discord-sdk.mjs";
+        import { DiscordSDK } from "https://unpkg.com/@discord/embedded-app-sdk@1.2.0/output/index.mjs";
         window.discordSdk = new DiscordSDK('1541005812951162920');
         window.discordSdk.ready().then(() => {
             window.sdkReady = true;
         }).catch(err => console.error("Lỗi khởi tạo SDK:", err));
-    </script>
+</script>
 
     <!-- JS File -->
-    <script src="music.js"></script>
+    <script type="module" src="music.js"></script>
 </body>
 </html>

@@ -14,7 +14,7 @@
     "url": "git+https://github.com/Sandau1204/Mosa.git"
   },
   "keywords": [],
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/Sandau1204/Mosa/issues"
   },

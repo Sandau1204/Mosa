@@ -51,25 +51,6 @@ input[type=range]::-webkit-slider-thumb {
 input[type=range]:focus {
     outline: none;
 }
-@script tailwind.config = {
-    darkMode: 'class',
-    theme: {
-        extend: {
-            fontFamily: {
-                sans: ['Inter', 'sans-serif'],
-            },
-            colors: {
-                discord: '#5865F2',
-                discordHover: '#4752C4',
-                gray: {
-                    850: '#1f2937',
-                    900: '#111827',
-                    950: '#030712',
-                }
-            }
-        }
-    }
-};
 
 /* Custom Scrollbar for a clean look */
 ::-webkit-scrollbar {
