@@ -1,0 +1,25 @@
+{
+  "name": "mosa",
+  "version": "1.0.0",
+  "description": "📜 Mosa – Terms of Service\r Last Updated: [Insert Date]\r 1. Acceptance of Terms\r By adding or using Mosa (the “Bot”) in your Discord server or personal account, you agree to these Terms of Service (“Terms”). If you do not agree, you must remove the Bot immediately.\r 2. Description of Service\r Mosa is a Discord bot designed to provide entertainment, utilities, and other automated features within Discord servers. Features may change over time as updates are deployed.\r 3. Eligibility\r You must comply with:\r Discord’s Terms of Service",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sandau1204/Mosa.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Sandau1204/Mosa/issues"
+  },
+  "homepage": "https://github.com/Sandau1204/Mosa#readme",
+  "devDependencies": {
+    "vite": "^8.3.0"
+  }
+}

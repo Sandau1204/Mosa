@@ -1,7 +1,7 @@
 import os
 import asyncio
 import logging
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from dotenv import load_dotenv
 import discord
 from typing import Optional
@@ -80,46 +80,17 @@ OWNER_ID = os.getenv('OWNER_ID')
 
 @app.route('/panel')
 def panel():
-    # 1. Nếu chưa đăng nhập: Cứ trả về trang panel (giao diện sẽ tự động hiện khung bắt đăng nhập)
     if 'user' not in session:
-        return render_template('panel.html')
+        # Trong môi trường dev của Vite, bạn truy cập thẳng localhost:5173/panel.html
+        # Code này chỉ chạy trên production (port 5000)
+        return send_from_directory('dist', 'panel.html')
     
-    # Lấy OWNER_ID từ file .env
     OWNER_ID = os.getenv('OWNER_ID')
-    
-    # 2. Nếu ĐÃ đăng nhập nhưng KHÔNG PHẢI là Owner
     if str(session['user']['id']) != str(OWNER_ID):
-        # Trả về giao diện báo lỗi kèm nút Đăng Xuất
-        unauthorized_html = """
-        <!DOCTYPE html>
-        <html lang="vi">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Không có quyền truy cập</title>
-            <script src="https://cdn.tailwindcss.com"></script>
-        </head>
-        <body class="bg-gray-900 h-screen flex flex-col items-center justify-center selection:bg-[#5865F2] selection:text-white">
-            <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 max-w-md w-full text-center mx-4">
-                <div class="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
-                    <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                    </svg>
-                </div>
-                <h2 class="text-xl font-bold text-white mb-2">Từ chối truy cập</h2>
-                <p class="text-gray-400 mb-6 text-sm">Tài khoản <b>{}</b> không có quyền truy cập vào bảng điều khiển này. Vui lòng đăng xuất và đăng nhập bằng tài khoản chỉ định.</p>
-                <a href="/logout" class="block w-full bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium py-2.5 rounded-lg transition-colors">
-                    Đăng Xuất
-                </a>
-            </div>
-        </body>
-        </html>
-        """.format(session['user']['username'])
-        
-        return unauthorized_html, 403
+        # ... (giữ nguyên code trả về HTML báo lỗi 403[cite: 1])
+        pass
 
-    # 3. Nếu ĐÃ đăng nhập và LÀ Owner: Trả về trang panel bình thường
-    return render_template('panel.html')
+    return send_from_directory('dist', 'panel.html')
 
 @app.route('/login')
 def login():
@@ -590,9 +561,8 @@ def api_logs():
 
 @app.route('/music')
 def music():
-    # Lưu lại trang hiện tại để callback chuyển hướng về đúng chỗ
-    session['next_url'] = url_for('music') 
-    return render_template('music.html')
+    session['next_url'] = url_for('music')
+    return send_from_directory('dist', 'music.html')
 
 # ==========================================
 # 1. LẤY TRẠNG THÁI VÀ HÀNG CHỜ HIỂN THỊ LÊN WEB
