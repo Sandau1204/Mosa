@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted  # Bắt buộc phải là self-hosted để chạy trên server của bạn[cite: 2]
+    runs-on: self-hosted  # Bắt buộc phải là self-hosted để chạy trên server của bạn
 
     steps:
       - name: Checkout code
@@ -29,25 +29,25 @@ jobs:
 
       - name: Tạo file .env tự động
         run: |
-          echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" | Out-File -FilePath .env -Encoding ascii[cite: 2]
-          echo "OWNER_ID=${{ secrets.OWNER_ID }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
-          echo "DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
-          echo "DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
-          echo "DISCORD_REDIRECT_URI=${{ secrets.DISCORD_REDIRECT_URI }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
-          echo "DATA_FOLDER=${{ secrets.DATA_FOLDER }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
-          echo "PROXY_URL=${{ secrets.PROXY_URL }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
-          echo "FLASK_SECRET_KEY=${{ secrets.FLASK_SECRET_KEY }}" | Out-File -FilePath .env -Encoding ascii -Append[cite: 2]
+          echo "DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}" | Out-File -FilePath .env -Encoding ascii
+          echo "OWNER_ID=${{ secrets.OWNER_ID }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "DISCORD_CLIENT_SECRET=${{ secrets.DISCORD_CLIENT_SECRET }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "DISCORD_REDIRECT_URI=${{ secrets.DISCORD_REDIRECT_URI }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "DATA_FOLDER=${{ secrets.DATA_FOLDER }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "PROXY_URL=${{ secrets.PROXY_URL }}" | Out-File -FilePath .env -Encoding ascii -Append
+          echo "FLASK_SECRET_KEY=${{ secrets.FLASK_SECRET_KEY }}" | Out-File -FilePath .env -Encoding ascii -Append
           
       - name: Copy file cookies vào thư mục vận hành
         run: |
-          Copy-Item -Path "C:\Users\Administrator\Documents\cookies.txt" -Destination ".\cookies.txt" -Force[cite: 2]
+          Copy-Item -Path "C:\Users\Administrator\Documents\cookies.txt" -Destination ".\cookies.txt" -Force
           
       - name: Cài đặt/Cập nhật thư viện Python
         run: |
-          python -m pip install --upgrade pip[cite: 2]
-          pip install -r requirements.txt[cite: 2]
-          pip install -U yt-dlp[cite: 2]
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -U yt-dlp
 
       - name: Khởi động lại Bot Service
         run: |
-          Restart-Service -Name "DiscordBot"[cite: 2]
+          Restart-Service -Name "DiscordBot"
