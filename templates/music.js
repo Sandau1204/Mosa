@@ -8,6 +8,16 @@ let volumeDebounceTimer = null;
 let currentVolume = 100;
 let previousVolume = 100;
 
+function isRunningInDiscord() {
+    try {
+        // Nếu window hiện tại khác với window gốc (top), nghĩa là đang ở trong iframe
+        return window.self !== window.top;
+    } catch (e) {
+        // Nếu trình duyệt chặn truy cập cross-origin, chắc chắn là đang trong iframe
+        return true; 
+    }
+}
+
 function formatTime(seconds) {
     if (!seconds || isNaN(seconds)) return "0:00";
     const m = Math.floor(seconds / 60);
@@ -73,15 +83,23 @@ async function init() {
 }
 
 async function handleLogin() {
+    // 1. NẾU ĐANG Ở TRÌNH DUYỆT NGOÀI (Chrome, Cốc Cốc...)
+    if (!isRunningInDiscord()) {
+        showToast('Đang chuyển hướng đến trang đăng nhập...', 'info');
+        window.location.href = '/login'; // Chuyển sang luồng OAuth2 của Flask
+        return;
+    }
+
+    // 2. NẾU ĐANG Ở TRONG DISCORD ACTIVITY
     if (!window.sdkReady) {
         showToast('Discord SDK đang khởi tạo, vui lòng thử lại sau giây lát...', 'error');
         return;
     }
 
     try {
-        showToast('Đang kết nối với Discord...', 'info');
-    
-        // 1. Authorize qua Iframe/Popup của Discord SDK
+        showToast('Đang kết nối Discord SDK...', 'info');
+
+        // Authorize qua Iframe/Popup của Discord SDK
         const { code } = await window.discordSdk.commands.authorize({
             client_id: '1541005812951162920',
             response_type: 'code',
@@ -89,38 +107,39 @@ async function handleLogin() {
             prompt: 'none',
             scope: ['identify', 'guilds']
         });
-    
-        // 2. Gửi Authorization code về Backend để đổi lấy access_token
+
+        // Gửi Authorization code về Backend lấy access_token
         const response = await fetch('/api/discord-auth', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code })
         });
         const data = await response.json();
-    
+
         if (!response.ok) {
             throw new Error(data.error || 'Lỗi lấy token từ backend');
         }
-    
-        // 3. Xác thực SDK (Bắt buộc để gọi các lệnh âm thanh/RPC trong iframe)
+
+        // Xác thực SDK (Bật luồng âm thanh/RPC trong iframe)
         await window.discordSdk.commands.authenticate({
             access_token: data.access_token
         });
-    
-        // 4. Xóa màn hình chờ và cập nhật Giao diện
+
+        // Tắt màn hình chặn và hiển thị UI
         document.getElementById('auth-overlay').classList.add('opacity-0', 'pointer-events-none');
         document.getElementById('app-container').classList.remove('opacity-0', 'pointer-events-none');
         document.getElementById('player-bar').classList.remove('opacity-0', 'pointer-events-none');
-    
+
+        // Cập nhật thông tin User
         document.getElementById('user-username').innerText = data.user.username;
         if (data.user.avatar) {
             document.getElementById('user-avatar').src = data.user.avatar;
         }
-    
+
         await loadServers();
         startPolling();
-        showToast('Xác thực thành công!', 'success');
-    
+        showToast('Xác thực SDK thành công!', 'success');
+
     } catch (error) {
         console.error("Login failed:", error);
         showToast("Đăng nhập thất bại: " + error.message, "error");
@@ -356,6 +375,17 @@ function showToast(msg, type = 'info') {
     requestAnimationFrame(() => t.classList.remove('translate-x-full', 'opacity-0'));
     setTimeout(() => { t.classList.add('translate-x-full', 'opacity-0'); setTimeout(() => t.remove(), 300); }, 3000);
 }
+
+window.handleLogin = handleLogin;
+window.togglePlay = togglePlay;
+window.skipSong = skipSong;
+window.clearQueue = clearQueue;
+window.inviteBot = inviteBot;
+window.toggleLoop = toggleLoop;
+window.changeVolume = changeVolume;
+window.toggleMute = toggleMute;
+window.addFromInput = addFromInput;
+window.seekMusic = seekMusic;
 
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('youtube-input').addEventListener('keypress', e => { 

@@ -675,4 +675,5 @@ window.alert = function(message) {
 };
 
 // Khởi động panel khi tải trang xong
+window.app = app;
 window.onload = () => app.init();
