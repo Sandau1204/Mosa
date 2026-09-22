@@ -391,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.shuffleQueue = shuffleQueue;
 
     document.getElementById('youtube-input').addEventListener('keypress', e => {
-         if(e.key === 'Enter') addFromInput(); 
+         if(e.key === 'Enter') addFromInput();
      });
     init();
 });

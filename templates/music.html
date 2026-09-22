@@ -162,9 +162,14 @@
         </div>
 
         <!-- Controls & Progress -->
+        <!-- Controls & Progress -->
         <div class="flex flex-col items-center flex-1 max-w-2xl px-4">
             <div class="flex items-center gap-5 mb-2">
-                <!-- Bỏ nút Shuffle cũ và nút Bài trước. Đưa nút Vòng lặp lên đây -->
+                <!-- Nút Giảm âm lượng (Bên trái thanh điều khiển) -->
+                <button onclick="changeVolume(-10)" class="text-discord-muted hover:text-white transition-colors" title="Giảm âm lượng">
+                    <i class="ph-fill ph-speaker-low text-xl"></i>
+                </button>
+
                 <button class="text-discord-muted hover:text-white transition-colors" title="Lặp lại" id="loop-btn" onclick="toggleLoop()">
                     <i class="ph ph-repeat text-lg"></i>
                 </button>
@@ -175,6 +180,11 @@
                 
                 <button class="text-discord-muted hover:text-white transition-colors" title="Bỏ qua" onclick="skipSong()">
                     <i class="ph-fill ph-skip-forward text-2xl"></i>
+                </button>
+
+                <!-- Nút Tăng âm lượng (Bên phải thanh điều khiển) -->
+                <button onclick="changeVolume(10)" class="text-discord-muted hover:text-white transition-colors" title="Tăng âm lượng">
+                    <i class="ph-fill ph-speaker-high text-xl"></i>
                 </button>
             </div>
             
@@ -191,20 +201,10 @@
 
         <!-- Extra Controls (Volume) -->
         <div class="flex items-center justify-end w-1/3 gap-2 pr-4">
-            <!-- Đổi ph-minus thành ph-speaker-low -->
-            <button onclick="changeVolume(-10)" class="w-8 h-8 flex items-center justify-center rounded-full text-discord-muted hover:text-white hover:bg-discord-hover transition-colors" title="Giảm">
-                <i class="ph-fill ph-speaker-low text-lg"></i>
-            </button>
-            
             <div class="flex items-center justify-center gap-1.5 min-w-[65px] px-2 py-1 bg-[#1E1F22] rounded cursor-pointer select-none border border-discord-bg hover:border-discord-hover transition-colors" onclick="toggleMute()" title="Click để Mute/Unmute">
                 <i class="ph ph-speaker-high text-discord-muted text-lg" id="volume-icon"></i>
                 <span id="volume-text" class="text-xs font-bold text-discord-text">100%</span>
             </div>
-        
-            <!-- Đổi ph-plus thành ph-speaker-high -->
-            <button onclick="changeVolume(10)" class="w-8 h-8 flex items-center justify-center rounded-full text-discord-muted hover:text-white hover:bg-discord-hover transition-colors" title="Tăng">
-                <i class="ph-fill ph-speaker-high text-lg"></i>
-            </button>
         </div>
     </div>
 
