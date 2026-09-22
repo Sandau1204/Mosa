@@ -7,6 +7,12 @@ let isDraggingVolume = false;
 let volumeDebounceTimer = null;
 let currentVolume = 100;
 let previousVolume = 100;
+let isDraggingQueue = false;
+let queueSortable = null;
+
+function shuffleQueue() {
+    sendAction('shuffle');
+}
 
 function isRunningInDiscord() {
     try {
@@ -245,6 +251,30 @@ function updateUI(state) {
     }
     const qList = document.getElementById('queue-list');
     document.getElementById('queue-count').innerText = `${state.queue.length} bài`;
+
+    if (!isDraggingQueue) {
+        if(state.queue.length === 0) {
+            qList.innerHTML = `<div class="flex flex-col items-center justify-center py-10 text-discord-muted"><i class="ph ph-ghost text-4xl mb-2"></i><p>Hàng chờ rỗng</p></div>`;
+        } else {
+            // Thêm icon "drag-handle" (6 dấu chấm) để kéo thả
+            qList.innerHTML = state.queue.map((song, i) => `
+                <li class="group flex items-center p-2 rounded-md hover:bg-discord-hover transition-colors" data-index="${i}">
+                    <i class="ph ph-dots-six-vertical text-discord-muted hover:text-white cursor-grab drag-handle mr-2 text-xl" title="Kéo để di chuyển"></i>
+                    <span class="w-6 text-center text-xs text-discord-muted">${i + 1}</span>
+                    <div class="flex-1 min-w-0 flex flex-col pl-2">
+                        <div class="text-sm font-medium text-discord-text truncate">${song.title}</div>
+                        <div class="text-xs text-discord-muted truncate">${song.author}</div>
+                    </div>
+                    <span class="text-xs text-discord-muted mx-4 font-mono">${song.duration}</span>
+                    <button onclick="sendAction('remove', {song_id: '${song.id}'})" class="opacity-0 group-hover:opacity-100 text-discord-muted hover:text-discord-danger p-1">
+                        <i class="ph ph-trash"></i>
+                    </button>
+                </li>
+            `).join('');
+        }
+        // Khởi tạo tính năng kéo thả
+        initSortable();
+    }
     if(state.queue.length === 0) {
         qList.innerHTML = `<div class="flex flex-col items-center justify-center py-10 text-discord-muted"><i class="ph ph-ghost text-4xl mb-2"></i><p>Hàng chờ trống</p></div>`;
     } else {
@@ -325,6 +355,28 @@ function showToast(msg, type = 'info') {
     setTimeout(() => { t.classList.add('translate-x-full', 'opacity-0'); setTimeout(() => t.remove(), 300); }, 3000);
 }
 
+// Khởi tạo SortableJS
+function initSortable() {
+    const qList = document.getElementById('queue-list');
+    if (qList && typeof Sortable !== 'undefined' && !queueSortable) {
+        queueSortable = new Sortable(qList, {
+            handle: '.drag-handle', // Chỉ kéo thả khi chuột chỉ vào icon 6 dấu chấm
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onStart: function () {
+                isDraggingQueue = true; // Chặn polling update lại UI khi đang kéo
+            },
+            onEnd: function (evt) {
+                isDraggingQueue = false;
+                if (evt.oldIndex !== evt.newIndex) {
+                    // Gửi API về backend với vị trí cũ và vị trí mới
+                    sendAction('reorder', { from: evt.oldIndex, to: evt.newIndex });
+                }
+            }
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     window.handleLogin = handleLogin;
     window.togglePlay = togglePlay;
@@ -336,6 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.toggleMute = toggleMute;
     window.addFromInput = addFromInput;
     window.seekMusic = seekMusic;
+    window.shuffleQueue = shuffleQueue;
 
     document.getElementById('youtube-input').addEventListener('keypress', e => {
          if(e.key === 'Enter') addFromInput(); 
