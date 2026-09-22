@@ -54,17 +54,14 @@ async function init() {
         document.cookie = "sameSite=None; secure";
         const res = await fetch('/api/user');
         const authData = await res.json();
-        
         if(authData.authenticated) {
             document.getElementById('auth-overlay').classList.add('opacity-0', 'pointer-events-none');
             document.getElementById('app-container').classList.remove('opacity-0', 'pointer-events-none');
             document.getElementById('player-bar').classList.remove('opacity-0', 'pointer-events-none');
-            
             document.getElementById('user-username').innerText = authData.user.username;
             if(authData.user.avatar) {
                 document.getElementById('user-avatar').src = authData.user.avatar;
             }
-            
             await loadServers();
             startPolling();
         } else {
@@ -153,7 +150,7 @@ async function loadVoiceChannels(guildId) {
         const channels = await res.json();
         const channelSelect = document.getElementById('channel-select');
         channelSelect.innerHTML = channels.length === 0 ? '<option value="">Không có kênh thoại</option>' :
-             channels.map(c => `<option value="${c.id}">🔊 ${c.name}</option>`).join('');
+            channels.map(c => `<option value="${c.id}">🔊 ${c.name}</option>`).join('');
     } catch (e) { console.error("Lỗi load kênh thoại", e); }
 }
 
@@ -251,7 +248,6 @@ function updateUI(state) {
     }
     const qList = document.getElementById('queue-list');
     document.getElementById('queue-count').innerText = `${state.queue.length} bài`;
-
     if (!isDraggingQueue) {
         if(state.queue.length === 0) {
             qList.innerHTML = `<div class="flex flex-col items-center justify-center py-10 text-discord-muted"><i class="ph ph-ghost text-4xl mb-2"></i><p>Hàng chờ rỗng</p></div>`;
@@ -389,7 +385,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addFromInput = addFromInput;
     window.seekMusic = seekMusic;
     window.shuffleQueue = shuffleQueue;
-
     document.getElementById('youtube-input').addEventListener('keypress', e => {
          if(e.key === 'Enter') addFromInput();
      });

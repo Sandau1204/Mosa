@@ -15,24 +15,19 @@ class Voice(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.welcome_channels = {}
-        
         # Tạo thư mục nếu chưa có
         if not os.path.exists(DATA_FOLDER):
             os.makedirs(DATA_FOLDER)
-            
         self.custom_names = self.load_custom_names()
-
     def load_custom_names(self):
         if not os.path.exists(NAME_FILE): return {}
         try:
             with open(NAME_FILE, "r", encoding="utf-8") as f: return json.load(f)
         except: return {}
-
     def save_custom_names(self):
         if not os.path.exists(DATA_FOLDER): os.makedirs(DATA_FOLDER)
         with open(NAME_FILE, "w", encoding="utf-8") as f:
             json.dump(self.custom_names, f, ensure_ascii=False, indent=4)
-
     async def join_channel(self, interaction, member=None):
         # Allow passing a resolved Member to avoid issues when interaction.user is a User
         if member is None:
@@ -43,16 +38,13 @@ class Voice(commands.Cog):
         if not isinstance(member, discord.Member):
             await interaction.followup.send("❌ Không thể xác định người dùng này.", ephemeral=True)
             return None
-
         if member.voice is None:
             await interaction.followup.send("❌ Bạn chưa vào Voice!", ephemeral=True)
             return None
-
         channel = member.voice.channel
         if channel is None:
             await interaction.followup.send("❌ Không thể xác định kênh thoại.", ephemeral=True)
             return None
-
         voice_client = interaction.guild.voice_client if interaction.guild else None
         if voice_client and getattr(voice_client, "is_connected", lambda: False)():
             if voice_client.channel != channel:
@@ -60,9 +52,8 @@ class Voice(commands.Cog):
         else:
             voice_client = await channel.connect()
         return voice_client
-
     async def speak_text(self, voice_client, text, lang='vi'):
-        if voice_client.is_playing(): return False 
+        if voice_client.is_playing(): return False
         try:
             tts = gTTS(text=text, lang=lang)
             file_path = f"tts_{voice_client.guild.id}.mp3"
@@ -70,7 +61,6 @@ class Voice(commands.Cog):
             voice_client.play(discord.FFmpegPCMAudio(file_path), after=lambda e: os.remove(file_path) if os.path.exists(file_path) else None)
             return True
         except: return False
-
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         if member.bot: return
@@ -78,31 +68,26 @@ class Voice(commands.Cog):
         if guild_id not in self.welcome_channels: return
         watched_channel_id = self.welcome_channels[guild_id]
         is_joining = (before.channel != after.channel) and (after.channel is not None and after.channel.id == watched_channel_id)
-
         if is_joining:
             voice_client = member.guild.voice_client
             if voice_client and getattr(voice_client, "is_connected", lambda: False)() and voice_client.channel.id == watched_channel_id:
-                if voice_client.is_playing(): return 
+                if voice_client.is_playing(): return
                 user_id = str(member.id)
                 target_name = self.custom_names.get(user_id, member.display_name)
                 await self.speak_text(voice_client, f" {target_name} đã vào phòng")
-
     # --- CÁC LỆNH SLASH ---
-
     @app_commands.command(name="name", description="Xem tên bot gọi bạn")
     async def name(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         user_id = str(interaction.user.id)
         name = self.custom_names.get(user_id, interaction.user.display_name)
         await interaction.followup.send(f"Tên hiện tại: **{name}**")
-
     @app_commands.command(name="setname", description="Đặt biệt danh")
     async def setname(self, interaction: discord.Interaction, new_name: str):
         await interaction.response.defer(ephemeral=True)
         self.custom_names[str(interaction.user.id)] = new_name
         self.save_custom_names()
         await interaction.followup.send(f"✅ Đã nhớ tên: **{new_name}**")
-
     @app_commands.command(name="welcome", description="Bật/Tắt chào")
     async def welcome(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -111,17 +96,13 @@ class Voice(commands.Cog):
         if member is None or member.voice is None:
             await interaction.followup.send("❌ Vào voice trước đã!")
             return
-
         voice_client = await self.join_channel(interaction, member=member)
         if not voice_client: return
-
         channel = member.voice.channel
         guild_id = interaction.guild_id
-
         if channel is None:
             await interaction.followup.send("❌ Không thể xác định kênh thoại.")
             return
-
         if guild_id in self.welcome_channels and self.welcome_channels[guild_id] == channel.id:
             del self.welcome_channels[guild_id]
             await interaction.followup.send(f"🔕 Đã TẮT chào tại **{channel.name}**.")
@@ -129,14 +110,12 @@ class Voice(commands.Cog):
             self.welcome_channels[guild_id] = channel.id
             await interaction.followup.send(f"👋 Đã BẬT chào tại **{channel.name}**.")
             await self.speak_text(voice_client, "Kích hoạt chào.")
-
     @app_commands.command(name="join", description="Mời bot vào")
     async def join(self, interaction: discord.Interaction):
         await interaction.response.defer()
         voice_client = await self.join_channel(interaction)
         if voice_client:
             await interaction.followup.send(f"✅ Đã vào kênh: **{voice_client.channel.name}**")
-
     @app_commands.command(name="leave", description="Mời bot ra")
     async def leave(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -144,7 +123,6 @@ class Voice(commands.Cog):
         if guild is None:
             await interaction.followup.send("❌ Lệnh này chỉ chạy trong máy chủ.")
             return
-
         voice_client = guild.voice_client
         if voice_client and getattr(voice_client, "is_connected", lambda: False)():
             if interaction.guild_id in self.welcome_channels:
@@ -153,7 +131,6 @@ class Voice(commands.Cog):
             await interaction.followup.send("👋 Bye bye!")
         else:
             await interaction.followup.send("❌ Bot không ở trong kênh nào.")
-
     @app_commands.command(name="say", description="Chuyển văn bản thành giọng nói")
     async def say(self, interaction: discord.Interaction, text: str, lang: str = "vi"):
         await interaction.response.defer()
@@ -161,12 +138,10 @@ class Voice(commands.Cog):
         if guild is None:
             await interaction.followup.send("❌ Lệnh này chỉ chạy trong máy chủ.")
             return
-
         voice_client = guild.voice_client
         if not voice_client:
             voice_client = await self.join_channel(interaction)
             if not voice_client: return
-
         success = await self.speak_text(voice_client, text, lang)
         if success:
             await interaction.followup.send(f"🗣️ **Nói:** {text}")

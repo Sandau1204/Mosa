@@ -30,13 +30,11 @@ def get_music_state(guild_id):
     # Dùng setattr và getattr để "bịt mắt" Pylance, tránh báo lỗi thuộc tính ảo
     if not hasattr(bot_instance, 'music_state'):
         setattr(bot_instance, 'music_state', {})
-
     # Trích xuất state ra một biến tạm để thao tác
     m_state = getattr(bot_instance, 'music_state')
-
     if guild_id not in m_state:
         m_state[guild_id] = {
-            'queue': [], 
+            'queue': [],
             'now_playing': None,
             'volume': 100,
             'is_loop': 0,
@@ -56,7 +54,6 @@ def run_web(bot):
 def run_coro(coro):
     if bot_instance is None or not hasattr(bot_instance, 'loop') or bot_instance.loop is None:
         raise RuntimeError('Bot is not running yet.')
-
     future = asyncio.run_coroutine_threadsafe(coro, bot_instance.loop)
     return future.result()
 
@@ -84,12 +81,10 @@ def panel():
         # Trong môi trường dev của Vite, bạn truy cập thẳng localhost:5173/panel.html
         # Code này chỉ chạy trên production (port 5000)
         return send_from_directory('dist', 'panel.html')
-    
     OWNER_ID = os.getenv('OWNER_ID')
     if str(session['user']['id']) != str(OWNER_ID):
         # ... (giữ nguyên code trả về HTML báo lỗi 403[cite: 1])
         pass
-
     return send_from_directory('dist', 'panel.html')
 
 @app.route('/assets/<path:filename>')
@@ -107,7 +102,6 @@ def callback():
     code = request.args.get('code')
     if not code:
         return redirect(url_for('panel'))
-    
     import requests
     data = {
         'client_id': CLIENT_ID,
@@ -116,20 +110,15 @@ def callback():
         'code': code,
         'redirect_uri': REDIRECT_URI
     }
-    
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     r = requests.post('https://discord.com/api/oauth2/token', data=data, headers=headers, timeout=10)
     token_data = r.json()
-    
     if 'access_token' not in token_data:
         return "Xác thực thất bại!", 400
-        
     access_token = token_data['access_token']
     user_resp = requests.get('https://discord.com/api/users/@me', headers={'Authorization': f'Bearer {access_token}'})
     user_data = user_resp.json()
-    
     # BỎ KIỂM TRA OWNER_ID Ở ĐÂY ĐỂ AI CŨNG CÓ THỂ ĐĂNG NHẬP!
-    
     avatar_hash = user_data.get('avatar')
     if avatar_hash:
         # Kiểm tra nếu hash bắt đầu bằng "a_" thì đó là ảnh GIF động
@@ -138,7 +127,6 @@ def callback():
     else:
         # Nếu không có avatar, dùng avatar mặc định
         avatar_url = "https://cdn.discordapp.com/embed/avatars/0.png"
-
     session['user'] = {
         'id': user_data.get('id'),
         'username': user_data.get('username'),
@@ -146,7 +134,6 @@ def callback():
         'avatar': avatar_url
     }
     session.permanent = True
-    
     # Chuyển hướng về trang mà người dùng vừa truy cập (mặc định là music nếu không có)
     next_url = session.pop('next_url', url_for('music'))
     return redirect(next_url)
@@ -157,7 +144,6 @@ def api_discord_auth():
     code = data.get('code')
     if not code:
         return jsonify({'error': 'No code provided'}), 400
-
     import requests
     # Gửi request lấy token không cần redirect_uri cho Embedded SDK
     token_data = {
@@ -166,26 +152,21 @@ def api_discord_auth():
         'grant_type': 'authorization_code',
         'code': code
     }
-    
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     r = requests.post('https://discord.com/api/oauth2/token', data=token_data, headers=headers, timeout=10)
     token_resp = r.json()
-
     if 'access_token' not in token_resp:
         return jsonify({'error': 'Xác thực thất bại', 'details': token_resp}), 400
-
     # Lấy thông tin user bằng access_token
     access_token = token_resp['access_token']
     user_resp = requests.get('https://discord.com/api/users/@me', headers={'Authorization': f'Bearer {access_token}'})
     user_data = user_resp.json()
-
     avatar_hash = user_data.get('avatar')
     if avatar_hash:
         ext = "gif" if avatar_hash.startswith("a_") else "png"
         avatar_url = f"https://cdn.discordapp.com/avatars/{user_data.get('id')}/{avatar_hash}.{ext}?size=1024"
     else:
         avatar_url = "https://cdn.discordapp.com/embed/avatars/0.png"
-
     # Cập nhật Flask session
     session['user'] = {
         'id': user_data.get('id'),
@@ -194,7 +175,6 @@ def api_discord_auth():
         'avatar': avatar_url
     }
     session.permanent = True
-
     # Trả về cả access_token để client hoàn tất authenticate với SDK
     return jsonify({
         'access_token': access_token,
@@ -217,15 +197,12 @@ def api_user():
 def api_stats():
     if not bot_instance or not bot_instance.is_ready():
         return jsonify({'error': 'Bot offline'}), 503
-    
     total_guilds = len(bot_instance.guilds)
     total_members = sum(g.member_count for g in bot_instance.guilds if g.member_count)
     ping = round(bot_instance.latency * 1000)
-    
     import psutil
     process = psutil.Process(os.getpid())
     ram_usage = round(process.memory_info().rss / 1024 / 1024, 2)
-    
     return jsonify({
         'guilds': total_guilds,
         'members': total_members,
@@ -239,8 +216,21 @@ def api_stats():
 def api_servers():
     if not bot_instance:
         return jsonify([])
+    # Lấy ID của người dùng đang đăng nhập từ session
+    user_id = None
+    if 'user' in session:
+        user_id = int(session['user']['id'])
+    # Kiểm tra xem người dùng có phải là Owner không (Owner thì cho thấy hết)
+    owner_id = os.getenv('OWNER_ID')
+    is_owner = str(user_id) == str(owner_id)
     servers = []
     for g in bot_instance.guilds:
+        # Nếu không phải là Owner, tiến hành lọc
+        if user_id and not is_owner:
+            # Dùng cache của bot để xem người dùng này có nằm trong server không
+            # Nếu get_member trả về None nghĩa là người dùng không ở trong server này -> Bỏ qua
+            if not g.get_member(user_id):
+                continue
         servers.append({
             'id': str(g.id),
             'name': g.name,
@@ -253,11 +243,9 @@ def api_servers():
 def api_server_voice_channels(guild_id):
     if not bot_instance:
         return jsonify([])
-
     guild = bot_instance.get_guild(int(guild_id))
     if not guild:
         return jsonify([])
-        
     channels = []
     # Chỉ lấy các kênh thoại (Voice Channels)
     for vc in guild.voice_channels:
@@ -271,7 +259,6 @@ def api_server_voice_channels(guild_id):
 def api_server_members(guild_id):
     if not bot_instance:
         return jsonify([])
-
     guild = bot_instance.get_guild(int(guild_id))
     if not guild:
         return jsonify([]), 404
@@ -291,15 +278,12 @@ def api_server_members(guild_id):
 def api_member_action(guild_id, member_id):
     if not bot_instance:
         return jsonify({'success': False, 'error': 'Bot not initialized'}), 503
-
     data = request.json or {}
     action = data.get('action') # ban, kick, timeout
     reason = data.get('reason', 'Không có lý do')
-    
     guild = bot_instance.get_guild(int(guild_id))
     if not guild:
         return jsonify({'success': False, 'error': 'Server not found'}), 404
-        
     async def do_action():
         member = guild.get_member(int(member_id))
         if not member:
@@ -314,7 +298,6 @@ def api_member_action(guild_id, member_id):
             until = discord.utils.utcnow() + datetime.timedelta(seconds=duration)
             await member.timeout(until, reason=reason)
         return True
-
     try:
         run_coro(do_action())
         add_log(f"Thực hiện {action} lên thành viên {member_id} tại server {guild.name}", "warn")
@@ -326,7 +309,6 @@ def api_member_action(guild_id, member_id):
 def api_create_invite(guild_id):
     if not bot_instance:
         return jsonify({'error': 'Bot not initialized'}), 503
-
     guild = bot_instance.get_guild(int(guild_id))
     if not guild:
         return jsonify({'error': 'Server not found'}), 404
@@ -348,7 +330,6 @@ def api_create_invite(guild_id):
 def api_leave_server(guild_id):
     if not bot_instance:
         return jsonify({'error': 'Bot not initialized'}), 503
-
     guild = bot_instance.get_guild(int(guild_id))
     if not guild:
         return jsonify({'error': 'Server not found'}), 404
@@ -375,24 +356,18 @@ def api_channel_messages(channel_id):
     try:
         if bot_instance is None:
             return jsonify({'error': 'Bot is not ready'}), 503
-
         # 1. Bắt lỗi an toàn nếu Javascript gửi lên chữ 'null' hoặc 'undefined'
         if channel_id in ("null", "undefined", "none", ""):
             return jsonify([]), 400
-            
         try:
             channel_id_int = int(channel_id)
         except ValueError:
             return jsonify([]), 400
-
         channel = bot_instance.get_channel(channel_id_int)
-        
         if not channel or not isinstance(channel, discord.abc.Messageable):
             return jsonify([]), 404
-
         if request.method == 'GET':
             before_id = request.args.get('before')
-            
             async def fetch_msgs():
                 msgs = []
                 try:
@@ -401,11 +376,9 @@ def api_channel_messages(channel_id):
                         before_msg = discord.Object(id=int(before_id))
                     else:
                         before_msg = None
-                    
                     async for m in channel.history(limit=30, before=before_msg):
                         # SỬA Ở ĐÂY: Dùng clean_content thay vì content để tự động đổi ID thành Tên (Mentions)
                         content = str(m.clean_content) if m.clean_content else ""
-                        
                         # Xử lý Reply an toàn tuyệt đối
                         reply_info = None
                         if m.reference and hasattr(m.reference, 'resolved') and isinstance(m.reference.resolved, discord.Message):
@@ -413,56 +386,46 @@ def api_channel_messages(channel_id):
                             # Dùng clean_content cho cả tin nhắn reply
                             ref_raw_content = str(ref.clean_content) if ref.clean_content else ""
                             ref_content = ref_raw_content[:50] + "..." if len(ref_raw_content) > 50 else ref_raw_content
-                            
                             if not ref_content:
                                 if ref.embeds: ref_content = "[Tin nhắn Embed]"
                                 elif ref.attachments: ref_content = "[Đính kèm File/Ảnh]"
                                 else: ref_content = "Tin nhắn không có nội dung"
-                                
                             reply_info = {
                                 'author': str(ref.author.display_name) if hasattr(ref.author, 'display_name') else "Unknown",
                                 'content': ref_content
                             }
-
                         # Xử lý Embeds an toàn tuyệt đối (Chống lỗi JSON)
                         embeds_data = []
                         for emb in m.embeds:
                             title = str(emb.title) if isinstance(emb.title, str) else ""
                             description = str(emb.description) if isinstance(emb.description, str) else ""
-                            
                             color = "#2B2D31"
                             if hasattr(emb, 'color') and isinstance(emb.color, discord.Colour):
                                 color = f"#{emb.color.value:06x}"
-                            
                             image_url = ""
                             if hasattr(emb, 'image') and emb.image and hasattr(emb.image, 'url') and isinstance(emb.image.url, str):
                                 image_url = emb.image.url
                             elif hasattr(emb, 'thumbnail') and emb.thumbnail and hasattr(emb.thumbnail, 'url') and isinstance(emb.thumbnail.url, str):
                                 image_url = emb.thumbnail.url
-
                             if not title and not description and not image_url:
                                 continue
-                                
                             embeds_data.append({
                                 'title': title,
                                 'description': description,
                                 'color': color,
                                 'image': image_url
                             })
-
                         # SỬA Ở ĐÂY: Lấy danh sách file đính kèm (ảnh, gif, video, tài liệu...)
                         attachments_data = []
                         for att in m.attachments:
                             is_image = False
                             if att.content_type and att.content_type.startswith(('image/', 'video/')):
                                 is_image = True # Đánh dấu là ảnh hoặc gif để frontend hiển thị
-
                             attachments_data.append({
                                 'filename': att.filename,
                                 'url': att.url,
                                 'is_image': is_image
                             })
-
                         msgs.append({
                             'id': str(m.id),
                             'author': str(m.author.display_name),
@@ -474,7 +437,6 @@ def api_channel_messages(channel_id):
                             'embeds': embeds_data,
                             'attachments': attachments_data # <-- Truyền thêm cục này xuống UI
                         })
-                        
                 except discord.errors.Forbidden:
                     if not before_id:
                         msgs.append({
@@ -487,16 +449,12 @@ def api_channel_messages(channel_id):
                         })
                 except Exception as e:
                     print(f"Lỗi khi xử lý dữ liệu tin nhắn: {e}")
-                    
                 return msgs[::-1]
-            
             return jsonify(run_coro(fetch_msgs()))
-            
         elif request.method == 'POST':
             data = request.json or {}
             content = data.get('content')
             reply_to = data.get('reply_to')
-            
             async def send_msg():
                 if reply_to:
                     ref_msg = await channel.fetch_message(int(reply_to))
@@ -509,27 +467,23 @@ def api_channel_messages(channel_id):
             except Exception as e:
                 print(f"Lỗi khi gửi tin nhắn: {e}")
                 return jsonify({'success': False, 'error': str(e)}), 500
-            
         return jsonify({'error': 'Method Not Allowed'}), 405
-
     except Exception as e:
         import traceback
         # Bắt toàn bộ lỗi sập Flask và ép nó in ra màn hình console (để Panel nhìn thấy)
         print(f"LỖI NGHIÊM TRỌNG (API Messages): {e}")
         print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-        
+
 # --- API Trạng thái Bot ---
 @app.route('/api/bot/status', methods=['POST'])
 def api_update_status():
     if not bot_instance:
         return jsonify({'success': False, 'error': 'Bot not initialized'}), 503
-
     data = request.json or {}
     status_type = data.get('status', 'online') # online, idle, dnd, invisible
     activity_type = data.get('activity_type', 'playing') # playing, watching, listening, competing
     activity_name = data.get('activity_name', '')
-    
     status_map = {
         'online': discord.Status.online,
         'idle': discord.Status.idle,
@@ -542,14 +496,11 @@ def api_update_status():
         'listening': discord.ActivityType.listening,
         'competing': discord.ActivityType.competing
     }
-
     bot = bot_instance
-    
     async def change_pres():
         st = status_map.get(status_type, discord.Status.online)
         act = discord.Activity(type=act_map.get(activity_type, discord.ActivityType.playing), name=activity_name)
         await bot.change_presence(status=st, activity=act)
-        
     try:
         run_coro(change_pres())
         add_log(f"Đã cập nhật trạng thái bot thành: {status_type} | {activity_type} {activity_name}")
@@ -576,26 +527,20 @@ def music():
 def api_music_state():
     if not bot_instance or not bot_instance.is_ready():
         return jsonify({'error': 'Bot offline'}), 503
-        
     guild_id = request.args.get('guild_id')
     if not guild_id:
         return jsonify({'error': 'Missing guild_id'}), 400
-
     guild = bot_instance.get_guild(int(guild_id))
     if not guild or not guild.voice_client:
         return jsonify({'connected': False, 'queue': [], 'playlists': [], 'now_playing': None})
-
     raw_vc = guild.voice_client
     if not isinstance(raw_vc, discord.VoiceClient):
         return jsonify({'connected': False, 'queue': [], 'playlists': [], 'now_playing': None})
     vc = raw_vc
-    
     channel_name = getattr(vc.channel, 'name', 'Voice Channel')
     state_data = get_music_state(int(guild_id))
-    
     if not vc.is_playing() and not vc.is_paused():
         state_data['now_playing'] = None
-
     state = {
         'connected': True,
         'channel_name': channel_name,
@@ -616,24 +561,18 @@ def api_music_state():
 def api_music_action():
     if not bot_instance:
         return jsonify({'success': False, 'error': 'Bot offline'})
-        
     if 'user' not in session:
         return jsonify({'success': False, 'error': 'Vui lòng đăng nhập lại.'})
-        
     user_id = session['user']['id']
     data = request.json or {}
-    
     raw_guild_id = data.get('guild_id')
     if not raw_guild_id:
         return jsonify({'success': False, 'error': 'Thiếu ID Server.'})
     guild_id_int = int(raw_guild_id)
-    
     action = data.get('action')
-    
     guild = bot_instance.get_guild(guild_id_int)
     if not guild:
         return jsonify({'success': False, 'error': 'Không tìm thấy Server.'})
-
     # Ủy quyền toàn bộ xử lý âm nhạc cho music.py thông qua Event 'web_music_action'
     try:
         bot_instance.loop.call_soon_threadsafe(

@@ -18,19 +18,16 @@ const app = {
             invisible: `<svg class="w-4 h-4" viewBox="0 0 24 24"><path fill="#80848e" fill-rule="evenodd" clip-rule="evenodd" d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12Zm0-5.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Z"/></svg>`
         }
     },
-
     async init() {
         // Kiểm tra đăng nhập
         try {
             const res = await fetch('/api/user');
             const authData = await res.json();
-            
             if(authData.authenticated) {
                 document.getElementById('login-screen').style.display = 'none';
                 document.getElementById('user-username').innerText = authData.user.username;
                 document.getElementById('user-discriminator').innerText = authData.user.discriminator !== '0' ? `#${authData.user.discriminator}` : '';
                 document.getElementById('user-avatar').src = authData.user.avatar;
-                
                 // Load dữ liệu
                 this.loadStats();
                 this.loadServers();
@@ -40,7 +37,6 @@ const app = {
         } catch(e) {
             console.error("Chưa đăng nhập", e);
         }
-
         // Lắng nghe thao tác bấm chuột để đóng menu trạng thái nếu click ra ngoài
         document.addEventListener('click', (event) => {
             const dropdown = document.getElementById('status-dropdown-container');
@@ -49,33 +45,27 @@ const app = {
             }
         });
     },
-
     login() {
         window.location.href = '/login';
     },
-
     logout() {
         window.location.href = '/logout';
     },
-
     // Cập nhật tab hiển thị
     switchTab(tabId) {
         document.querySelectorAll('.nav-btn').forEach(btn => {
             btn.classList.remove('text-white', 'bg-gray-800/50');
             btn.classList.add('text-gray-400');
         });
-        
         const activeBtn = document.querySelector(`.nav-btn[data-target="${tabId}"]`);
         if(activeBtn) {
             activeBtn.classList.add('text-white', 'bg-gray-800/50');
             activeBtn.classList.remove('text-gray-400');
             document.getElementById('page-title').innerText = activeBtn.querySelector('span').innerText;
         }
-
         document.querySelectorAll('.tab-content').forEach(tab => {
             tab.classList.add('hidden-tab');
         });
-        
         const target = document.getElementById(`tab-${tabId}`);
         if (target) {
             target.classList.remove('hidden-tab');
@@ -85,7 +75,6 @@ const app = {
             }
         }
     },
-
     // --- TỔNG QUAN ---
     async loadStats() {
         try {
@@ -98,7 +87,6 @@ const app = {
             document.getElementById('stat-ram').innerHTML = `${data.ram}<span class="text-sm font-normal text-gray-500 ml-1">MB</span>`;
         } catch(e) { console.error("Lỗi lấy thống kê", e); }
     },
-
     // --- MÁY CHỦ ---
     async loadServers() {
         try {
@@ -130,12 +118,10 @@ const app = {
             });
         } catch(e) { console.error("Lỗi lấy danh sách máy chủ", e); }
     },
-
     // --- HÀM CHO CUSTOM STATUS DROPDOWN ---
     toggleStatusDropdown() {
         document.getElementById('status-dropdown-menu').classList.toggle('hidden');
     },
-
     selectStatus(value, text) {
         // Đổi giá trị của thẻ input ẩn
         document.getElementById('bot-status-select').value = value;
@@ -147,26 +133,22 @@ const app = {
         // Đóng menu
         document.getElementById('status-dropdown-menu').classList.add('hidden');
     },
-
     showServerList() {
         document.getElementById('server-detail-view').classList.add('hidden-tab');
         document.getElementById('server-list-view').classList.remove('hidden-tab');
         this.data.currentGuildId = null;
     },
-
     async viewServer(id, name) {
         this.data.currentGuildId = id;
         document.getElementById('server-list-view').classList.add('hidden-tab');
         document.getElementById('server-detail-view').classList.remove('hidden-tab');
         document.getElementById('detail-server-name').innerText = name;
-        
         try {
             const res = await fetch(`/api/servers/${id}/members`);
             if(!res.ok) return;
             const members = await res.json();
             const tbody = document.getElementById('member-list-tbody');
             tbody.innerHTML = '';
-            
             members.forEach(m => {
                 const botBadge = m.bot ? `<span class="bg-indigo-500 text-[10px] font-bold px-1 rounded text-white ml-2">BOT</span>` : '';
                 tbody.innerHTML += `
@@ -195,11 +177,9 @@ const app = {
             });
         } catch(e) { console.error("Lỗi lấy thành viên", e); }
     },
-
     async leaveServer(guildId) {
         if(!guildId) guildId = this.data.currentGuildId;
         if(!confirm("Bạn có chắc muốn Bot rời khỏi máy chủ này?")) return;
-        
         try {
             const res = await fetch(`/api/servers/${guildId}/leave`, { method: 'POST' });
             const data = await res.json();
@@ -217,7 +197,6 @@ const app = {
         if(!this.data.currentGuildId) return;
         document.getElementById('server-invite-link').innerText = "Đang tạo link...";
         this.openModal('serverInviteModal');
-        
         try {
             const res = await fetch(`/api/servers/${this.data.currentGuildId}/invite`, { method: 'POST' });
             const data = await res.json();
@@ -230,23 +209,18 @@ const app = {
             document.getElementById('server-invite-link').innerText = "Lỗi kết nối";
         }
     },
-
     openMemberAction(actionType, name, avatar, id) {
         this.closeAllModals();
         this.data.actionTarget = { actionType, id };
-        
         document.getElementById('action-username').innerText = name;
         document.getElementById('action-avatar').src = avatar;
         document.getElementById('action-id').innerText = `ID: ${id}`;
         document.getElementById('action-reason').value = '';
-        
         const titleEl = document.getElementById('action-title');
         const btnEl = document.getElementById('action-submit-btn');
         const timeoutWrap = document.getElementById('timeout-duration-wrap');
         timeoutWrap.classList.add('hidden-tab');
-        
         btnEl.className = "w-full mt-2 font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center text-white";
-        
         if(actionType === 'timeout') {
             titleEl.innerText = "Hạn chế thành viên";
             btnEl.innerText = "Áp dụng hạn chế";
@@ -261,21 +235,16 @@ const app = {
             btnEl.innerText = "Ban thành viên";
             btnEl.classList.add('bg-red-600', 'hover:bg-red-500');
         }
-        
         this.openModal('memberActionModal');
     },
-
     async submitMemberAction() {
         if(!this.data.actionTarget || !this.data.currentGuildId) return;
-        
         const { actionType, id } = this.data.actionTarget;
         const reason = document.getElementById('action-reason').value.trim() || "Không có lý do";
         const payload = { action: actionType, reason: reason };
-        
         if(actionType === 'timeout') {
             payload.duration = parseInt(document.getElementById('action-duration').value);
         }
-
         try {
             const res = await fetch(`/api/servers/${this.data.currentGuildId}/members/${id}/action`, {
                 method: 'POST',
@@ -292,17 +261,14 @@ const app = {
             }
         } catch(e) { window.alert("Lỗi kết nối khi gửi yêu cầu."); }
     },
-
     // --- BẢNG NHẮN TIN (CHAT) ---
     async loadChatData() {
         try {
             const res = await fetch('/api/chat/servers');
             if(!res.ok) return;
             this.data.chatServers = await res.json();
-            
             const srvContainer = document.getElementById('chat-server-list');
             srvContainer.innerHTML = '';
-            
             this.data.chatServers.forEach((s) => {
                 srvContainer.innerHTML += `
                     <button onclick="app.selectChatServer('${s.id}')" class="w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2 text-gray-400 hover:bg-gray-700/30 focus:text-white focus:bg-gray-700/50">
@@ -311,20 +277,16 @@ const app = {
                     </button>
                 `;
             });
-
             if(this.data.chatServers.length > 0) {
                 this.selectChatServer(this.data.chatServers[0].id);
             }
         } catch(e) {}
     },
-
     selectChatServer(serverId) {
         const srv = this.data.chatServers.find(s => s.id === serverId);
         if(!srv) return;
-        
         const chContainer = document.getElementById('chat-channel-list');
         chContainer.innerHTML = '';
-        
         srv.channels.forEach((c) => {
             chContainer.innerHTML += `
                 <button onclick="app.selectChannel('${c.id}', '${c.name.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2 text-gray-400 hover:bg-gray-700/30 focus:text-white focus:bg-gray-700/50">
@@ -332,22 +294,18 @@ const app = {
                 </button>
             `;
         });
-
         if(srv.channels.length > 0) {
             this.selectChannel(srv.channels[0].id, srv.channels[0].name);
         }
     },
-
     async selectChannel(channelId, channelName) {
         this.data.currentChannelId = channelId;
         document.getElementById('current-chat-channel').innerText = channelName;
         this.cancelReply();
-        
         this.data.oldestMessageId = null;
         this.data.hasMoreMessages = true;
         const container = document.getElementById('chat-messages');
         container.innerHTML = '<div class="text-center text-gray-500 my-4 text-xs">Đang tải tin nhắn...</div>';
-        
         try {
             const res = await fetch(`/api/channels/${channelId}/messages`);
             if(!res.ok) {
@@ -356,23 +314,19 @@ const app = {
             }
             const msgs = await res.json();
             this.data.chatMessages = msgs;
-            
             if (msgs.length > 0) {
                 this.data.oldestMessageId = msgs[0].id;
                 if (msgs.length < 30) this.data.hasMoreMessages = false;
             }
-
             this.renderChatMessages(true);
             this.setupChatScrollListener();
         } catch(e) {
             container.innerHTML = '<div class="text-center text-red-500 my-4 text-xs">Mất kết nối với Bot.</div>';
         }
     },
-
     generateMessageHTML(msg) {
         const botBadge = msg.bot ? `<span class="bg-indigo-500 text-[10px] font-bold px-1 rounded text-white flex items-center gap-0.5 ml-2"><i class="ph-fill ph-check-circle"></i> BOT</span>` : '';
         const safeContent = msg.content ? msg.content.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
-        
         // Render HTML cho Reply
         let replyHTML = '';
         if (msg.reply_info) {
@@ -386,7 +340,6 @@ const app = {
                 </div>
             `;
         }
-
         // Render HTML cho Embeds
         let embedsHTML = '';
         if (msg.embeds && msg.embeds.length > 0) {
@@ -401,7 +354,6 @@ const app = {
                 </div>
             `).join('');
         }
-
         let attachmentsHTML = '';
         if (msg.attachments && msg.attachments.length > 0) {
             attachmentsHTML = msg.attachments.map(att => {
@@ -418,7 +370,6 @@ const app = {
                 }
             }).join('');
         }
-
         return `
             <div class="group flex flex-col hover:bg-gray-700/20 py-2 px-2 rounded-lg transition-colors -mx-2">
                 ${replyHTML}
@@ -443,17 +394,14 @@ const app = {
             </div>
         `;
     },
-
     renderChatMessages(scrollToBottom = false) {
         const container = document.getElementById('chat-messages');
         const html = this.data.chatMessages.map(msg => this.generateMessageHTML(msg)).join('');
         container.innerHTML = html;
-        
         if (scrollToBottom) {
             container.scrollTop = container.scrollHeight;
         }
     },
-
     setupChatScrollListener() {
         const container = document.getElementById('chat-messages');
         container.onscroll = () => {
@@ -462,50 +410,37 @@ const app = {
             }
         };
     },
-
     async loadOlderMessages() {
         if (this.data.isLoadingMore || !this.data.hasMoreMessages || !this.data.oldestMessageId) return;
-        
         this.data.isLoadingMore = true;
         const container = document.getElementById('chat-messages');
-        
         const loadingDiv = document.createElement('div');
         loadingDiv.id = 'chat-loading-older';
         loadingDiv.className = 'text-center text-gray-500 my-2 text-xs';
         loadingDiv.innerText = 'Đang tải tin nhắn cũ...';
         container.prepend(loadingDiv);
-
         const oldScrollHeight = container.scrollHeight;
-
         try {
             const res = await fetch(`/api/channels/${this.data.currentChannelId}/messages?before=${this.data.oldestMessageId}`);
             if (!res.ok) return;
             const olderMsgs = await res.json();
-            
             document.getElementById('chat-loading-older')?.remove();
-
             if (olderMsgs.length === 0) {
                 this.data.hasMoreMessages = false;
                 return;
             }
-
             if (olderMsgs.length < 30) this.data.hasMoreMessages = false;
             this.data.oldestMessageId = olderMsgs[0].id;
-
             this.data.chatMessages = [...olderMsgs, ...this.data.chatMessages];
-            
             this.renderChatMessages(false);
-            
             const newScrollHeight = container.scrollHeight;
             container.scrollTop = newScrollHeight - oldScrollHeight;
-
         } catch (e) {
             document.getElementById('chat-loading-older')?.remove();
         } finally {
             this.data.isLoadingMore = false;
         }
     },
-
     setReply(msgId, author) {
         this.data.replyingToMsgId = msgId;
         this.data.replyingToUser = author;
@@ -513,34 +448,27 @@ const app = {
         document.getElementById('reply-target-name').innerText = `@${author}`;
         document.getElementById('chat-input').focus();
     },
-
     cancelReply() {
         this.data.replyingToMsgId = null;
         this.data.replyingToUser = null;
         document.getElementById('reply-indicator').classList.add('hidden-tab');
     },
-
     async sendMessage(e) {
         e.preventDefault();
         const input = document.getElementById('chat-input');
         const content = input.value.trim();
-        
         if (!content || !this.data.currentChannelId) return;
-
         const payload = { content: content };
         if (this.data.replyingToMsgId) {
             payload.reply_to = this.data.replyingToMsgId;
         }
-
         input.disabled = true;
-        
         try {
             const res = await fetch(`/api/channels/${this.data.currentChannelId}/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            
             if(res.ok) {
                 input.value = '';
                 this.cancelReply();
@@ -555,18 +483,15 @@ const app = {
             input.focus();
         }
     },
-
     // --- WELCOME EMBED PREVIEW ---
     updateEmbedPreview() {
         const title = document.getElementById('em-title').value || 'Tiêu đề trống';
         const desc = document.getElementById('em-desc').value || 'Mô tả trống';
         const color = document.getElementById('em-color').value || '#2B2D31';
         const img = document.getElementById('em-image').value;
-        
         document.getElementById('pv-title').innerText = title;
         document.getElementById('pv-desc').innerText = desc;
         document.getElementById('pv-color').style.backgroundColor = color;
-        
         const imgEl = document.getElementById('pv-img');
         if(img) {
             imgEl.src = img;
@@ -575,13 +500,11 @@ const app = {
             imgEl.style.display = 'none';
         }
     },
-
     // --- TRẠNG THÁI BOT ---
     async updateBotStatus() {
         const status = document.getElementById('bot-status-select').value;
         const activityType = document.getElementById('bot-act-type').value;
         const activityName = document.getElementById('bot-act-name').value.trim();
-
         try {
             const res = await fetch('/api/bot/status', {
                 method: 'POST',
@@ -600,7 +523,6 @@ const app = {
             }
         } catch(e) { window.alert("Lỗi kết nối"); }
     },
-
     // --- LOGS ---
     logInterval: null,
     startLogPolling() {
@@ -611,40 +533,33 @@ const app = {
                 if(!res.ok) return;
                 const logs = await res.json();
                 const container = document.getElementById('log-container');
-                
                 if(logs.length === 0) {
                     container.innerHTML = '<div class="text-gray-500">[System] Đang chờ dữ liệu log...</div>';
                     return;
                 }
-
                 container.innerHTML = logs.map(l => {
                     let color = 'text-gray-300';
                     if(l.level === 'warn') color = 'text-yellow-400';
                     if(l.level === 'error') color = 'text-red-400';
                     return `<div class="${color}">[${l.time}] ${l.msg}</div>`;
                 }).join('');
-                
                 container.scrollTop = container.scrollHeight;
             } catch(e) {}
-        }, 2000); 
+        }, 2000);
     },
-
     clearLogs() {
         document.getElementById('log-container').innerHTML = '<div class="text-indigo-400">[System] Logs cleared (UI only).</div>';
     },
-
     // --- UTILITIES ---
     openModal(modalId) {
         document.getElementById('modal-backdrop').classList.remove('hidden-tab');
         document.getElementById(modalId).classList.remove('hidden-tab');
     },
-    
     closeAllModals() {
         document.getElementById('modal-backdrop').classList.add('hidden-tab');
         document.querySelectorAll('div[id$="Modal"]').forEach(m => m.classList.add('hidden-tab'));
         this.data.actionTarget = null;
     },
-
     copyText(text) {
         navigator.clipboard.writeText(text).then(() => {
             window.alert("Đã sao chép link!");
@@ -666,7 +581,6 @@ window.alert = function(message) {
     toast.className = 'fixed bottom-4 right-4 bg-gray-800 border border-gray-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 z-[100] transform transition-all translate-y-10 opacity-0';
     toast.innerHTML = `<i class="ph-fill ph-check-circle text-green-400 text-xl"></i> <span>${message}</span>`;
     document.body.appendChild(toast);
-    
     setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 10);
     setTimeout(() => {
         toast.classList.add('translate-y-10', 'opacity-0');
