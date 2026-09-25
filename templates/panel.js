@@ -28,6 +28,11 @@ const app = {
                 document.getElementById('user-username').innerText = authData.user.username;
                 document.getElementById('user-discriminator').innerText = authData.user.discriminator !== '0' ? `#${authData.user.discriminator}` : '';
                 document.getElementById('user-avatar').src = authData.user.avatar;
+                // Đồng bộ ảnh Avatar lên phần Menu của Mobile
+                const mobileAvatar = document.getElementById('user-avatar-mobile');
+                if (mobileAvatar) {
+                    mobileAvatar.src = authData.user.avatar;
+                }
                 // Load dữ liệu
                 this.loadStats();
                 this.loadServers();
