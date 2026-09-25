@@ -601,3 +601,81 @@ document.addEventListener('DOMContentLoaded', () => {
     window.app = app;
     app.init();
 });
+// ==========================================
+// TÍNH NĂNG VUỐT XUỐNG ĐỂ LÀM MỚI (MOBILE)
+// ==========================================
+function setupPullToRefresh() {
+    // Tránh chạy trên PC (chỉ kích hoạt khi thiết bị hỗ trợ cảm ứng)
+    if (!('ontouchstart' in window)) return;
+    // Tạo giao diện biểu tượng Load
+    const ptrIndicator = document.createElement('div');
+    ptrIndicator.id = 'ptr-indicator';
+    // Giao diện vòng tròn nổi bật
+    ptrIndicator.className = 'fixed top-0 left-1/2 -translate-x-1/2 -translate-y-[100px] w-10 h-10 bg-indigo-500 rounded-full shadow-lg flex items-center justify-center z-[150] transition-transform duration-300 pointer-events-none text-white';
+    ptrIndicator.innerHTML = '<i class="ph-bold ph-arrow-down text-xl transition-transform duration-200" id="ptr-icon"></i>';
+    document.body.appendChild(ptrIndicator);
+    const icon = document.getElementById('ptr-icon');
+    let startY = 0;
+    let isPulling = false;
+    let isRefreshing = false;
+    // Lắng nghe khi ngón tay chạm vào màn hình
+    document.addEventListener('touchstart', (e) => {
+        if (isRefreshing) return;
+        // Kiểm tra xem vị trí cuộn có đang ở trên cùng (Top = 0) hay không
+        const scrollTarget = e.target.closest('.overflow-y-auto, .overflow-x-auto, main, aside') || document.documentElement;
+        if (scrollTarget.scrollTop <= 1) {
+            startY = e.touches[0].clientY;
+            isPulling = true;
+            ptrIndicator.style.transition = 'none'; // Tắt animation để vuốt mượt theo tay
+        }
+    }, { passive: true });
+    // Lắng nghe khi ngón tay vuốt di chuyển
+    document.addEventListener('touchmove', (e) => {
+        if (!isPulling || isRefreshing) return;
+        const currentY = e.touches[0].clientY;
+        const pullDistance = currentY - startY;
+        // Nếu vuốt xuống (pullDistance > 0)
+        if (pullDistance > 0) {
+            // Làm chậm tốc độ kéo (hiệu ứng ma sát)
+            const translateY = Math.min(pullDistance * 0.4, 70);
+            ptrIndicator.style.transform = `translate(-50%, ${translateY - 50}px)`;
+            // Xoay mũi tên dựa trên khoảng cách kéo
+            icon.style.transform = `rotate(${translateY * 2.5}deg)`;
+            // Nếu kéo đủ sâu, đổi icon thành spinner
+            if (translateY > 55) {
+                icon.className = 'ph-bold ph-spinner-gap animate-spin text-xl';
+                icon.style.transform = `rotate(0deg)`;
+            } else {
+                icon.className = 'ph-bold ph-arrow-down text-xl';
+            }
+        }
+    }, { passive: true });
+    // Lắng nghe khi nhấc ngón tay ra
+    document.addEventListener('touchend', (e) => {
+        if (!isPulling || isRefreshing) return;
+        isPulling = false;
+        ptrIndicator.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'; // Hiệu ứng nảy (bounce)
+        const currentY = e.changedTouches[0].clientY;
+        const pullDistance = currentY - startY;
+        const translateY = Math.min(pullDistance * 0.4, 70);
+        // Kích hoạt làm mới nếu kéo qua vạch đích
+        if (translateY > 55) {
+            isRefreshing = true;
+            ptrIndicator.style.transform = `translate(-50%, 20px)`; // Treo vòng tròn lại trên màn hình
+            icon.className = 'ph-bold ph-spinner-gap animate-spin text-xl'; // Chắc chắn quay icon
+            // Thực hiện tải lại (Reload trang) sau 0.5s để người dùng nhìn thấy hiệu ứng
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } else {
+            // Nếu kéo nhẹ chưa đủ, thu hồi vòng tròn lên trên
+            ptrIndicator.style.transform = 'translate(-50%, -100px)';
+            icon.className = 'ph-bold ph-arrow-down text-xl';
+        }
+    });
+}
+
+// Chạy hàm kích hoạt khi tải trang
+document.addEventListener('DOMContentLoaded', () => {
+    setupPullToRefresh();
+});
