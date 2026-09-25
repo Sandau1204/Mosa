@@ -184,31 +184,59 @@
             </div>
 
             <!-- BẢNG NHẮN TIN -->
-            <div id="tab-chat" class="tab-content hidden-tab h-full flex flex-col md:flex-row gap-3 md:gap-4 max-w-6xl mx-auto">
-                <!-- Sidebar Chat -->
-                <div class="w-full md:w-64 flex flex-row md:flex-col gap-2 shrink-0">
-                    <div class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden w-1/2 md:w-auto flex flex-col">
-                        <div class="p-2 md:p-3 border-b border-gray-700 bg-gray-800/80 font-medium text-xs md:text-sm text-gray-300 shrink-0">
-                            Chọn Máy Chủ
-                        </div>
-                        <div class="flex-1 overflow-y-auto p-1.5 md:p-2 space-y-1 h-24 md:h-auto" id="chat-server-list">
-                            <!-- Render via JS -->
-                        </div>
+            <div id="tab-chat" class="tab-content hidden-tab h-full flex flex-col max-w-6xl mx-auto">
+                
+                <!-- Khu vực Chọn Máy Chủ & Kênh (Dùng chung cho PC & Mobile) -->
+                <div class="flex flex-col md:flex-row gap-2 md:gap-4 w-full shrink-0 mb-3 md:mb-4">
+                    <!-- Dropdown Máy Chủ -->
+                    <div class="flex-1 relative">
+                        <select id="chat-server-select" onchange="app.selectChatServer(this.value)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base text-white appearance-none focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm">
+                            <option>Đang tải...</option>
+                        </select>
+                        <i class="ph ph-caret-down absolute right-3 md:right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
                     </div>
-                    <div class="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden w-1/2 md:w-auto flex flex-col">
-                        <div class="p-2 md:p-3 border-b border-gray-700 bg-gray-800/80 font-medium text-xs md:text-sm text-gray-300 shrink-0">
-                            Kênh Văn Bản
-                        </div>
-                        <div class="flex-1 overflow-y-auto p-1.5 md:p-2 space-y-1 h-24 md:h-auto" id="chat-channel-list">
-                            <!-- Render via JS -->
-                        </div>
+                    <!-- Dropdown Kênh -->
+                    <div class="flex-1 relative">
+                        <select id="chat-channel-select" onchange="app.selectChannel(this.value, this.options[this.selectedIndex].text)" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base text-white appearance-none focus:outline-none focus:border-indigo-500 cursor-pointer shadow-sm">
+                            <option>Đang tải...</option>
+                        </select>
+                        <i class="ph ph-caret-down absolute right-3 md:right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
                     </div>
                 </div>
-                <!-- Main Chat Area -->
-                <div class="flex-1 bg-gray-800 border border-gray-700 rounded-xl flex flex-col relative overflow-hidden min-h-[350px]">
-                    <div class="h-12 md:h-14 border-b border-gray-700 flex items-center px-4 gap-2 bg-gray-800/80 shrink-0">
+
+                <!-- Khu vực Bảng Tin Nhắn (Mở rộng 100% chiều ngang) -->
+                <div class="flex-1 bg-gray-800 border border-gray-700 rounded-xl flex flex-col relative overflow-hidden min-h-0 shadow-sm">
+                    <div class="h-10 md:h-14 border-b border-gray-700 flex items-center px-3 md:px-4 gap-2 bg-gray-800/80 shrink-0">
                         <i class="ph ph-hash text-gray-400"></i>
-                        <span class="font-medium text-sm md:text-base text-white" id="current-chat-channel">Chưa chọn kênh</span>
+                        <span class="font-medium text-sm md:text-base text-white truncate" id="current-chat-channel">Chưa chọn kênh</span>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-3 md:p-4 space-y-4" id="chat-messages">
+                        <!-- Render via JS -->
+                    </div>
+                    <!-- Replying Indicator -->
+                    <div id="reply-indicator" class="hidden-tab bg-gray-700/50 border-t border-gray-700 px-4 py-2 flex items-center justify-between text-[10px] md:text-xs text-gray-300">
+                        <div class="flex items-center gap-2">
+                            <i class="ph ph-arrow-u-up-left"></i> Đang trả lời <span id="reply-target-name" class="font-semibold text-white">...</span>
+                        </div>
+                        <button onclick="app.cancelReply()" class="text-gray-400 hover:text-white"><i class="ph ph-x"></i></button>
+                    </div>
+                    <!-- Input -->
+                    <div class="p-2 md:p-4 bg-gray-900/50 border-t border-gray-700 shrink-0">
+                        <form onsubmit="app.sendMessage(event)" class="relative flex items-center">
+                            <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." class="w-full bg-gray-950 border border-gray-700 rounded-lg pl-3 md:pl-4 pr-10 md:pr-12 py-2.5 md:py-3 text-xs md:text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors">
+                            <button type="submit" class="absolute right-2 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-indigo-400 transition-colors">
+                                <i class="ph-fill ph-paper-plane-right text-lg"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+                <!-- Khu vực Bảng Tin Nhắn (Được nới rộng hết mức) -->
+                <div class="flex-1 bg-gray-800 border border-gray-700 rounded-xl flex flex-col relative overflow-hidden min-h-0">
+                    <div class="h-10 md:h-14 border-b border-gray-700 flex items-center px-3 md:px-4 gap-2 bg-gray-800/80 shrink-0">
+                        <i class="ph ph-hash text-gray-400"></i>
+                        <span class="font-medium text-sm md:text-base text-white truncate" id="current-chat-channel">Chưa chọn kênh</span>
                     </div>
                     <div class="flex-1 overflow-y-auto p-3 md:p-4 space-y-4" id="chat-messages">
                         <!-- Render via JS -->

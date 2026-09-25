@@ -272,15 +272,12 @@ const app = {
             const res = await fetch('/api/chat/servers');
             if(!res.ok) return;
             this.data.chatServers = await res.json();
-            const srvContainer = document.getElementById('chat-server-list');
-            srvContainer.innerHTML = '';
+            const srvSelect = document.getElementById('chat-server-select');
+            if(srvSelect) srvSelect.innerHTML = '';
             this.data.chatServers.forEach((s) => {
-                srvContainer.innerHTML += `
-                    <button onclick="app.selectChatServer('${s.id}')" class="w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2 text-gray-400 hover:bg-gray-700/30 focus:text-white focus:bg-gray-700/50">
-                        <div class="w-6 h-6 rounded bg-gray-700 flex items-center justify-center text-xs shrink-0 uppercase">${s.name.charAt(0)}</div>
-                        <span class="truncate">${s.name}</span>
-                    </button>
-                `;
+                if(srvSelect) {
+                    srvSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+                }
             });
             if(this.data.chatServers.length > 0) {
                 this.selectChatServer(this.data.chatServers[0].id);
@@ -288,22 +285,28 @@ const app = {
         } catch(e) {}
     },
     selectChatServer(serverId) {
+        const srvSelect = document.getElementById('chat-server-select');
+        if (srvSelect && srvSelect.value !== serverId) {
+            srvSelect.value = serverId;
+        }
         const srv = this.data.chatServers.find(s => s.id === serverId);
         if(!srv) return;
-        const chContainer = document.getElementById('chat-channel-list');
-        chContainer.innerHTML = '';
+        const chSelect = document.getElementById('chat-channel-select');
+        if(chSelect) chSelect.innerHTML = '';
         srv.channels.forEach((c) => {
-            chContainer.innerHTML += `
-                <button onclick="app.selectChannel('${c.id}', '${c.name.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2 text-gray-400 hover:bg-gray-700/30 focus:text-white focus:bg-gray-700/50">
-                    <i class="ph ph-hash"></i> <span class="truncate">${c.name}</span>
-                </button>
-            `;
+            if(chSelect) {
+                chSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+            }
         });
         if(srv.channels.length > 0) {
             this.selectChannel(srv.channels[0].id, srv.channels[0].name);
         }
     },
     async selectChannel(channelId, channelName) {
+        const chSelect = document.getElementById('chat-channel-select');
+        if (chSelect && chSelect.value !== channelId) {
+            chSelect.value = channelId;
+        }
         this.data.currentChannelId = channelId;
         document.getElementById('current-chat-channel').innerText = channelName;
         this.cancelReply();
@@ -328,7 +331,6 @@ const app = {
         } catch(e) {
             container.innerHTML = '<div class="text-center text-red-500 my-4 text-xs">Mất kết nối với Bot.</div>';
         }
-    },
     generateMessageHTML(msg) {
         const botBadge = msg.bot ? `<span class="bg-indigo-500 text-[10px] font-bold px-1 rounded text-white flex items-center gap-0.5 ml-2"><i class="ph-fill ph-check-circle"></i> BOT</span>` : '';
         const safeContent = msg.content ? msg.content.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
