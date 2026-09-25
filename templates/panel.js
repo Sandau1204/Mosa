@@ -331,6 +331,7 @@ const app = {
         } catch(e) {
             container.innerHTML = '<div class="text-center text-red-500 my-4 text-xs">Mất kết nối với Bot.</div>';
         }
+    },
     generateMessageHTML(msg) {
         const botBadge = msg.bot ? `<span class="bg-indigo-500 text-[10px] font-bold px-1 rounded text-white flex items-center gap-0.5 ml-2"><i class="ph-fill ph-check-circle"></i> BOT</span>` : '';
         const safeContent = msg.content ? msg.content.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
