@@ -597,10 +597,16 @@ window.alert = function(message) {
 };
 
 // Khởi động panel khi tải trang xong
-document.addEventListener('DOMContentLoaded', () => {
+function bootstrapPanel() {
     window.app = app;
     app.init();
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapPanel, { once: true });
+} else {
+    bootstrapPanel();
+}
 // ==========================================
 // TÍNH NĂNG VUỐT XUỐNG ĐỂ LÀM MỚI (MOBILE)
 // ==========================================
@@ -676,6 +682,12 @@ function setupPullToRefresh() {
 }
 
 // Chạy hàm kích hoạt khi tải trang
-document.addEventListener('DOMContentLoaded', () => {
+function bootstrapPullToRefresh() {
     setupPullToRefresh();
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapPullToRefresh, { once: true });
+} else {
+    bootstrapPullToRefresh();
+}

@@ -378,7 +378,7 @@ function initSortable() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function bootstrapMusic() {
     window.handleLogin = handleLogin;
     window.togglePlay = togglePlay;
     window.skipSong = skipSong;
@@ -394,7 +394,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if(e.key === 'Enter') addFromInput();
     });
     init();
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapMusic, { once: true });
+} else {
+    bootstrapMusic();
+}
 // ==========================================
 // TÍNH NĂNG VUỐT XUỐNG ĐỂ LÀM MỚI (MOBILE)
 // ==========================================
@@ -470,6 +476,12 @@ function setupPullToRefresh() {
 }
 
 // Chạy hàm kích hoạt khi tải trang
-document.addEventListener('DOMContentLoaded', () => {
+function bootstrapPullToRefresh() {
     setupPullToRefresh();
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapPullToRefresh, { once: true });
+} else {
+    bootstrapPullToRefresh();
+}
