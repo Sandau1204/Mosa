@@ -182,5 +182,6 @@ The web interface uses Next.js. Install its dependencies with `npm ci`, then run
 The Next.js development server is available at `http://localhost:3000` and
 proxies API and Discord OAuth requests to Flask.
 
-Run `npm run build` to create the static site in `out/`. The Flask server serves
-that export for `/panel` and `/music` in production.
+Run `npm run build` to create the static site in `out/`. In production, the Flask
+server redirects `/` to `/gamehub` for Discord Activities and serves the static
+export for `/gamehub`, `/panel`, and `/music`.

@@ -71,8 +71,8 @@ def add_log(message, level="info"):
 
 @app.route('/')
 def index():
-    # Chuyển hướng người dùng từ trang chủ (/) sang (/panel)
-    return redirect(url_for('panel'))
+    # Discord Activity mở URL gốc, nên chuyển thẳng tới Game Hub.
+    return redirect(url_for('gamehub'))
 
 OWNER_ID = os.getenv('OWNER_ID')
 
