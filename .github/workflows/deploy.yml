@@ -15,7 +15,7 @@ jobs:
         with:
           clean: false
 
-      # --- THÊM BƯỚC NÀY ĐỂ XỬ LÝ GIAO DIỆN VITE ---
+      # --- Cài đặt Node.js và build giao diện Next.js ---
       - name: Cài đặt Node.js
         uses: actions/setup-node@v4
         with:
@@ -23,9 +23,8 @@ jobs:
 
       - name: Cài đặt thư viện JS và Build Giao diện
         run: |
-          npm install
+          npm ci
           npm run build
-      # --------------------------------------------
 
       - name: Tạo file .env tự động
         run: |

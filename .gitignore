@@ -3,3 +3,6 @@ cookies.txt
 ffmpeg.exe
 __pycache__/
 data/
+.next/
+out/
+node_modules

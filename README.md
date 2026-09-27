@@ -175,3 +175,12 @@ If you'd like, I can also:
  📘 Generate a Markdown or HTML version
 Just tell me what you need!
 
+## Frontend development
+
+The web interface uses Next.js. Install its dependencies with `npm ci`, then run
+`npm run dev` while the Flask backend is running on `http://127.0.0.1:5000`.
+The Next.js development server is available at `http://localhost:3000` and
+proxies API and Discord OAuth requests to Flask.
+
+Run `npm run build` to create the static site in `out/`. The Flask server serves
+that export for `/panel` and `/music` in production.

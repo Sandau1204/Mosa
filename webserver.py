@@ -24,6 +24,7 @@ OWNER_ID = os.getenv('OWNER_ID') # ID tài khoản Discord được phép truy c
 
 bot_instance: Optional[discord.Client] = None  # Báo cho VSCode biết đây là Discord Client hoặc None
 bot_loop = None
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
 
 
 def get_music_state(guild_id):
@@ -78,19 +79,12 @@ OWNER_ID = os.getenv('OWNER_ID')
 @app.route('/panel')
 def panel():
     if 'user' not in session:
-        # Trong môi trường dev của Vite, bạn truy cập thẳng localhost:5173/panel.html
-        # Code này chỉ chạy trên production (port 5000)
-        return send_from_directory('dist', 'panel.html')
+        return send_from_directory(FRONTEND_DIR, 'panel.html')
     OWNER_ID = os.getenv('OWNER_ID')
     if str(session['user']['id']) != str(OWNER_ID):
         # ... (giữ nguyên code trả về HTML báo lỗi 403[cite: 1])
         pass
-    return send_from_directory('dist', 'panel.html')
-
-@app.route('/assets/<path:filename>')
-def serve_assets(filename):
-    # Trả về các file JS, CSS do Vite build ra nằm trong thư mục dist/assets
-    return send_from_directory('dist/assets', filename)
+    return send_from_directory(FRONTEND_DIR, 'panel.html')
 
 @app.route('/login')
 def login():
@@ -518,7 +512,7 @@ def api_logs():
 @app.route('/music')
 def music():
     session['next_url'] = url_for('music')
-    return send_from_directory('dist', 'music.html')
+    return send_from_directory(FRONTEND_DIR, 'music.html')
 
 # ==========================================
 # 1. LẤY TRẠNG THÁI VÀ HÀNG CHỜ HIỂN THỊ LÊN WEB
@@ -586,3 +580,7 @@ def api_music_action():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/<path:filename>')
+def serve_frontend_file(filename):
+    return send_from_directory(FRONTEND_DIR, filename)
