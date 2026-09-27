@@ -1,5 +1,20 @@
 import './globals.css';
 import Script from 'next/script';
+import { Inter, Noto_Sans } from 'next/font/google';
+
+const inter = Inter({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['300', '400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-inter'
+});
+
+const notoSans = Noto_Sans({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-noto-sans'
+});
 
 export const metadata = {
   title: 'Mosa',
@@ -16,7 +31,7 @@ export default function RootLayout({ children }) {
           strategy="beforeInteractive"
         />
       </head>
-      <body>{children}</body>
+      <body className={`${inter.variable} ${notoSans.variable}`}>{children}</body>
     </html>
   );
 }

@@ -25,7 +25,13 @@ const config = {
         discordHover: '#4752C4'
       },
       fontFamily: {
-        sans: ['Inter', 'Noto Sans', 'Helvetica Neue', 'Arial', 'sans-serif']
+        sans: [
+          'var(--font-inter)',
+          'var(--font-noto-sans)',
+          'Helvetica Neue',
+          'Arial',
+          'sans-serif'
+        ]
       }
     }
   },

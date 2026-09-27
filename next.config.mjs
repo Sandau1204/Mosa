@@ -1,18 +1,10 @@
-const isDevelopment = process.env.NODE_ENV === 'development';
+// next.config.mjs
+const isDevelopment = process.env.NODE_DE_ENV === 'development';
 
 const nextConfig = {
-  output: isDevelopment ? undefined : 'export',
-  ...(isDevelopment && {
-    async rewrites() {
-      const backend = 'http://127.0.0.1:5000';
-      return [
-        { source: '/api/:path*', destination: `${backend}/api/:path*` },
-        { source: '/login', destination: `${backend}/login` },
-        { source: '/callback', destination: `${backend}/callback` },
-        { source: '/logout', destination: `${backend}/logout` }
-      ];
-    }
-  })
+  output: 'export', // Luôn dùng export vì bạn chạy front-end bằng thư mục "out" qua Flask
+  // Tùy chọn: Xóa slash cuối URL để tương thích tốt hơn với file path
+  trailingSlash: false,
 };
 
 export default nextConfig;
