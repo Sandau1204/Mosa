@@ -177,11 +177,14 @@ Just tell me what you need!
 
 ## Frontend development
 
-The web interface uses Next.js. Install its dependencies with `npm ci`, then run
-`npm run dev` while the Flask backend is running on `http://127.0.0.1:5000`.
-The Next.js development server is available at `http://localhost:3000` and
-proxies API and Discord OAuth requests to Flask.
+The web interface uses Next.js. Set `NEXT_PUBLIC_DISCORD_CLIENT_ID` to the same
+Discord application ID used as `DISCORD_CLIENT_ID` by Flask, then install its
+dependencies with `npm ci`. Run `npm run dev` while the Flask backend is running
+on `http://127.0.0.1:5000`; the Next.js development server proxies `/api/*`
+requests to Flask. Set `FLASK_API_URL` if the backend uses a different address.
 
 Run `npm run build` to create the static site in `out/`. In production, the Flask
 server redirects `/` to `/gamehub` for Discord Activities and serves the static
-export for `/gamehub`, `/panel`, and `/music`.
+export for `/gamehub`, `/panel`, and `/music`. The deployment workflow passes
+`DISCORD_CLIENT_ID` as `NEXT_PUBLIC_DISCORD_CLIENT_ID` when building so the
+Activity and backend use the same Discord application.

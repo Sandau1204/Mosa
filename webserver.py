@@ -134,11 +134,15 @@ def callback():
 
 @app.route('/api/discord-auth', methods=['POST'])
 def api_discord_auth():
-    data = request.json or {}
-    code = data.get('code')
-    if not code:
+    data = request.get_json(silent=True)
+    code = data.get('code') if isinstance(data, dict) else None
+    if not isinstance(code, str) or not code.strip():
         return jsonify({'error': 'No code provided'}), 400
     import requests
+    if not CLIENT_ID or not CLIENT_SECRET:
+        app.logger.error('Discord OAuth client credentials are not configured.')
+        return jsonify({'error': 'Discord OAuth chưa được cấu hình trên máy chủ.'}), 503
+
     # Gửi request lấy token không cần redirect_uri cho Embedded SDK
     token_data = {
         'client_id': CLIENT_ID,
@@ -147,14 +151,53 @@ def api_discord_auth():
         'code': code
     }
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    r = requests.post('https://discord.com/api/oauth2/token', data=token_data, headers=headers, timeout=10)
-    token_resp = r.json()
-    if 'access_token' not in token_resp:
-        return jsonify({'error': 'Xác thực thất bại', 'details': token_resp}), 400
+    try:
+        token_response = requests.post(
+            'https://discord.com/api/oauth2/token',
+            data=token_data,
+            headers=headers,
+            timeout=10
+        )
+        token_resp = token_response.json()
+    except requests.exceptions.RequestException:
+        app.logger.exception('Discord OAuth token exchange failed.')
+        return jsonify({'error': 'Không thể kết nối dịch vụ xác thực Discord.'}), 502
+    except ValueError:
+        app.logger.exception('Discord OAuth token endpoint returned invalid JSON.')
+        return jsonify({'error': 'Phản hồi xác thực từ Discord không hợp lệ.'}), 502
+
+    if (
+        not token_response.ok
+        or not isinstance(token_resp, dict)
+        or not isinstance(token_resp.get('access_token'), str)
+    ):
+        return jsonify({'error': 'Mã xác thực Discord không hợp lệ hoặc đã hết hạn.'}), 401
+
     # Lấy thông tin user bằng access_token
     access_token = token_resp['access_token']
-    user_resp = requests.get('https://discord.com/api/users/@me', headers={'Authorization': f'Bearer {access_token}'})
-    user_data = user_resp.json()
+    try:
+        user_response = requests.get(
+            'https://discord.com/api/users/@me',
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=10
+        )
+        user_response.raise_for_status()
+        user_data = user_response.json()
+    except requests.exceptions.RequestException:
+        app.logger.exception('Failed to fetch the authenticated Discord user.')
+        return jsonify({'error': 'Không thể lấy thông tin người dùng từ Discord.'}), 502
+    except ValueError:
+        app.logger.exception('Discord user endpoint returned invalid JSON.')
+        return jsonify({'error': 'Phản hồi thông tin người dùng từ Discord không hợp lệ.'}), 502
+
+    if (
+        not isinstance(user_data, dict)
+        or not user_data.get('id')
+        or not user_data.get('username')
+    ):
+        app.logger.error('Discord user endpoint returned an incomplete user profile.')
+        return jsonify({'error': 'Discord không trả về hồ sơ người dùng hợp lệ.'}), 502
+
     avatar_hash = user_data.get('avatar')
     if avatar_hash:
         ext = "gif" if avatar_hash.startswith("a_") else "png"

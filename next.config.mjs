@@ -1,10 +1,22 @@
-// next.config.mjs
-const isDevelopment = process.env.NODE_DE_ENV === 'development';
+const isDevelopment = process.env.NODE_ENV === 'development';
+const flaskApiUrl = process.env.FLASK_API_URL || 'http://127.0.0.1:5000';
 
 const nextConfig = {
   output: 'export', // Luôn dùng export vì bạn chạy front-end bằng thư mục "out" qua Flask
   // Tùy chọn: Xóa slash cuối URL để tương thích tốt hơn với file path
   trailingSlash: false,
+  ...(isDevelopment
+    ? {
+        async rewrites() {
+          return [
+            {
+              source: '/api/:path*',
+              destination: `${flaskApiUrl}/api/:path*`
+            }
+          ];
+        }
+      }
+    : {})
 };
 
 export default nextConfig;

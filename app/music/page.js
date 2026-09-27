@@ -157,12 +157,9 @@ export default function MusicDashboard() {
                 </div>
             </div>
             <div id="toast-container" className="fixed top-5 right-5 z-50 flex flex-col gap-2"></div>
-            {/* Discord SDK Loader */}
-            
             {/* JS File */}
             
       </div>
-      <Script src="/music-sdk.js" type="module" strategy="afterInteractive" />
       <Script src="/music.js" type="module" strategy="afterInteractive" />
     </>
   );

@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-const DISCORD_CLIENT_ID =
-  process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '1541005812951162920';
+const DISCORD_CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
 let discordActivityConnection;
 
 function withTimeout(promise, step, timeoutMs = 15000) {
@@ -24,6 +23,9 @@ function connectDiscordActivity() {
     discordActivityConnection = (async () => {
       if (window.self === window.top) {
         throw new Error('Hãy mở Game Hub từ Discord Activities.');
+      }
+      if (!DISCORD_CLIENT_ID) {
+        throw new Error('Thiếu cấu hình NEXT_PUBLIC_DISCORD_CLIENT_ID.');
       }
       const { DiscordSDK } = await withTimeout(
         import('@discord/embedded-app-sdk'),

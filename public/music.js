@@ -14,14 +14,6 @@ function shuffleQueue() {
     sendAction('shuffle');
 }
 
-function isRunningInDiscord() {
-    try {
-        return window.self !== window.top;
-    } catch (e) {
-        return true;
-    }
-}
-
 function formatTime(seconds) {
     if (!seconds || isNaN(seconds)) return "0:00";
     const m = Math.floor(seconds / 60);
@@ -73,57 +65,9 @@ async function init() {
     }
 }
 
-async function handleLogin() {
-    if (!isRunningInDiscord()) {
-        showToast('Đang chuyển hướng đến trang đăng nhập...', 'info');
-        window.location.href = '/login';
-        return;
-    }
-    try {
-        if (!window.discordSdk || !window.sdkReadyPromise) {
-            throw new Error('Discord SDK chưa được tải. Hãy tải lại trang.');
-        }
-        if (!window.sdkReady) {
-            showToast('Đang khởi tạo Discord SDK...', 'info');
-            await window.sdkReadyPromise;
-        }
-        if (!window.sdkReady) {
-            throw window.sdkError || new Error('Discord SDK không sẵn sàng.');
-        }
-        showToast('Đang kết nối Discord SDK...', 'info');
-        const { code } = await window.discordSdk.commands.authorize({
-            client_id: '1541005812951162920',
-            response_type: 'code',
-            state: '',
-            prompt: 'none',
-            scope: ['identify', 'guilds']
-        });
-        const response = await fetch('/api/discord-auth', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'Lỗi lấy token từ backend');
-        }
-        await window.discordSdk.commands.authenticate({
-            access_token: data.access_token
-        });
-        document.getElementById('auth-overlay').classList.add('opacity-0', 'pointer-events-none');
-        document.getElementById('app-container').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('player-bar').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('user-username').innerText = data.user.username;
-        if (data.user.avatar) {
-            document.getElementById('user-avatar').src = data.user.avatar;
-        }
-        await loadServers();
-        startPolling();
-        showToast('Xác thực SDK thành công!', 'success');
-    } catch (error) {
-        console.error("Login failed:", error);
-        showToast("Đăng nhập thất bại: " + error.message, "error");
-    }
+function handleLogin() {
+    showToast('Đang chuyển hướng đến trang đăng nhập...', 'info');
+    window.location.href = '/login';
 }
 
 async function loadServers() {
