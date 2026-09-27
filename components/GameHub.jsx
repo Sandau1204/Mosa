@@ -458,13 +458,13 @@ const GameCard = ({ game, onClick }) => {
         audio.playClick();
         onClick(game);
       }}
-      className={`relative shrink-0 w-64 h-80 rounded-[2.5rem] border-[6px] border-white/90 cursor-pointer snap-center
+      className={`group relative shrink-0 w-64 h-80 rounded-[2.5rem] border-[6px] border-white/90 cursor-pointer snap-center
                   flex flex-col items-center justify-center p-6 text-white text-center
                   transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
-                  hover:-translate-y-4 hover:scale-105 hover:shadow-[0_20px_40px_rgba(0,0,0,0.5),0_0_25px_rgba(255,255,255,0.6)]
+                  hover:-translate-y-2 hover:scale-[1.03] hover:shadow-[0_20px_40px_rgba(0,0,0,0.5),0_0_25px_rgba(255,255,255,0.6)]
                   shadow-[0_10px_20px_rgba(0,0,0,0.3)] overflow-hidden ${game.colorBg}`}
     >
-      <div className="absolute top-0 left-[-100%] w-[50%] h-full bg-white/20 skew-x-[-30deg] transition-all duration-500 hover:left-[200%]"></div>
+      <div className="absolute top-0 left-[-100%] w-[50%] h-full bg-white/20 skew-x-[-30deg] transition-all duration-500 group-hover:left-[200%]"></div>
       <div className="h-24 flex items-center justify-center text-[5rem] drop-shadow-xl mb-4 transform transition-transform group-hover:scale-110 group-hover:rotate-6">
         {game.icon}
       </div>
@@ -617,8 +617,30 @@ export default function GameHub() {
           <h2 className="text-lg font-extrabold text-indigo-100 mb-4 bg-slate-900/60 border border-indigo-500/30 py-1.5 px-5 rounded-full shadow-md backdrop-blur-md self-start flex items-center gap-2">
             <span>🔥</span> Chọn Game
           </h2>
-          <div className="flex gap-6 overflow-x-auto pb-6 pt-2 snap-x snap-mandatory hide-scrollbar p-1"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div
+            role="region"
+            aria-label="Danh sách game"
+            tabIndex={0}
+            onWheel={(event) => {
+              if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+              const list = event.currentTarget;
+              const maxScrollLeft = list.scrollWidth - list.clientWidth;
+              const nextScrollLeft = Math.max(
+                0,
+                Math.min(maxScrollLeft, list.scrollLeft + event.deltaY)
+              );
+              if (nextScrollLeft !== list.scrollLeft) {
+                event.preventDefault();
+                list.scrollLeft = nextScrollLeft;
+              }
+            }}
+            className="flex gap-6 overflow-x-auto overscroll-x-contain px-2 py-8 snap-x snap-proximity hide-scrollbar focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              touchAction: 'pan-x'
+            }}
+          >
             {gamesData.map((game) => (
               <GameCard
                 key={game.id}
