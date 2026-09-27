@@ -373,6 +373,12 @@ class Music(commands.Cog):
                 if position is not None:
                     self.seek_song(guild_id, float(position))
                     await self.update_ui(guild_id)
+            elif action == 'reorder':
+                from_idx = data.get('from')
+                to_idx = data.get('to')
+                if from_idx is not None and to_idx is not None:
+                    self.move_song(guild_id, int(from_idx), int(to_idx))
+                    await self.update_ui(guild_id)
         except Exception as e:
             print(f"Lỗi khi xử lý Web Music Action: {e}")
     async def _web_process_song(self, guild_id, song_data, channel):

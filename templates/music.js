@@ -288,8 +288,13 @@ function updateUI(state) {
     }
     const loopBtn = document.getElementById('loop-btn');
     const loopIcon = loopBtn.querySelector('i');
-    loopBtn.className = state.loop_mode > 0 ? "text-discord-blurple transition-colors" : "text-discord-muted hover:text-white transition-colors";
-    loopIcon.className = state.loop_mode === 2 ? "ph ph-repeat-once text-lg" : "ph ph-repeat text-lg";
+    if (state.loop_mode > 0) {
+        loopBtn.className = "text-discord-blurple hover:text-[#4752C4] transition-colors";
+        loopIcon.className = "ph-fill ph-repeat text-lg"; // Hiển thị icon đậm khi bật
+    } else {
+        loopBtn.className = "text-discord-muted hover:text-white transition-colors";
+        loopIcon.className = "ph ph-repeat text-lg"; // Hiển thị icon nét mảnh khi tắt
+    }
     if (state.volume !== undefined) {
         currentVolume = state.volume;
         if (currentVolume > 0) previousVolume = currentVolume;
