@@ -32,7 +32,7 @@ export default function PanelDashboard() {
                     </div>
                     {/* Mobile User Profile & Logout */}
                     <div className="flex md:hidden items-center gap-3">
-                        <img id="user-avatar-mobile" src="..." onError={(event) => { event.currentTarget.src = 'https://cdn.discordapp.com/embed/avatars/0.png' }} className="w-7 h-7 rounded-full object-cover border border-gray-700" />
+                        <img id="user-avatar-mobile" src="..." alt="Ảnh đại diện người dùng" onError={(event) => { event.currentTarget.src = 'https://cdn.discordapp.com/embed/avatars/0.png' }} className="w-7 h-7 rounded-full object-cover border border-gray-700" />
                         <button onClick={() => {window.app.logout()}} className="text-gray-400 hover:text-red-400 transition-colors" title="Đăng xuất">
                             <i className="ph ph-sign-out text-lg"></i>
                         </button>
@@ -62,7 +62,7 @@ export default function PanelDashboard() {
                 {/* User Profile (Desktop) */}
                 <div className="hidden md:block p-4 border-t border-gray-800 mt-auto shrink-0">
                     <div className="flex items-center gap-3 bg-gray-900 p-3 rounded-xl border border-gray-800">
-                        <img id="user-avatar" src="..." onError={(event) => { event.currentTarget.src = 'https://cdn.discordapp.com/embed/avatars/0.png' }} className="w-8 h-8 rounded-full object-cover" />
+                        <img id="user-avatar" src="..." alt="Ảnh đại diện người dùng" onError={(event) => { event.currentTarget.src = 'https://cdn.discordapp.com/embed/avatars/0.png' }} className="w-8 h-8 rounded-full object-cover" />
                         <div className="flex-1 min-w-0">
                             <p id="user-username" className="text-sm font-semibold text-white truncate">Đang tải...</p>
                             <p id="user-discriminator" className="text-xs text-gray-500 truncate"></p>
@@ -139,7 +139,7 @@ export default function PanelDashboard() {
                         <div id="server-detail-view" className="hidden-tab bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden flex-1 flex flex-col">
                             <div className="p-3 md:p-4 border-b border-gray-700 flex items-center justify-between bg-gray-800/80">
                                 <div className="flex items-center gap-2 md:gap-3">
-                                    <button onClick={() => {window.app.showServerList()}} className="w-7 h-7 md:w-8 md:h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors text-sm">
+                                    <button aria-label="Quay lại danh sách server" onClick={() => {window.app.showServerList()}} className="w-7 h-7 md:w-8 md:h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors text-sm">
                                         <i className="ph ph-arrow-left"></i>
                                     </button>
                                     <h3 id="detail-server-name" className="font-semibold text-white text-sm md:text-base">Tên Server</h3>
@@ -202,13 +202,13 @@ export default function PanelDashboard() {
                                 <div className="flex items-center gap-2">
                                     <i className="ph ph-arrow-u-up-left"></i> Đang trả lời <span id="reply-target-name" className="font-semibold text-white">...</span>
                                 </div>
-                                <button onClick={() => {window.app.cancelReply()}} className="text-gray-400 hover:text-white"><i className="ph ph-x"></i></button>
+                                <button onClick={() => {window.app.cancelReply()}} aria-label="Hủy trả lời" className="text-gray-400 hover:text-white"><i className="ph ph-x"></i></button>
                             </div>
                             {/* Input */}
                             <div className="p-2 md:p-4 bg-gray-900/50 border-t border-gray-700 shrink-0">
                                 <form onsubmit="app.sendMessage(event)" className="relative flex items-center">
                                     <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." className="w-full bg-gray-950 border border-gray-700 rounded-lg pl-3 md:pl-4 pr-10 md:pr-12 py-2.5 md:py-3 text-xs md:text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-                                    <button type="submit" className="absolute right-2 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-indigo-400 transition-colors">
+                                    <button type="submit" aria-label="Gửi tin nhắn" className="absolute right-2 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-indigo-400 transition-colors">
                                         <i className="ph-fill ph-paper-plane-right text-lg"></i>
                                     </button>
                                 </form>
@@ -353,7 +353,7 @@ export default function PanelDashboard() {
             <div id="inviteBotModal" className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-[90%] md:w-full max-w-md hidden-tab flex flex-col overflow-hidden">
                 <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80">
                     <h3 className="font-semibold text-white">Mời Bot Vào Server</h3>
-                    <button onClick={() => {window.app.closeAllModals()}} className="text-gray-400 hover:text-white"><i className="ph ph-x"></i></button>
+                    <button onClick={() => {window.app.closeAllModals()}} className="text-gray-400 hover:text-white" aria-label="Đóng modal"><i className="ph ph-x"></i></button>
                 </div>
                 <div className="p-6 flex flex-col items-center">
                     <div className="w-16 h-16 bg-discord rounded-xl flex items-center justify-center mb-4">
@@ -372,7 +372,7 @@ export default function PanelDashboard() {
             <div id="serverInviteModal" className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md hidden-tab flex flex-col overflow-hidden">
                 <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80">
                     <h3 className="font-semibold text-white">Link tham gia server</h3>
-                    <button onClick={() => {window.app.closeAllModals()}} className="text-gray-400 hover:text-white"><i className="ph ph-x"></i></button>
+                    <button onClick={() => {window.app.closeAllModals()}} className="text-gray-400 hover:text-white" aria-label="Đóng modal"><i className="ph ph-x"></i></button>
                 </div>
                 <div className="p-6">
                     <p className="text-gray-300 text-sm mb-4">Gửi link này cho bạn bè để mời vào server.</p>
@@ -386,11 +386,11 @@ export default function PanelDashboard() {
             <div id="memberActionModal" className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md hidden-tab flex flex-col overflow-hidden">
                 <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/80">
                     <h3 className="font-semibold text-white" id="action-title">Thao tác thành viên</h3>
-                    <button onClick={() => {window.app.closeAllModals()}} className="text-gray-400 hover:text-white"><i className="ph ph-x"></i></button>
+                    <button onClick={() => {window.app.closeAllModals()}} className="text-gray-400 hover:text-white" aria-label="Đóng modal"><i className="ph ph-x"></i></button>
                 </div>
                 <div className="p-6">
                     <div className="flex items-center gap-3 mb-6 bg-gray-900 p-3 rounded-xl border border-gray-700">
-                        <img src="https://placehold.co/100/333/fff" id="action-avatar" className="w-10 h-10 rounded-full" />
+                        <img src="https://placehold.co/100/333/fff" id="action-avatar" className="w-10 h-10 rounded-full" alt="Ảnh đại diện thành viên" />
                         <div>
                             <div className="text-white font-medium" id="action-username">User</div>
                             <div className="text-xs text-gray-400" id="action-id">ID: ...</div>

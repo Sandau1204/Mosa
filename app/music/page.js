@@ -24,7 +24,7 @@ export default function MusicDashboard() {
                 <aside className="w-full md:w-72 bg-discord-panel flex flex-col flex-shrink-0 border-b md:border-b-0 md:border-r border-discord-bg h-[45%] md:h-auto">
                     {/* User Profile & Logout */}
                     <div className="h-12 md:h-14 border-b border-discord-bg flex items-center px-4 transition-colors shadow-sm shrink-0">
-                        <img id="user-avatar" src="..." onError={(event) => { event.currentTarget.src = 'https://cdn.discordapp.com/embed/avatars/0.png' }} className="w-7 h-7 md:w-8 md:h-8 rounded-full object-cover" />
+                        <img id="user-avatar" src="..." alt="Ảnh đại diện người dùng" onError={(event) => { event.currentTarget.src = 'https://cdn.discordapp.com/embed/avatars/0.png' }} className="w-7 h-7 md:w-8 md:h-8 rounded-full object-cover" />
                         <div id="user-username" className="ml-3 font-semibold text-white truncate flex-1 text-xs">Đang tải...</div>
                         <a href="/logout" className="text-discord-muted hover:text-discord-danger transition-colors p-1" title="Đăng xuất">
                             <i className="ph ph-sign-out text-lg"></i>
