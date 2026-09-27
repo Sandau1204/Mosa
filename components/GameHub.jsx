@@ -6,34 +6,69 @@ const DISCORD_CLIENT_ID =
   process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '1541005812951162920';
 let discordActivityConnection;
 
+function withTimeout(promise, step, timeoutMs = 15000) {
+  let timeoutId;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(`Discord ${step} quá thời gian chờ.`)),
+        timeoutMs
+      );
+    })
+  ]).finally(() => clearTimeout(timeoutId));
+}
+
 function connectDiscordActivity() {
   if (!discordActivityConnection) {
     discordActivityConnection = (async () => {
       if (window.self === window.top) {
         throw new Error('Hãy mở Game Hub từ Discord Activities.');
       }
-      const { DiscordSDK } = await import('@discord/embedded-app-sdk');
+      const { DiscordSDK } = await withTimeout(
+        import('@discord/embedded-app-sdk'),
+        'tải SDK'
+      );
       const discordSdk = new DiscordSDK(DISCORD_CLIENT_ID);
-      await discordSdk.ready();
-      const { code } = await discordSdk.commands.authorize({
-        client_id: DISCORD_CLIENT_ID,
-        response_type: 'code',
-        state: '',
-        prompt: 'none',
-        scope: ['identify']
-      });
-      const response = await fetch('/api/discord-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
-      });
-      const authData = await response.json();
+      await withTimeout(discordSdk.ready(), 'khởi tạo SDK');
+      const { code } = await withTimeout(
+        discordSdk.commands.authorize({
+          client_id: DISCORD_CLIENT_ID,
+          response_type: 'code',
+          state: '',
+          prompt: 'none',
+          scope: ['identify']
+        }),
+        'ủy quyền'
+      );
+      const controller = new AbortController();
+      const fetchTimeout = setTimeout(() => controller.abort(), 15000);
+      let response;
+      try {
+        response = await fetch('/api/discord-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+          signal: controller.signal
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('Máy chủ xác thực Discord không phản hồi.');
+        }
+        throw error;
+      } finally {
+        clearTimeout(fetchTimeout);
+      }
+      const authData = await withTimeout(response.json(), 'đọc phản hồi xác thực');
       if (!response.ok) {
         throw new Error(authData.error || 'Không thể xác thực với Discord.');
       }
-      const { user } = await discordSdk.commands.authenticate({
-        access_token: authData.access_token
-      });
+      const { user } = await withTimeout(
+        discordSdk.commands.authenticate({
+          access_token: authData.access_token
+        }),
+        'xác thực người dùng'
+      );
       const avatarUrl = user.avatar
         ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${user.avatar.startsWith('a_') ? 'gif' : 'png'}?size=128`
         : 'https://cdn.discordapp.com/embed/avatars/0.png';
@@ -512,7 +547,7 @@ export default function GameHub() {
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] tracking-tight">
-              GAME HUB <span className="text-yellow-300">DISCORD</span>
+              GAME HUB <span className="text-yellow-300">MOSA</span>
             </h1>
             <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
@@ -578,7 +613,7 @@ export default function GameHub() {
         {/* Carousel Chọn Game */}
         <section className="flex-1 flex flex-col justify-center min-w-0">
           <h2 className="text-lg font-extrabold text-indigo-100 mb-4 bg-slate-900/60 border border-indigo-500/30 py-1.5 px-5 rounded-full shadow-md backdrop-blur-md self-start flex items-center gap-2">
-            <span>🔥</span> Chọn Board Game Cùng Bạn Bè
+            <span>🔥</span> Chọn Game
           </h2>
           <div className="flex gap-6 overflow-x-auto pb-6 pt-2 snap-x snap-mandatory hide-scrollbar p-1"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
