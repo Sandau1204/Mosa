@@ -514,6 +514,10 @@ def music():
     session['next_url'] = url_for('music')
     return send_from_directory(FRONTEND_DIR, 'music.html')
 
+@app.route('/gamehub')
+def gamehub():
+    return send_from_directory(FRONTEND_DIR, 'gamehub.html')
+
 # ==========================================
 # 1. LẤY TRẠNG THÁI VÀ HÀNG CHỜ HIỂN THỊ LÊN WEB
 # ==========================================
