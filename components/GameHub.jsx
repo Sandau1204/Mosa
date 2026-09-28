@@ -166,76 +166,82 @@ const audio = createAudioEngine();
 
 const CanvasBackground = () => {
   const canvasRef = useRef(null);
+
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let animationFrameId;
-    let lastTime = 0;
-    let particles = [];
-    const initParticles = () => {
-      particles = Array.from({ length: 40 }).map(() => ({
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight,
-        size: Math.random() * 20 + 10,
-        speedY: Math.random() * 60 + 20,
-        speedX: (Math.random() - 0.5) * 30,
-        type: Math.random() > 0.5 ? 'circle' : 'rect',
-        color: `hsla(${Math.random() * 60 + 15}, 90%, 65%, 0.4)`,
-        rotation: Math.random() * Math.PI * 2,
-        rotSpeed: (Math.random() - 0.5) * 3
-      }));
-    };
-    const handleResize = () => {
+    let lastTime = performance.now();
+
+    const resize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
-      initParticles();
     };
-    window.addEventListener('resize', handleResize);
-    handleResize();
+    resize();
+    window.addEventListener('resize', resize);
+
+    const icons = ['🎲', '🃏', '♟️', '🌟', '🎯', '🎰'];
+    const particles = Array.from({ length: 24 }).map(() => ({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      icon: icons[Math.floor(Math.random() * icons.length)],
+      size: Math.random() * 18 + 14,
+      speedY: (Math.random() * 20 + 10),
+      speedX: (Math.random() * 10 - 5),
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 1.5,
+      opacity: Math.random() * 0.35 + 0.1,
+    }));
+
     const render = (time) => {
-      if (!lastTime) lastTime = time;
-      const dt = (time - lastTime) / 1000;
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
       lastTime = time;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      particles.forEach(p => {
+
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      grad.addColorStop(0, '#0f172a');
+      grad.addColorStop(0.5, '#1e1b4b');
+      grad.addColorStop(1, '#020617');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      particles.forEach((p) => {
         p.y -= p.speedY * dt;
         p.x += p.speedX * dt;
         p.rotation += p.rotSpeed * dt;
-        if (p.y < -50) {
-          p.y = canvas.height + 50;
+
+        if (p.y < -30) {
+          p.y = canvas.height + 30;
           p.x = Math.random() * canvas.width;
         }
-        if (p.x < -50) p.x = canvas.width + 50;
-        if (p.x > canvas.width + 50) p.x = -50;
+        if (p.x < -30) p.x = canvas.width + 30;
+        if (p.x > canvas.width + 30) p.x = -30;
+
         ctx.save();
+        ctx.globalAlpha = p.opacity;
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rotation);
-        ctx.fillStyle = p.color;
-        if (p.type === 'circle') {
-          ctx.beginPath();
-          ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          ctx.beginPath();
-          ctx.roundRect(-p.size / 2, -p.size / 2, p.size, p.size, 4);
-          ctx.fill();
-        }
+        ctx.font = `${p.size}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(p.icon, 0, 0);
         ctx.restore();
       });
+
       animationFrameId = requestAnimationFrame(render);
     };
+
     animationFrameId = requestAnimationFrame(render);
+
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
-  return (
-    <canvas
-      ref={canvasRef}
-      className="fixed top-0 left-0 w-full h-full -z-10 bg-gradient-to-br from-[#1e1b4b] via-[#311b92] to-[#4a148c]"
-    />
-  );
+
+  return <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />;
 };
 
 const XiangqiPieceIcon = () => (
