@@ -438,7 +438,7 @@ const XiangqiBoard = ({ board, isFlipped = false, isPlaying = false, activeSide,
   const isLegalDestination = (x, y) => legalMoves.some(move => move.x === x && move.y === y);
 
   return (
-    <div className={`relative w-[clamp(280px,85vw,440px)] aspect-[8/9] bg-amber-100/90 border-4 border-amber-900 rounded-xl p-4 md:p-6 shadow-[inset_0_0_20px_rgba(120,53,15,0.4),0_10px_30px_rgba(0,0,0,0.5)] transition-transform duration-500 ${isFlipped ? 'rotate-180' : ''}`}>
+    <div className={`@container relative h-[clamp(150px,calc(100dvh-330px),495px)] w-auto max-w-[85vw] aspect-[8/9] bg-amber-100/90 border-4 border-amber-900 rounded-xl p-3 sm:p-4 md:p-5 shadow-[inset_0_0_20px_rgba(120,53,15,0.4),0_10px_30px_rgba(0,0,0,0.5)] transition-transform duration-500 ${isFlipped ? 'rotate-180' : ''}`}>
       {/* Board Grid Lines */}
       <div className="relative w-full h-full border-2 border-amber-950">
         {/* Horizontal Lines */}
@@ -482,7 +482,7 @@ const XiangqiBoard = ({ board, isFlipped = false, isPlaying = false, activeSide,
                   key={`move-${x}-${y}`}
                   aria-label={`Di chuyển đến ${x + 1}, ${y + 1}`}
                   onClick={() => onMove(selectedPiece.x, selectedPiece.y, x, y)}
-                  className={`absolute z-20 h-[clamp(10px,1.6vw,18px)] w-[clamp(10px,1.6vw,18px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-800/80 bg-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.8)] hover:scale-125`}
+                  className={`absolute z-20 h-[clamp(8px,4cqw,18px)] w-[clamp(8px,4cqw,18px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-800/80 bg-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.8)] hover:scale-125`}
                   style={{ left: `${(x / 8) * 100}%`, top: `${(y / 9) * 100}%` }}
                 />
               );
@@ -504,7 +504,7 @@ const XiangqiBoard = ({ board, isFlipped = false, isPlaying = false, activeSide,
                   else if (isSelectable) onSelectPiece(x, y);
                 }}
                 disabled={!isSelectable && !isDestination}
-                className={`absolute z-20 flex h-[clamp(26px,4vw,44px)] w-[clamp(26px,4vw,44px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 font-serif text-[clamp(12px,2vw,20px)] font-black shadow-lg transition-all
+                className={`absolute z-20 flex h-[clamp(18px,10cqw,44px)] w-[clamp(18px,10cqw,44px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 font-serif text-[clamp(11px,4.5cqw,20px)] font-black shadow-lg transition-all
                   ${piece.side === 'red' ? 'border-red-700 bg-amber-50 text-red-600' : 'border-slate-300 bg-slate-900 text-slate-100'}
                   ${isSelectable ? 'cursor-pointer hover:scale-110' : 'cursor-default'}
                   ${isSelected ? 'ring-4 ring-emerald-400' : ''}
@@ -623,13 +623,13 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
               onRequestSwap(player);
             }
           }}
-          className={`flex items-center gap-3 bg-slate-950/70 border px-4 py-2 rounded-2xl animate-fade-in group relative min-w-[200px] transition-all
+          className={`flex items-center gap-2 bg-slate-950/70 border px-3 py-1 rounded-2xl animate-fade-in group relative min-w-[170px] transition-all
             ${isOpponent 
               ? 'border-amber-500/50 hover:border-amber-400 hover:bg-slate-900/90 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
               : 'border-slate-700/60'}`}
           title={isOpponent ? "Nhấn để gửi yêu cầu Đổi Phe" : ""}
         >
-          <div className={`w-12 h-12 rounded-full p-0.5 shadow-lg shrink-0 relative ${isRed ? 'bg-gradient-to-tr from-red-600 to-orange-400' : 'bg-gradient-to-tr from-slate-700 to-slate-400'}`}>
+          <div className={`w-10 h-10 rounded-full p-0.5 shadow-lg shrink-0 relative ${isRed ? 'bg-gradient-to-tr from-red-600 to-orange-400' : 'bg-gradient-to-tr from-slate-700 to-slate-400'}`}>
             <img src={player.avatarUrl} alt={player.name} className="w-full h-full rounded-full object-cover border border-slate-900" />
             {isOpponent && (
               <span className="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold border border-slate-900 shadow">
@@ -675,7 +675,7 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
       <button 
         onClick={() => { audio.playClick(); onJoinSide(side); }}
         disabled={isPlaying}
-        className={`flex items-center gap-2 px-5 py-2 rounded-2xl border-2 border-dashed transition-all min-w-[180px] justify-center
+        className={`flex items-center gap-2 px-4 py-1.5 rounded-2xl border-2 border-dashed transition-all min-w-[170px] justify-center
           ${isPlaying ? 'opacity-40 cursor-not-allowed border-gray-600 text-gray-600 bg-slate-800/30' : 
           isRed ? 'border-red-500/50 text-red-400 hover:bg-red-950/40 hover:border-red-400 cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.15)]' : 
                   'border-slate-400/50 text-slate-300 hover:bg-slate-800/40 hover:border-slate-300 cursor-pointer shadow-[0_0_12px_rgba(148,163,184,0.15)]'}`}
@@ -709,7 +709,7 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-900/80 backdrop-blur-xl rounded-[2.5rem] border-2 border-rose-500/30 overflow-hidden shadow-2xl relative animate-fade-in h-full">
+    <div className="flex-1 flex flex-col min-h-0 bg-slate-900/80 backdrop-blur-xl rounded-2xl sm:rounded-[2rem] border-2 border-rose-500/30 overflow-hidden shadow-2xl relative animate-fade-in h-full">
       {/* Thông báo / Hộp thoại Yêu Cầu Đổi Phe */}
       {isTargetOfSwap && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-slate-950/95 border-2 border-amber-400 p-4 rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.5)] flex flex-col items-center gap-2.5 animate-fade-in backdrop-blur-md max-w-xs w-full">
@@ -771,8 +771,8 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
       )}
 
       {/* Header Phòng */}
-      <div className="bg-slate-950/60 p-4 px-6 border-b border-slate-700/50 flex justify-between items-center z-10 shrink-0">
-        <div>
+      <div className="bg-slate-950/60 p-2 sm:px-4 sm:py-2 border-b border-slate-700/50 flex flex-wrap justify-between items-center gap-2 z-10 shrink-0">
+        <div className="min-w-0 flex-1">
           {isEditingName ? (
             <form
               className="flex items-center gap-2"
@@ -796,15 +796,15 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
             </form>
           ) : (
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-rose-300 flex items-center gap-2">
-                <span className="text-2xl">♟️</span> {room.name}
+              <h2 className="min-w-0 truncate text-base sm:text-lg font-black text-rose-300 flex items-center gap-2">
+                <span className="shrink-0 text-xl">♟️</span> <span className="truncate">{room.name}</span>
               </h2>
               {room.ownerId === currentUser.id && (
                 <button className="rounded-md border border-slate-600 px-2 py-1 text-xs font-bold text-slate-300 hover:text-white" onClick={() => setIsEditingName(true)}>Đổi tên</button>
               )}
             </div>
           )}
-          <div className="flex items-center gap-3 mt-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
             <p className="text-xs text-gray-400">
               Trạng thái: {isPlaying ? <span className="text-emerald-400 font-bold">Đang thi đấu</span> : room.status === 'finished' ? <span className="text-rose-300 font-bold">Đã kết thúc</span> : <span className="text-amber-400 font-bold">Đang chờ...</span>}
             </p>
@@ -814,7 +814,7 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           {isPlaying && (isUserRed || isUserBlack) && (
             <>
               {isRequesterOfDraw && (
@@ -830,7 +830,7 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
               {(!drawOffer || drawOffer.status === 'declined') && (
                 <button
                   onClick={() => { audio.playClick(); onRequestDraw(); }}
-                  className="bg-amber-700 hover:bg-amber-600 text-amber-50 px-4 py-2 rounded-xl text-sm font-bold transition-colors border border-amber-500/60"
+                  className="bg-amber-700 hover:bg-amber-600 text-amber-50 px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-colors border border-amber-500/60"
                 >
                   Xin hòa
                 </button>
@@ -843,7 +843,7 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
               if (isPlaying && (isUserRed || isUserBlack)) onSurrender();
               else onLeave();
             }}
-            className="bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-gray-300 px-4 py-2 rounded-xl text-sm font-bold transition-colors border border-slate-700"
+            className="bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-gray-300 px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-colors border border-slate-700"
           >
             {isPlaying && (isUserRed || isUserBlack) ? 'Đầu Hàng' : 'Rời Phòng'}
           </button>
@@ -851,14 +851,14 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
       </div>
 
       {/* Main Content (Vertical Board & Top/Bottom Player Slots) */}
-      <div className="flex-1 flex flex-col items-center justify-center p-3 md:p-4 gap-3 z-10 overflow-y-auto w-full max-w-4xl mx-auto">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center p-1 sm:p-2 gap-1.5 z-10 overflow-y-auto w-full max-w-4xl mx-auto">
         {/* Top Player Slot (Đối thủ / Phe phía trên) */}
         <div className="shrink-0 flex items-center justify-center">
           {renderPlayerSlot(topSide, topPlayer)}
         </div>
         
         {/* Board Container */}
-        <div className="relative my-1 flex items-center justify-center shrink-0 w-full">
+        <div className="relative flex items-center justify-center shrink-0 w-full">
           <div className="relative">
             <XiangqiBoard
               board={room.board || []}
@@ -902,20 +902,20 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
       </div>
 
       {/* Bottom Controls & Observers */}
-      <div className="bg-slate-950/80 p-4 border-t border-slate-700/50 z-10 shrink-0">
-        <div className="flex justify-between items-center mb-3">
+      <div className="bg-slate-950/80 p-2 sm:p-3 border-t border-slate-700/50 z-10 shrink-0">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-2">
           <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2">
             👁️ Đang xem ({room.observers.length})
           </h3>
           
           {!isPlaying && room.status !== 'finished' && (
-            <div className="flex items-center gap-3">
-              <span className={`text-xs font-bold ${room.redReady ? 'text-emerald-300' : 'text-slate-400'}`}>Đỏ {room.redReady ? '✓ Sẵn sàng' : 'Chưa sẵn sàng'}</span>
-              <span className={`text-xs font-bold ${room.blackReady ? 'text-emerald-300' : 'text-slate-400'}`}>Đen {room.blackReady ? '✓ Sẵn sàng' : 'Chưa sẵn sàng'}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`text-[10px] sm:text-xs font-bold ${room.redReady ? 'text-emerald-300' : 'text-slate-400'}`}>Đỏ {room.redReady ? '✓ Sẵn sàng' : 'Chưa sẵn sàng'}</span>
+              <span className={`text-[10px] sm:text-xs font-bold ${room.blackReady ? 'text-emerald-300' : 'text-slate-400'}`}>Đen {room.blackReady ? '✓ Sẵn sàng' : 'Chưa sẵn sàng'}</span>
               {(isUserRed || isUserBlack) && (
                 <button
                   onClick={() => onReady(!(isUserRed ? room.redReady : room.blackReady))}
-                  className={`rounded-xl px-5 py-2 font-bold text-white ${((isUserRed && room.redReady) || (isUserBlack && room.blackReady)) ? 'bg-amber-700 hover:bg-amber-600' : 'bg-emerald-700 hover:bg-emerald-600'}`}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-bold text-white ${((isUserRed && room.redReady) || (isUserBlack && room.blackReady)) ? 'bg-amber-700 hover:bg-amber-600' : 'bg-emerald-700 hover:bg-emerald-600'}`}
                 >
                   {((isUserRed && room.redReady) || (isUserBlack && room.blackReady)) ? 'Bỏ sẵn sàng' : 'Sẵn sàng'}
                 </button>
@@ -928,7 +928,7 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
         </div>
         
         {/* Observers List */}
-        <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2 min-h-[48px]">
+        <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1 min-h-8">
           {room.observers.length === 0 ? (
             <span className="text-xs text-gray-500 italic">Chưa có người xem nào...</span>
           ) : (
@@ -1330,7 +1330,7 @@ export default function Games() {
 
   if (connectionState !== 'connected') {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center text-white">
+      <main className="h-dvh flex flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center text-white">
         <h1 className="text-2xl font-black">{connectionState === 'connecting' ? 'Đang kết nối Discord...' : 'Không thể kết nối Discord'}</h1>
         {connectionError && <p className="max-w-lg text-sm text-rose-300">{connectionError}</p>}
         {connectionState === 'error' && (
@@ -1343,15 +1343,15 @@ export default function Games() {
   }
 
   return (
-    <div className="isolate min-h-screen font-sans text-gray-100 overflow-hidden flex flex-col justify-between selection:bg-indigo-500 selection:text-white" onClick={handleGlobalInteraction}>
+    <div className="isolate h-dvh min-h-0 w-full font-sans text-gray-100 overflow-hidden flex flex-col selection:bg-indigo-500 selection:text-white" onClick={handleGlobalInteraction}>
       <CanvasBackground />
       
       {/* Header */}
-      <header className="flex justify-between items-center p-4 md:p-6 z-20 shrink-0">
+      <header className="flex justify-between items-center p-2 sm:p-3 z-20 shrink-0">
         <div className="flex items-center gap-3">
           <div>
             <h1 
-              className="text-2xl md:text-3xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] tracking-tight cursor-pointer hover:text-yellow-200 transition-colors"
+              className="text-xl sm:text-2xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] tracking-tight cursor-pointer hover:text-yellow-200 transition-colors"
               onClick={() => { if(currentView !== 'games') setCurrentView('games'); }}
             >
               GAMES <span className="text-yellow-300">MOSA</span>
@@ -1379,7 +1379,7 @@ export default function Games() {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col xl:flex-row w-full max-w-[1500px] mx-auto px-4 md:px-8 py-2 gap-6 overflow-hidden min-h-0">
+      <main className="flex-1 flex flex-col xl:flex-row w-full max-w-[1500px] mx-auto px-2 sm:px-4 py-1 gap-2 sm:gap-3 overflow-hidden min-h-0">
         
         {/* Dynamic View Switcher */}
         {currentView === 'games' ? (
@@ -1397,7 +1397,7 @@ export default function Games() {
             </div>
           </section>
         ) : (
-          <section className="flex-1 flex flex-col min-w-0 pb-4 h-full">
+          <section className="flex-1 flex flex-col min-w-0 min-h-0 h-full">
             {activeRoomData && (
               <XiangqiRoom 
                 room={activeRoomData} 
