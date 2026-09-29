@@ -886,11 +886,6 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
   const isUserRed = room.redPlayer?.id === currentUser.id;
   const isFlipped = isUserBlack;
 
-  const topSide = isFlipped ? 'red' : 'black';
-  const topPlayer = isFlipped ? room.redPlayer : room.blackPlayer;
-  const bottomSide = isFlipped ? 'black' : 'red';
-  const bottomPlayer = isFlipped ? room.blackPlayer : room.redPlayer;
-  
   const swapRequest = room.swapRequest;
   const isTargetOfSwap = !isPlaying && swapRequest && swapRequest.targetId === currentUser.id;
   const isRequesterOfSwap = !isPlaying && swapRequest && swapRequest.requesterId === currentUser.id;
@@ -1045,9 +1040,19 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
     }
     
     return (
-      <div className="min-w-[150px] rounded-xl border border-dashed border-slate-700/70 px-3 py-2 text-center text-[10px] font-semibold text-slate-500">
-        Chờ người chơi phe {isRed ? 'Đỏ' : 'Đen'}
-      </div>
+      <button
+        onClick={() => { audio.playClick(); onJoinSide(side); }}
+        disabled={isPlaying || room.status === 'finished'}
+        className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed px-2 py-2 text-xs font-bold transition-colors
+          ${isPlaying || room.status === 'finished'
+            ? 'cursor-not-allowed border-slate-700/70 bg-slate-900/50 text-slate-600'
+            : isRed
+              ? 'border-red-500/50 bg-red-950/30 text-red-300 hover:border-red-400 hover:bg-red-950/60'
+              : 'border-slate-400/50 bg-slate-800/40 text-slate-200 hover:border-slate-300 hover:bg-slate-800'}`}
+      >
+        <span className="text-base">＋</span>
+        Ngồi {isRed ? 'Đỏ' : 'Đen'}
+      </button>
     );
   };
 
@@ -1233,13 +1238,9 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
       </div>
 
       {/* Main Arena Content */}
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-between p-1.5 sm:p-2 gap-1 z-10 overflow-hidden w-full max-w-4xl mx-auto">
-        <div className="shrink-0 flex items-center justify-center">
-          {renderPlayerSlot(topSide, topPlayer)}
-        </div>
-        
+      <div className="flex-1 min-h-0 flex flex-col p-1.5 sm:p-2 gap-1 z-10 overflow-hidden w-full max-w-4xl mx-auto">
         <div className="flex-1 min-h-0 w-full flex flex-col sm:flex-row items-center justify-center gap-3 py-1 relative overflow-auto">
-          <div className="relative h-full min-h-0 max-h-[calc(100%-0.25rem)] flex items-center justify-center">
+          <div className="relative min-h-0 min-w-0 flex-1 flex items-center justify-center">
             <XiangqiBoard
               board={room.board || []}
               isFlipped={isFlipped}
@@ -1267,42 +1268,26 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
               </div>
             )}
           </div>
-          {!isPlaying && room.status !== 'finished' && (
-            <div className="flex w-full shrink-0 flex-row flex-wrap items-center justify-center gap-2 sm:w-44 sm:flex-col sm:items-stretch">
-              <p className="hidden text-center text-[10px] font-black uppercase tracking-wider text-indigo-200 sm:block">
-                Chọn vị trí
-              </p>
-              {(!room.redPlayer || isUserRed) && (
-                <button
-                  onClick={() => { audio.playClick(); onJoinSide('red'); }}
-                  className="flex-1 rounded-xl border-2 border-dashed border-red-500/50 bg-red-950/30 px-3 py-2 text-xs font-bold text-red-300 transition-colors hover:border-red-400 hover:bg-red-950/60 sm:flex-none"
-                >
-                  ＋ Ngồi Đỏ
-                </button>
-              )}
-              {(!room.blackPlayer || isUserBlack) && (
-                <button
-                  onClick={() => { audio.playClick(); onJoinSide('black'); }}
-                  className="flex-1 rounded-xl border-2 border-dashed border-slate-400/50 bg-slate-800/40 px-3 py-2 text-xs font-bold text-slate-200 transition-colors hover:border-slate-300 hover:bg-slate-800 sm:flex-none"
-                >
-                  ＋ Ngồi Đen
-                </button>
-              )}
-              {onAddBot && (!room.redPlayer || !room.blackPlayer) && (
-                <button
-                  onClick={() => {
-                    audio.playClick();
-                    setBotModalMode('single');
-                    setShowBotEloModal(true);
-                  }}
-                  className="flex-1 rounded-xl border border-indigo-400/50 bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow transition-colors hover:bg-indigo-500 sm:flex-none"
-                  title="Chọn cấp độ và thêm bot"
-                >
-                  🤖 Thêm Bot
-                </button>
-              )}
-            </div>
-          )}
+          <aside className="flex w-full shrink-0 flex-row flex-wrap items-center justify-center gap-2 sm:w-44 sm:flex-col sm:items-stretch">
+            <p className="hidden text-center text-[10px] font-black uppercase tracking-wider text-indigo-200 sm:block">
+              Người chơi
+            </p>
+            {renderPlayerSlot('red', room.redPlayer)}
+            {renderPlayerSlot('black', room.blackPlayer)}
+            {!isPlaying && room.status !== 'finished' && onAddBot && (!room.redPlayer || !room.blackPlayer) && (
+              <button
+                onClick={() => {
+                  audio.playClick();
+                  setBotModalMode('single');
+                  setShowBotEloModal(true);
+                }}
+                className="w-full rounded-xl border border-indigo-400/50 bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow transition-colors hover:bg-indigo-500"
+                title="Chọn cấp độ và thêm bot"
+              >
+                🤖 Thêm Bot
+              </button>
+            )}
+          </aside>
         </div>
 
         {isPlaying && room.checkSide && (
@@ -1312,9 +1297,6 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
         )}
         {moveError && <p role="alert" className="text-xs font-bold text-rose-300 shrink-0">{moveError}</p>}
 
-        <div className="shrink-0 flex items-center justify-center">
-          {renderPlayerSlot(bottomSide, bottomPlayer)}
-        </div>
       </div>
 
       {/* Bottom Controls & Observers Bar */}
