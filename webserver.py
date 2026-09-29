@@ -601,8 +601,24 @@ def api_game_room_action(room_id, action):
         return jsonify({'active': games_cog.heartbeat(room_id, user_id)})
     if action == 'ready':
         room = games_cog.set_ready(room_id, user_id, data.get('ready') is True)
-    elif action == 'turn':
-        room = games_cog.complete_turn(room_id, user_id)
+    elif action == 'piece-moves':
+        coordinates = (data.get('x'), data.get('y'))
+        if any(type(value) is not int for value in coordinates):
+            return jsonify({'error': 'Tọa độ quân cờ không hợp lệ.'}), 400
+        result = games_cog.get_piece_moves(room_id, user_id, *coordinates)
+        if result is None:
+            return jsonify({'error': 'Không thể chọn quân cờ này.'}), 409
+        return jsonify(result)
+    elif action == 'move':
+        coordinates = tuple(data.get(key) for key in ('fromX', 'fromY', 'toX', 'toY'))
+        if any(type(value) is not int for value in coordinates):
+            return jsonify({'error': 'Nước đi không hợp lệ.'}), 400
+        if any(
+            not (0 <= value < (9 if index % 2 == 0 else 10))
+            for index, value in enumerate(coordinates)
+        ):
+            return jsonify({'error': 'Nước đi nằm ngoài bàn cờ.'}), 400
+        room = games_cog.move_piece(room_id, user_id, *coordinates)
     elif action == 'surrender':
         room = games_cog.surrender(room_id, user_id)
     elif action == 'rename':

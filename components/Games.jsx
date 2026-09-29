@@ -105,6 +105,23 @@ const createAudioEngine = () => {
     osc.start();
     osc.stop(ctx.currentTime + 0.15);
   };
+  const playCheck = () => {
+    if (isMuted || !ctx) return;
+    const time = ctx.currentTime;
+    [880, 660, 880].forEach((frequency, index) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const start = time + index * 0.13;
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.07, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.11);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.12);
+    });
+  };
   const startBGM = () => {
     if (bgmInterval) return;
     let step = 0;
@@ -135,7 +152,7 @@ const createAudioEngine = () => {
       ctx.resume();
     }
   };
-  return { init, playHover, playClick, startBGM, setMuted };
+  return { init, playHover, playClick, playCheck, startBGM, setMuted };
 };
 
 const audio = createAudioEngine();
@@ -362,74 +379,19 @@ const ProfileModal = ({ user, onClose }) => {
   );
 };
 
-const XiangqiBoard = ({ isFlipped = false, isPlaying = false, isUserRed = false, isUserBlack = false }) => {
-  // Initial Xiangqi pieces configuration
-  const initialPieces = [
-    { x: 0, y: 0, type: 'R', isRed: false },
-    { x: 1, y: 0, type: 'H', isRed: false },
-    { x: 2, y: 0, type: 'E', isRed: false },
-    { x: 3, y: 0, type: 'A', isRed: false },
-    { x: 4, y: 0, type: 'K', isRed: false },
-    { x: 5, y: 0, type: 'A', isRed: false },
-    { x: 6, y: 0, type: 'E', isRed: false },
-    { x: 7, y: 0, type: 'H', isRed: false },
-    { x: 8, y: 0, type: 'R', isRed: false },
-    { x: 1, y: 2, type: 'C', isRed: false },
-    { x: 7, y: 2, type: 'C', isRed: false },
-    { x: 0, y: 3, type: 'P', isRed: false },
-    { x: 2, y: 3, type: 'P', isRed: false },
-    { x: 4, y: 3, type: 'P', isRed: false },
-    { x: 6, y: 3, type: 'P', isRed: false },
-    { x: 8, y: 3, type: 'P', isRed: false },
-
-    { x: 0, y: 6, type: 'P', isRed: true },
-    { x: 2, y: 6, type: 'P', isRed: true },
-    { x: 4, y: 6, type: 'P', isRed: true },
-    { x: 6, y: 6, type: 'P', isRed: true },
-    { x: 8, y: 6, type: 'P', isRed: true },
-    { x: 1, y: 7, type: 'C', isRed: true },
-    { x: 7, y: 7, type: 'C', isRed: true },
-    { x: 0, y: 9, type: 'R', isRed: true },
-    { x: 1, y: 9, type: 'H', isRed: true },
-    { x: 2, y: 9, type: 'E', isRed: true },
-    { x: 3, y: 9, type: 'A', isRed: true },
-    { x: 4, y: 9, type: 'K', isRed: true },
-    { x: 5, y: 9, type: 'A', isRed: true },
-    { x: 6, y: 9, type: 'E', isRed: true },
-    { x: 7, y: 9, type: 'H', isRed: true },
-    { x: 8, y: 9, type: 'R', isRed: true },
-  ];
-
-  const renderPiece = (x, y, type, isRed) => {
-    const labels = {
-      'K': isRed ? '帥' : '將', 'A': isRed ? '仕' : '士', 'E': isRed ? '相' : '象',
-      'H': isRed ? '傌' : '馬', 'R': isRed ? '俥' : '車', 'C': isRed ? '炮' : '砲', 'P': isRed ? '兵' : '卒'
-    };
-    
-    // Kiểm tra quyền tương tác: Chỉ khi đang thi đấu VÀ quân cờ thuộc phe của người chơi hiện tại
-    const canInteract = isPlaying && ((isUserRed && isRed) || (isUserBlack && !isRed));
-
-    return (
-      <div 
-        key={`${x}-${y}`} 
-        className="absolute transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10 transition-all duration-300"
-        style={{ left: `${(x / 8) * 100}%`, top: `${(y / 9) * 100}%` }}
-      >
-        <div className={`w-[clamp(22px,3.5vw,42px)] h-[clamp(22px,3.5vw,42px)] rounded-full border-2 
-                        flex items-center justify-center font-serif font-black text-[clamp(12px,2vw,20px)] shadow-lg
-                        select-none transition-transform duration-200 ${isFlipped ? 'rotate-180' : ''}
-                        ${canInteract 
-                          ? 'cursor-pointer hover:scale-110 hover:shadow-xl' 
-                          : 'cursor-default pointer-events-none'}
-                        ${isRed 
-                          ? 'bg-amber-50 border-red-700 text-red-600 shadow-[0_4px_8px_rgba(220,38,38,0.3)]' 
-                          : 'bg-slate-900 border-slate-300 text-slate-100 shadow-[0_4px_8px_rgba(0,0,0,0.5)]'}`}
-        >
-          {labels[type]}
-        </div>
-      </div>
-    );
+const XiangqiBoard = ({ board, isFlipped = false, isPlaying = false, activeSide, playerSide, selectablePieces, selectedPiece, legalMoves, checkSide, onSelectPiece, onMove }) => {
+  const labels = {
+    K: { red: '帥', black: '將' },
+    A: { red: '仕', black: '士' },
+    E: { red: '相', black: '象' },
+    H: { red: '傌', black: '馬' },
+    R: { red: '俥', black: '車' },
+    C: { red: '炮', black: '砲' },
+    P: { red: '兵', black: '卒' }
   };
+  const findPiece = (x, y) => board.find(piece => piece.x === x && piece.y === y);
+  const canMove = isPlaying && playerSide === activeSide;
+  const isLegalDestination = (x, y) => legalMoves.some(move => move.x === x && move.y === y);
 
   return (
     <div className={`relative w-[clamp(280px,85vw,440px)] aspect-[8/9] bg-amber-100/90 border-4 border-amber-900 rounded-xl p-4 md:p-6 shadow-[inset_0_0_20px_rgba(120,53,15,0.4),0_10px_30px_rgba(0,0,0,0.5)] transition-transform duration-500 ${isFlipped ? 'rotate-180' : ''}`}>
@@ -464,17 +426,66 @@ const XiangqiBoard = ({ isFlipped = false, isPlaying = false, isUserRed = false,
           <span className={isFlipped ? 'rotate-180' : ''}>漢 界</span>
         </div>
 
-        {/* Render Pieces */}
-        {initialPieces.map((p) => renderPiece(p.x, p.y, p.type, p.isRed))}
+        {Array.from({ length: 10 }, (_, y) =>
+          Array.from({ length: 9 }, (_, x) => {
+            const piece = findPiece(x, y);
+            const isDestination = isLegalDestination(x, y);
+            if (!isDestination && !piece) return null;
+
+            if (isDestination && !piece) {
+              return (
+                <button
+                  key={`move-${x}-${y}`}
+                  aria-label={`Di chuyển đến ${x + 1}, ${y + 1}`}
+                  onClick={() => onMove(selectedPiece.x, selectedPiece.y, x, y)}
+                  className={`absolute z-20 h-[clamp(18px,2.5vw,30px)] w-[clamp(18px,2.5vw,30px)] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-emerald-800/80 bg-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.8)] hover:scale-125`}
+                  style={{ left: `${(x / 8) * 100}%`, top: `${(y / 9) * 100}%` }}
+                />
+              );
+            }
+
+            const isCurrentSide = piece.side === playerSide;
+            const isSelectable = canMove
+              && isCurrentSide
+              && piece.side === activeSide
+              && selectablePieces.some(position => position.x === x && position.y === y);
+            const isSelected = selectedPiece?.x === x && selectedPiece?.y === y;
+            const isCheckedKing = piece.type === 'K' && piece.side === checkSide;
+            return (
+              <button
+                key={`piece-${x}-${y}`}
+                aria-label={`${piece.side === 'red' ? 'Đỏ' : 'Đen'} ${labels[piece.type][piece.side]} tại ${x + 1}, ${y + 1}`}
+                onClick={() => {
+                  if (isDestination) onMove(selectedPiece.x, selectedPiece.y, x, y);
+                  else if (isSelectable) onSelectPiece(x, y);
+                }}
+                disabled={!isSelectable && !isDestination}
+                className={`absolute z-20 flex h-[clamp(26px,4vw,44px)] w-[clamp(26px,4vw,44px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 font-serif text-[clamp(12px,2vw,20px)] font-black shadow-lg transition-all
+                  ${piece.side === 'red' ? 'border-red-700 bg-amber-50 text-red-600' : 'border-slate-300 bg-slate-900 text-slate-100'}
+                  ${isSelectable ? 'cursor-pointer hover:scale-110' : 'cursor-default'}
+                  ${isSelected ? 'ring-4 ring-emerald-400' : ''}
+                  ${isDestination ? 'ring-4 ring-emerald-500' : ''}
+                  ${isCheckedKing ? 'animate-check-pulse ring-4 ring-rose-500' : ''}`}
+                style={{ left: `${(x / 8) * 100}%`, top: `${(y / 9) * 100}%` }}
+              >
+                <span className={isFlipped ? 'rotate-180' : ''}>{labels[piece.type][piece.side]}</span>
+              </button>
+            );
+          })
+        )}
       </div>
     </div>
   );
 };
 
-const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onCompleteTurn, onSurrender, onRenameRoom, onRequestSwap, onAcceptSwap, onRejectSwap, onCancelSwap }) => {
+const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, onSurrender, onRenameRoom, onRequestSwap, onAcceptSwap, onRejectSwap, onCancelSwap }) => {
   const [clockNow, setClockNow] = useState(Date.now());
   const [isEditingName, setIsEditingName] = useState(false);
   const [roomNameDraft, setRoomNameDraft] = useState(room.name);
+  const [selectedPiece, setSelectedPiece] = useState(null);
+  const [legalMoves, setLegalMoves] = useState([]);
+  const [moveError, setMoveError] = useState('');
+  const previousCheckSide = useRef(room.checkSide);
   const isPlaying = room.status === 'playing';
   // Nếu người dùng đang đóng vai Phe Đen -> Đảo ngược góc nhìn bàn cờ để Đen ở dưới
   const isUserBlack = room.blackPlayer?.id === currentUser.id;
@@ -490,6 +501,47 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onComple
   const swapRequest = room.swapRequest;
   const isTargetOfSwap = !isPlaying && swapRequest && swapRequest.targetId === currentUser.id;
   const isRequesterOfSwap = !isPlaying && swapRequest && swapRequest.requesterId === currentUser.id;
+
+  useEffect(() => {
+    setSelectedPiece(null);
+    setLegalMoves([]);
+    setMoveError('');
+  }, [room.id, room.revision]);
+
+  useEffect(() => {
+    if (room.checkSide && room.checkSide !== previousCheckSide.current) {
+      audio.playCheck();
+    }
+    previousCheckSide.current = room.checkSide;
+  }, [room.checkSide]);
+
+  const handleSelectPiece = async (x, y) => {
+    try {
+      const response = await fetch(`/api/games/rooms/${room.id}/piece-moves`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, x, y })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Không thể chọn quân cờ.');
+      setSelectedPiece({ x, y });
+      setLegalMoves(result.moves);
+      setMoveError('');
+    } catch (error) {
+      setSelectedPiece(null);
+      setLegalMoves([]);
+      setMoveError(error instanceof Error ? error.message : 'Không thể chọn quân cờ.');
+    }
+  };
+
+  const handleMove = async (fromX, fromY, toX, toY) => {
+    const succeeded = await onMove(fromX, fromY, toX, toY);
+    if (succeeded) {
+      setSelectedPiece(null);
+      setLegalMoves([]);
+      setMoveError('');
+    }
+  };
 
   const renderPlayerSlot = (side, player) => {
     const isRed = side === 'red';
@@ -525,6 +577,9 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onComple
             </span>
             <span className={`text-[10px] font-semibold uppercase tracking-wider ${isRed ? 'text-red-400/80' : 'text-slate-400'}`}>
               {isRed ? 'Phe Đỏ' : 'Phe Đen'}
+            </span>
+            <span className={`font-mono text-lg font-black ${isPlaying && room.clock?.activeSide === side ? 'text-amber-300' : 'text-white'}`}>
+              {getClockLabel(side)}
             </span>
           </div>
           
@@ -693,19 +748,31 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onComple
         {/* Board Container */}
         <div className="relative my-1 flex items-center justify-center shrink-0 w-full">
           <XiangqiBoard 
+            board={room.board || []}
             isFlipped={isFlipped} 
             isPlaying={isPlaying}
-            isUserRed={isUserRed}
-            isUserBlack={isUserBlack}
+            activeSide={room.clock?.activeSide}
+            playerSide={isUserRed ? 'red' : isUserBlack ? 'black' : null}
+            selectablePieces={room.selectablePieces || []}
+            selectedPiece={selectedPiece}
+            legalMoves={legalMoves}
+            checkSide={room.checkSide}
+            onSelectPiece={handleSelectPiece}
+            onMove={handleMove}
           />
         </div>
 
-        <div className="flex w-full max-w-[440px] items-center justify-between gap-3 rounded-xl bg-slate-950/80 px-4 py-2 font-mono text-lg font-black">
-          <span className={room.clock?.activeSide === 'red' && isPlaying ? 'text-amber-300' : 'text-red-300'}>Đỏ {getClockLabel('red')}</span>
-          <span className="text-xs font-sans text-slate-400">{isPlaying ? `Lượt ${room.clock?.activeSide === 'red' ? 'Đỏ' : 'Đen'}` : '20 phút + 5 giây/nước'}</span>
-          <span className={room.clock?.activeSide === 'black' && isPlaying ? 'text-amber-300' : 'text-slate-200'}>Đen {getClockLabel('black')}</span>
-        </div>
-        {room.result && <p role="status" className="max-w-[440px] text-center text-sm font-bold text-amber-300">{room.result}</p>}
+        {isPlaying && room.checkSide && (
+          <p role="alert" className="animate-check-pulse rounded-lg border border-rose-500 bg-rose-950/90 px-4 py-2 text-sm font-black text-rose-200">
+            CHIẾU TƯỚNG — Phe {room.checkSide === 'red' ? 'Đỏ' : 'Đen'} phải cứu tướng!
+          </p>
+        )}
+        {moveError && <p role="alert" className="text-sm font-bold text-rose-300">{moveError}</p>}
+        {room.result && (
+          <p role="status" className={`max-w-[440px] text-center text-sm font-black ${isUserRed || isUserBlack ? room.winner === (isUserRed ? 'red' : 'black') ? 'text-emerald-300' : 'text-rose-300' : 'text-amber-300'}`}>
+            {room.result} {room.winner && (isUserRed || isUserBlack) ? (room.winner === (isUserRed ? 'red' : 'black') ? 'Bạn thắng!' : 'Bạn thua!') : ''}
+          </p>
+        )}
 
         {/* Bottom Player Slot (Bạn / Phe phía dưới) */}
         <div className="shrink-0 flex items-center justify-center">
@@ -720,11 +787,6 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onComple
             👁️ Đang xem ({room.observers.length})
           </h3>
           
-          {isPlaying && (isUserRed || isUserBlack) && room.clock?.activeSide === (isUserRed ? 'red' : 'black') && (
-            <button onClick={onCompleteTurn} className="rounded-xl bg-indigo-600 px-5 py-2 font-bold text-white hover:bg-indigo-500">
-              Xác nhận nước đi (+5 giây)
-            </button>
-          )}
           {!isPlaying && room.status !== 'finished' && (
             <div className="flex items-center gap-3">
               <span className={`text-xs font-bold ${room.redReady ? 'text-emerald-300' : 'text-slate-400'}`}>Đỏ {room.redReady ? '✓ Sẵn sàng' : 'Chưa sẵn sàng'}</span>
@@ -1135,7 +1197,8 @@ export default function Games() {
   };
 
   const handleReady = (ready) => performRoomAction(activeRoomId, 'ready', { ready });
-  const handleCompleteTurn = () => performRoomAction(activeRoomId, 'turn');
+  const handleMove = (fromX, fromY, toX, toY) =>
+    performRoomAction(activeRoomId, 'move', { fromX, fromY, toX, toY });
   const handleSurrender = () => performRoomAction(activeRoomId, 'surrender');
   const handleRenameRoom = (name) => performRoomAction(activeRoomId, 'rename', { name });
 
@@ -1218,7 +1281,7 @@ export default function Games() {
                 onLeave={handleLeaveRoom}
                 onJoinSide={handleJoinSide}
                 onReady={handleReady}
-                onCompleteTurn={handleCompleteTurn}
+                onMove={handleMove}
                 onSurrender={handleSurrender}
                 onRenameRoom={handleRenameRoom}
                 onRequestSwap={handleRequestSwap}
@@ -1296,7 +1359,12 @@ export default function Games() {
           from { opacity: 0; transform: scale(0.95) translateY(10px); }
           to { opacity: 1; transform: scale(1) translateY(0); }
         }
+        @keyframes checkPulse {
+          0%, 100% { box-shadow: 0 0 0 rgba(244, 63, 94, 0); }
+          50% { box-shadow: 0 0 22px rgba(244, 63, 94, 0.9); }
+        }
         .animate-fade-in { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-check-pulse { animation: checkPulse 0.8s ease-in-out infinite; }
       `}} />
     </div>
   );
