@@ -184,7 +184,11 @@ on `http://127.0.0.1:5000`; the Next.js development server proxies `/api/*`
 requests to Flask. Set `FLASK_API_URL` if the backend uses a different address.
 
 Run `npm run build` to create the static site in `out/`. In production, the Flask
-server redirects `/` to `/gamehub` for Discord Activities and serves the static
-export for `/gamehub`, `/panel`, and `/music`. The deployment workflow passes
+server redirects `/` to `/games` for Discord Activities and serves the static
+export for `/games`, `/panel`, and `/music`. The deployment workflow passes
 `DISCORD_CLIENT_ID` as `NEXT_PUBLIC_DISCORD_CLIENT_ID` when building so the
 Activity and backend use the same Discord application.
+
+The Games Activity shares its room state through the `cogs.games` bot extension
+and persists it in `data/games.json`. Keep the configured `DATA_FOLDER`
+available to the bot so game rooms survive restarts.

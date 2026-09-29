@@ -725,7 +725,7 @@ const gamesData = [
   { id: 1, title: 'Cờ Tướng', desc: 'Đấu trí đỉnh cao', colorBg: 'bg-gradient-to-b from-red-500 to-red-800', icon: <XiangqiPieceIcon />, type: 'xiangqi' },
 ];
 
-export default function GameHub() {
+export default function Games() {
   const [isMuted, setIsMuted] = useState(true);
   const [hasStarted, setHasStarted] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -734,13 +734,54 @@ export default function GameHub() {
   const [retryCount, setRetryCount] = useState(0);
   
   // Navigation State
-  const [currentView, setCurrentView] = useState('hub'); // 'hub' | 'room'
+  const [currentView, setCurrentView] = useState('games'); // 'games' | 'room'
   const [activeRoomId, setActiveRoomId] = useState(null);
   
   // Dynamic Rooms State
   const [rooms, setRooms] = useState([]);
+  const roomsRef = useRef([]);
+  const [roomError, setRoomError] = useState('');
+  const [roomLoadError, setRoomLoadError] = useState('');
 
   const [userProfile, setUserProfile] = useState(null);
+
+  useEffect(() => {
+    let isActive = true;
+    let isLoading = false;
+
+    const refreshRooms = async () => {
+      if (isLoading) return;
+      isLoading = true;
+      try {
+        const response = await fetch('/api/games/rooms', { cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Không thể tải danh sách phòng.');
+        }
+        if (!Array.isArray(result)) {
+          throw new Error('Dữ liệu danh sách phòng không hợp lệ.');
+        }
+        if (isActive) {
+          roomsRef.current = result;
+          setRooms(result);
+          setRoomLoadError('');
+        }
+      } catch (error) {
+        if (isActive) {
+          setRoomLoadError(error instanceof Error ? error.message : 'Không thể tải danh sách phòng.');
+        }
+      } finally {
+        isLoading = false;
+      }
+    };
+
+    refreshRooms();
+    const intervalId = window.setInterval(refreshRooms, 2000);
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -780,7 +821,36 @@ export default function GameHub() {
     }
   };
 
-  const handleCreateRoom = (gameData) => {
+  const updateRoom = (roomId, update) => {
+    const currentRoom = roomsRef.current.find(room => room.id === roomId);
+    if (!currentRoom) {
+      setRoomError('Không tìm thấy phòng cần cập nhật.');
+      return;
+    }
+
+    const updatedRoom = update(currentRoom);
+    const updatedRooms = roomsRef.current.map(room => room.id === roomId ? updatedRoom : room);
+    roomsRef.current = updatedRooms;
+    setRooms(updatedRooms);
+
+    fetch(`/api/games/rooms/${roomId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedRoom)
+    })
+      .then(async response => {
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Không thể cập nhật phòng.');
+        }
+        setRoomError('');
+      })
+      .catch(error => {
+        setRoomError(error instanceof Error ? error.message : 'Không thể cập nhật phòng.');
+      });
+  };
+
+  const handleCreateRoom = async (gameData) => {
     if (gameData.type === 'xiangqi') {
       const newRoom = {
         id: Date.now(),
@@ -794,9 +864,25 @@ export default function GameHub() {
         blackPlayer: null,
         observers: [userProfile] // Creator joins as observer initially
       };
-      setRooms(prev => [newRoom, ...prev]);
-      setActiveRoomId(newRoom.id);
-      setCurrentView('room');
+      try {
+        const response = await fetch('/api/games/rooms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newRoom)
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Không thể tạo phòng.');
+        }
+        const updatedRooms = [result, ...roomsRef.current.filter(room => room.id !== result.id)];
+        roomsRef.current = updatedRooms;
+        setRooms(updatedRooms);
+        setRoomError('');
+        setActiveRoomId(result.id);
+        setCurrentView('room');
+      } catch (error) {
+        setRoomError(error instanceof Error ? error.message : 'Không thể tạo phòng.');
+      }
     }
   };
 
@@ -806,18 +892,16 @@ export default function GameHub() {
     
     if (room.type === 'xiangqi') {
       // Logic add user to observers if not already anywhere in room
-      setRooms(prev => prev.map(r => {
-        if (r.id === roomId) {
-          const isRed = r.redPlayer?.id === userProfile.id;
-          const isBlack = r.blackPlayer?.id === userProfile.id;
-          const isObs = r.observers.some(o => o.id === userProfile.id);
-          
-          if (!isRed && !isBlack && !isObs) {
-            return { ...r, observers: [...r.observers, userProfile] };
-          }
+      updateRoom(roomId, currentRoom => {
+        const isRed = currentRoom.redPlayer?.id === userProfile.id;
+        const isBlack = currentRoom.blackPlayer?.id === userProfile.id;
+        const isObs = currentRoom.observers.some(observer => observer.id === userProfile.id);
+
+        if (!isRed && !isBlack && !isObs) {
+          return { ...currentRoom, observers: [...currentRoom.observers, userProfile] };
         }
-        return r;
-      }));
+        return currentRoom;
+      });
       setActiveRoomId(roomId);
       setCurrentView('room');
     }
@@ -825,109 +909,75 @@ export default function GameHub() {
 
   const handleLeaveRoom = () => {
     // Remove user from current room
-    setRooms(prev => prev.map(r => {
-      if (r.id === activeRoomId) {
-        return {
-          ...r,
-          redPlayer: r.redPlayer?.id === userProfile.id ? null : r.redPlayer,
-          blackPlayer: r.blackPlayer?.id === userProfile.id ? null : r.blackPlayer,
-          observers: r.observers.filter(o => o.id !== userProfile.id),
-          swapRequest: null,
-          // Cập nhật lại số slot
-          slots: `${(r.redPlayer && r.redPlayer.id !== userProfile.id ? 1 : 0) + (r.blackPlayer && r.blackPlayer.id !== userProfile.id ? 1 : 0)}/2`
-        };
-      }
-      return r;
+    updateRoom(activeRoomId, room => ({
+      ...room,
+      redPlayer: room.redPlayer?.id === userProfile.id ? null : room.redPlayer,
+      blackPlayer: room.blackPlayer?.id === userProfile.id ? null : room.blackPlayer,
+      observers: room.observers.filter(observer => observer.id !== userProfile.id),
+      swapRequest: null,
+      slots: `${(room.redPlayer && room.redPlayer.id !== userProfile.id ? 1 : 0) + (room.blackPlayer && room.blackPlayer.id !== userProfile.id ? 1 : 0)}/2`
     }));
     setActiveRoomId(null);
-    setCurrentView('hub');
+    setCurrentView('games');
   };
 
   const handleJoinSide = (side) => {
-    setRooms(prev => prev.map(r => {
-      if (r.id === activeRoomId) {
-        let newRed = r.redPlayer;
-        let newBlack = r.blackPlayer;
-        let newObs = r.observers.filter(o => o.id !== userProfile.id); // Xóa khỏi danh sách xem
+    updateRoom(activeRoomId, room => {
+      let newRed = room.redPlayer;
+      let newBlack = room.blackPlayer;
+      let newObservers = room.observers.filter(observer => observer.id !== userProfile.id);
 
-        // Xóa khỏi ghế cũ nếu có
-        if (newRed?.id === userProfile.id) newRed = null;
-        if (newBlack?.id === userProfile.id) newBlack = null;
+      if (newRed?.id === userProfile.id) newRed = null;
+      if (newBlack?.id === userProfile.id) newBlack = null;
 
-        // Thêm vào ghế mới
-        if (side === 'red') newRed = userProfile;
-        else if (side === 'black') newBlack = userProfile;
-        else newObs = [...newObs, userProfile]; // side === null nghĩa là rời ghế ra xem
+      if (side === 'red') newRed = userProfile;
+      else if (side === 'black') newBlack = userProfile;
+      else newObservers = [...newObservers, userProfile];
 
-        return {
-          ...r,
-          redPlayer: newRed,
-          blackPlayer: newBlack,
-          observers: newObs,
-          swapRequest: null,
-          slots: `${(newRed ? 1 : 0) + (newBlack ? 1 : 0)}/2`
-        };
-      }
-      return r;
-    }));
+      return {
+        ...room,
+        redPlayer: newRed,
+        blackPlayer: newBlack,
+        observers: newObservers,
+        swapRequest: null,
+        slots: `${(newRed ? 1 : 0) + (newBlack ? 1 : 0)}/2`
+      };
+    });
   };
 
   const handleRequestSwap = (targetUser) => {
-    setRooms(prev => prev.map(r => {
-      if (r.id === activeRoomId) {
-        if (r.swapRequest) return r; // đã có yêu cầu đang chờ
-        return {
-          ...r,
-          swapRequest: {
-            requesterId: userProfile.id,
-            requesterName: userProfile.name,
-            targetId: targetUser.id
-          }
-        };
-      }
-      return r;
-    }));
+    updateRoom(activeRoomId, room => {
+      if (room.swapRequest) return room;
+      return {
+        ...room,
+        swapRequest: {
+          requesterId: userProfile.id,
+          requesterName: userProfile.name,
+          targetId: targetUser.id
+        }
+      };
+    });
   };
 
   const handleAcceptSwap = () => {
-    setRooms(prev => prev.map(r => {
-      if (r.id === activeRoomId && r.swapRequest) {
-        return {
-          ...r,
-          redPlayer: r.blackPlayer,
-          blackPlayer: r.redPlayer,
-          swapRequest: null
-        };
-      }
-      return r;
-    }));
+    updateRoom(activeRoomId, room => room.swapRequest ? ({
+      ...room,
+      redPlayer: room.blackPlayer,
+      blackPlayer: room.redPlayer,
+      swapRequest: null
+    }) : room);
   };
 
   const handleRejectSwap = () => {
-    setRooms(prev => prev.map(r => {
-      if (r.id === activeRoomId) {
-        return { ...r, swapRequest: null };
-      }
-      return r;
-    }));
+    updateRoom(activeRoomId, room => ({ ...room, swapRequest: null }));
   };
 
   const handleCancelSwap = () => {
-    setRooms(prev => prev.map(r => {
-      if (r.id === activeRoomId) {
-        return { ...r, swapRequest: null };
-      }
-      return r;
-    }));
+    updateRoom(activeRoomId, room => ({ ...room, swapRequest: null }));
   };
 
   const handleStartGame = () => {
-    setRooms(prev => prev.map(r => {
-      if (r.id === activeRoomId) {
-        return { ...r, status: 'playing', swapRequest: null };
-      }
-      return r;
-    }));
+    updateRoom(activeRoomId, room => ({ ...room, status: 'playing', swapRequest: null }));
   };
 
   const activeRoomData = rooms.find(r => r.id === activeRoomId);
@@ -956,9 +1006,9 @@ export default function GameHub() {
           <div>
             <h1 
               className="text-2xl md:text-3xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] tracking-tight cursor-pointer hover:text-yellow-200 transition-colors"
-              onClick={() => { if(currentView !== 'hub') setCurrentView('hub'); }}
+              onClick={() => { if(currentView !== 'games') setCurrentView('games'); }}
             >
-              GAME HUB <span className="text-yellow-300">MOSA</span>
+              GAMES <span className="text-yellow-300">MOSA</span>
             </h1>
             <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
@@ -986,7 +1036,7 @@ export default function GameHub() {
       <main className="flex-1 flex flex-col xl:flex-row w-full max-w-[1500px] mx-auto px-4 md:px-8 py-2 gap-6 overflow-hidden min-h-0">
         
         {/* Dynamic View Switcher */}
-        {currentView === 'hub' ? (
+        {currentView === 'games' ? (
           <section className="flex-1 flex flex-col justify-center min-w-0 animate-fade-in">
             <h2 className="text-lg font-extrabold text-indigo-100 mb-4 bg-slate-900/60 border border-indigo-500/30 py-1.5 px-5 rounded-full shadow-md backdrop-blur-md self-start flex items-center gap-2">
               <span>🔥</span> Chọn Game Để Tạo Phòng
@@ -1027,6 +1077,12 @@ export default function GameHub() {
               </h3>
             </div>
             <div className="overflow-y-auto pr-1 flex flex-col gap-3 flex-1 custom-scrollbar">
+              {(roomLoadError || roomError) && (
+                <>
+                  {roomLoadError && <p role="alert" className="text-center text-rose-300 text-sm">{roomLoadError}</p>}
+                  {roomError && <p role="alert" className="text-center text-rose-300 text-sm">{roomError}</p>}
+                </>
+              )}
               {rooms.length === 0 ? (
                 <p className="text-center text-slate-500 mt-10 text-sm italic">Chưa có phòng nào được tạo.</p>
               ) : (

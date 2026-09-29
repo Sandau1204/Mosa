@@ -71,8 +71,8 @@ def add_log(message, level="info"):
 
 @app.route('/')
 def index():
-    # Discord Activity mở URL gốc, nên chuyển thẳng tới Game Hub.
-    return redirect(url_for('gamehub'))
+    # Discord Activity mở URL gốc, nên chuyển thẳng tới trang Games.
+    return redirect(url_for('games'))
 
 OWNER_ID = os.getenv('OWNER_ID')
 
@@ -550,6 +550,39 @@ def api_update_status():
 def api_logs():
     return jsonify(realtime_logs)
 
+@app.route('/api/games/rooms', methods=['GET', 'POST'])
+def api_game_rooms():
+    games_cog = bot_instance.get_cog('Game') if bot_instance else None
+    if games_cog is None:
+        return jsonify({'error': 'Game service is not available.'}), 503
+
+    if request.method == 'GET':
+        return jsonify(games_cog.get_rooms())
+
+    room = request.get_json(silent=True)
+    if not isinstance(room, dict) or type(room.get('id')) is not int or room['id'] <= 0:
+        return jsonify({'error': 'Dữ liệu phòng không hợp lệ.'}), 400
+    if not isinstance(room.get('name'), str) or not room['name'].strip():
+        return jsonify({'error': 'Tên phòng không hợp lệ.'}), 400
+
+    if not games_cog.create_room(room):
+        return jsonify({'error': 'Phòng này đã tồn tại.'}), 409
+    return jsonify(room), 201
+
+@app.route('/api/games/rooms/<int:room_id>', methods=['PUT'])
+def api_update_game_room(room_id):
+    games_cog = bot_instance.get_cog('Game') if bot_instance else None
+    if games_cog is None:
+        return jsonify({'error': 'Game service is not available.'}), 503
+
+    room = request.get_json(silent=True)
+    if not isinstance(room, dict) or type(room.get('id')) is not int or room['id'] != room_id:
+        return jsonify({'error': 'Dữ liệu phòng không hợp lệ.'}), 400
+
+    if not games_cog.update_room(room_id, room):
+        return jsonify({'error': 'Không tìm thấy phòng.'}), 404
+    return jsonify(room)
+
 #--- Trang Music Player ---
 
 @app.route('/music')
@@ -557,9 +590,9 @@ def music():
     session['next_url'] = url_for('music')
     return send_from_directory(FRONTEND_DIR, 'music.html')
 
-@app.route('/gamehub')
-def gamehub():
-    return send_from_directory(FRONTEND_DIR, 'gamehub.html')
+@app.route('/games')
+def games():
+    return send_from_directory(FRONTEND_DIR, 'games.html')
 
 # ==========================================
 # 1. LẤY TRẠNG THÁI VÀ HÀNG CHỜ HIỂN THỊ LÊN WEB
