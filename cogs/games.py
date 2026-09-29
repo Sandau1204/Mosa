@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import random
 import threading
 import time
 import uuid
@@ -216,6 +217,149 @@ class Game(commands.Cog):
             if piece["side"] == side
             for move in self._legal_moves(board, piece)
         ]
+
+    def _simulate_move(
+        self,
+        board: list[dict[str, Any]],
+        piece: dict[str, Any],
+        move: dict[str, int],
+    ) -> list[dict[str, Any]]:
+        return [
+            *(
+                candidate
+                for candidate in board
+                if (candidate["x"], candidate["y"]) not in (
+                    (piece["x"], piece["y"]),
+                    (move["x"], move["y"]),
+                )
+            ),
+            {**piece, "x": move["x"], "y": move["y"]},
+        ]
+
+    def _evaluate_board(self, board: list[dict[str, Any]], bot_side: str) -> int:
+        values = {"K": 10000, "R": 900, "C": 450, "H": 400, "E": 200, "A": 200, "P": 100}
+        score = 0
+        for piece in board:
+            value = values.get(piece["type"], 0)
+            if piece["type"] == "P":
+                crossed_river = piece["y"] <= 4 if piece["side"] == "red" else piece["y"] >= 5
+                if crossed_river:
+                    value += 120
+            if piece["type"] in ("R", "C", "H") and 3 <= piece["x"] <= 5:
+                value += 30
+            score += value if piece["side"] == bot_side else -value
+        return score
+
+    def _ordered_legal_moves(
+        self,
+        board: list[dict[str, Any]],
+        side: str,
+    ) -> list[tuple[dict[str, Any], dict[str, int]]]:
+        values = {"K": 10000, "R": 900, "C": 450, "H": 400, "E": 200, "A": 200, "P": 100}
+        moves = self._all_legal_moves(board, side)
+        moves.sort(
+            key=lambda candidate: values.get(
+                (self._piece_at(board, candidate[1]["x"], candidate[1]["y"]) or {}).get("type"),
+                0,
+            ),
+            reverse=True,
+        )
+        return moves
+
+    def _search_bot_move(
+        self,
+        board: list[dict[str, Any]],
+        side_to_move: str,
+        bot_side: str,
+        depth: int,
+        alpha: float,
+        beta: float,
+    ) -> tuple[int, tuple[dict[str, Any], dict[str, int]] | None]:
+        if depth == 0:
+            return self._evaluate_board(board, bot_side), None
+
+        moves = self._ordered_legal_moves(board, side_to_move)
+        if not moves:
+            return (-1_000_000 if side_to_move == bot_side else 1_000_000), None
+
+        maximizing = side_to_move == bot_side
+        best_score = float("-inf") if maximizing else float("inf")
+        best_move = moves[0]
+        next_side = "black" if side_to_move == "red" else "red"
+        for piece, move in moves:
+            next_board = self._simulate_move(board, piece, move)
+            score, _ = self._search_bot_move(
+                next_board,
+                next_side,
+                bot_side,
+                depth - 1,
+                alpha,
+                beta,
+            )
+            if maximizing and score > best_score or not maximizing and score < best_score:
+                best_score = score
+                best_move = (piece, move)
+            if maximizing:
+                alpha = max(alpha, best_score)
+            else:
+                beta = min(beta, best_score)
+            if beta <= alpha:
+                break
+        return int(best_score), best_move
+
+    def _choose_bot_move(
+        self,
+        board: list[dict[str, Any]],
+        side: str,
+        elo: int,
+    ) -> tuple[dict[str, Any], dict[str, int]] | None:
+        moves = self._all_legal_moves(board, side)
+        if not moves:
+            return None
+        if elo <= 800:
+            return random.choice(moves)
+        depth = 1 if elo <= 1200 else 2 if elo <= 1600 else 3
+        _, best_move = self._search_bot_move(
+            board,
+            side,
+            side,
+            depth,
+            float("-inf"),
+            float("inf"),
+        )
+        return best_move or moves[0]
+
+    def make_bot_move(self, room_id: int, requester_id: str) -> dict[str, Any] | None:
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            if room is None or requester_id not in self._participant_ids(room):
+                return None
+            if room.get("status") != "playing":
+                return self._room_state(room)
+            clock = room.get("clock")
+            side = clock.get("activeSide") if isinstance(clock, dict) else None
+            player = room.get(f"{side}Player") if side in ("red", "black") else None
+            if not player or not player.get("isBot"):
+                return self._room_state(room)
+            board = room.get("board")
+            if not isinstance(board, list):
+                return None
+            try:
+                elo = int(player.get("elo", 1200))
+            except (TypeError, ValueError):
+                elo = 1200
+            move = self._choose_bot_move(board, side, elo)
+            if move is None:
+                return None
+            piece, destination = move
+            return self.move_piece(
+                room_id,
+                player["id"],
+                piece["x"],
+                piece["y"],
+                destination["x"],
+                destination["y"],
+            )
 
     def _selectable_pieces(
         self,

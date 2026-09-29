@@ -903,6 +903,8 @@ def api_game_room_action(room_id, action):
         if result is None:
             return jsonify({'error': 'Không thể chọn quân cờ này.'}), 409
         return jsonify(result)
+    elif action == 'bot-move':
+        room = games_cog.make_bot_move(room_id, user_id)
     elif action == 'move':
         coordinates = tuple(data.get(key) for key in ('fromX', 'fromY', 'toX', 'toY'))
         if any(type(value) is not int for value in coordinates):

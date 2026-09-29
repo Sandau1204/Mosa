@@ -241,28 +241,28 @@ const BOT_ELO_PRESETS = [
   {
     elo: 800,
     title: 'Tập Sự',
-    desc: 'Thi thoảng hay đi nhầm, ngây thơ, phù hợp cho người mới học cờ.',
+    desc: 'Chọn ngẫu nhiên trong các nước đi hợp lệ, phù hợp cho người mới học cờ.',
     badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50',
     icon: '🌱',
   },
   {
     elo: 1200,
     title: 'Thành Thạo',
-    desc: 'Biết ưu tiên ăn quân, phòng thủ cơ bản và né các bẫy chiếu cơ bản.',
+    desc: 'Đánh giá nước đi tiếp theo và ưu tiên lợi thế quân.',
     badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/50',
     icon: '⚡',
   },
   {
     elo: 1600,
     title: 'Kiện Tướng',
-    desc: 'Tính toán 2-3 nước cờ, kiểm soát khu vực trung tâm bàn cờ rất gắt.',
+    desc: 'Minimax alpha-beta, tính trước 2 nửa-nước để cân nhắc phản đòn.',
     badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/50',
     icon: '👑',
   },
   {
     elo: 2000,
     title: 'Đại Kiện Tướng',
-    desc: 'Sử dụng thuật toán Minimax Alpha-Beta 3 nước sâu. Đánh hiểm hóc!',
+    desc: 'Minimax alpha-beta, tính trước 3 nửa-nước với sắp xếp nước ăn quân.',
     badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/50',
     icon: '🔥',
   },
@@ -429,143 +429,6 @@ function getLegalMovesLocal(board, x, y, activeSide) {
   }
 
   return legalMoves;
-}
-
-function getSelectablePiecesLocal(board, side) {
-  const selectables = [];
-  for (const p of board) {
-    if (p.side === side) {
-      const moves = getLegalMovesLocal(board, p.x, p.y, side);
-      if (moves.length > 0) {
-        selectables.push({ x: p.x, y: p.y });
-      }
-    }
-  }
-  return selectables;
-}
-
-const PIECE_VALUES = { K: 10000, R: 900, C: 450, H: 400, E: 200, A: 200, P: 100 };
-
-function evaluateBoard(board, botSide) {
-  let score = 0;
-  for (const p of board) {
-    let val = PIECE_VALUES[p.type] || 0;
-    
-    // Pawn river bonus
-    if (p.type === 'P') {
-      const crossedRiver = p.side === 'red' ? p.y <= 4 : p.y >= 5;
-      if (crossedRiver) val += 120;
-    }
-
-    // Center position bonus for R, C, H
-    if (['R', 'C', 'H'].includes(p.type)) {
-      if (p.x >= 3 && p.x <= 5) val += 30;
-    }
-
-    if (p.side === botSide) {
-      score += val;
-    } else {
-      score -= val;
-    }
-  }
-  return score;
-}
-
-function simulateMove(board, move) {
-  return board
-    .filter(p => !(p.x === move.toX && p.y === move.toY))
-    .map(p => (p.x === move.fromX && p.y === move.fromY ? { ...p, x: move.toX, y: move.toY } : p));
-}
-
-function getAllLegalMoves(board, side) {
-  const allMoves = [];
-  for (const p of board) {
-    if (p.side === side) {
-      const moves = getLegalMovesLocal(board, p.x, p.y, side);
-      for (const m of moves) {
-        allMoves.push({
-          fromX: p.x,
-          fromY: p.y,
-          toX: m.x,
-          toY: m.y,
-          pieceType: p.type
-        });
-      }
-    }
-  }
-  return allMoves;
-}
-
-function minimax(board, depth, alpha, beta, isMaximizing, botSide) {
-  const currentSide = isMaximizing ? botSide : (botSide === 'red' ? 'black' : 'red');
-  const allMoves = getAllLegalMoves(board, currentSide);
-
-  if (depth === 0 || allMoves.length === 0) {
-    return { score: evaluateBoard(board, botSide) };
-  }
-
-  let bestMove = allMoves[0];
-
-  if (isMaximizing) {
-    let maxEval = -Infinity;
-    for (const move of allMoves) {
-      const nextBoard = simulateMove(board, move);
-      const evaluation = minimax(nextBoard, depth - 1, alpha, beta, false, botSide).score;
-      if (evaluation > maxEval) {
-        maxEval = evaluation;
-        bestMove = move;
-      }
-      alpha = Math.max(alpha, evaluation);
-      if (beta <= alpha) break;
-    }
-    return { score: maxEval, move: bestMove };
-  } else {
-    let minEval = Infinity;
-    for (const move of allMoves) {
-      const nextBoard = simulateMove(board, move);
-      const evaluation = minimax(nextBoard, depth - 1, alpha, beta, true, botSide).score;
-      if (evaluation < minEval) {
-        minEval = evaluation;
-        bestMove = move;
-      }
-      beta = Math.min(beta, evaluation);
-      if (beta <= alpha) break;
-    }
-    return { score: minEval, move: bestMove };
-  }
-}
-
-function getBestMoveByElo(board, botSide, elo = 1200) {
-  const allMoves = getAllLegalMoves(board, botSide);
-  if (allMoves.length === 0) return null;
-
-  // 800 ELO (Tập Sự): 75% đi ngẫu nhiên, 25% ăn quân
-  if (elo <= 800) {
-    if (Math.random() < 0.75) {
-      return allMoves[Math.floor(Math.random() * allMoves.length)];
-    }
-    const captureMove = allMoves.find(m => board.some(p => p.x === m.toX && p.y === m.toY && p.side !== botSide));
-    return captureMove || allMoves[Math.floor(Math.random() * allMoves.length)];
-  }
-
-  // 1200 ELO (Thành Thạo): Greedy + 30% đi ngẫu nhiên
-  if (elo <= 1200) {
-    if (Math.random() < 0.3) {
-      return allMoves[Math.floor(Math.random() * allMoves.length)];
-    }
-    const result = minimax(board, 1, -Infinity, Infinity, true, botSide);
-    return result.move || allMoves[0];
-  }
-
-  // 1600 ELO (Kiện Tướng): Minimax Depth 2
-  if (elo <= 1600) {
-    const result = minimax(board, 2, -Infinity, Infinity, true, botSide);
-    return result.move || allMoves[0];
-  }
-
-  // 2000 ELO (Đại Kiện Tướng): Minimax Depth 3
-  const result = minimax(board, 3, -Infinity, Infinity, true, botSide);
-  return result.move || allMoves[0];
 }
 
 const CanvasBackground = () => {
@@ -985,7 +848,7 @@ const XiangqiBoard = ({ board, isFlipped = false, isPlaying = false, activeSide,
                   else if (isSelectable) onSelectPiece(x, y);
                 }}
                 disabled={!isSelectable && !isDestination}
-                className={`absolute z-20 flex h-[clamp(16px,9.2cqw,40px)] w-[clamp(16px,9.2cqw,40px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 font-serif text-[clamp(10px,4.5cqw,19px)] font-black shadow-lg transition-all
+                className={`absolute z-20 flex h-[clamp(14px,8cqw,34px)] w-[clamp(14px,8cqw,34px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 font-serif text-[clamp(9px,4cqw,17px)] font-black shadow-lg transition-all
                   ${piece.side === 'red' ? 'border-red-700 bg-amber-50 text-red-600' : 'border-slate-300 bg-slate-900 text-slate-100'}
                   ${isSelectable ? 'cursor-pointer hover:scale-110' : 'cursor-default'}
                   ${isSelected ? 'ring-2 sm:ring-4 ring-emerald-400 scale-105' : ''}
@@ -1182,34 +1045,8 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
     }
     
     return (
-      <div className="flex items-center gap-1.5">
-        <button 
-          onClick={() => { audio.playClick(); onJoinSide(side); }}
-          disabled={isPlaying}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-xl border-2 border-dashed transition-all min-w-[120px] sm:min-w-[140px] justify-center
-            ${isPlaying ? 'opacity-40 cursor-not-allowed border-gray-600 text-gray-600 bg-slate-800/30' : 
-            isRed ? 'border-red-500/50 text-red-400 hover:bg-red-950/40 hover:border-red-400 cursor-pointer shadow-[0_0_12px_rgba(239,68,68,0.15)]' : 
-                    'border-slate-400/50 text-slate-300 hover:bg-slate-800/40 hover:border-slate-300 cursor-pointer shadow-[0_0_12px_rgba(148,163,184,0.15)]'}`}
-        >
-          <span className="text-base font-bold">+</span>
-          <span className={`text-xs font-bold ${isRed ? 'text-red-400' : 'text-slate-300'}`}>
-            Ngồi {isRed ? 'Đỏ' : 'Đen'}
-          </span>
-        </button>
-
-        {!isPlaying && onAddBot && (
-          <button
-            onClick={() => { 
-              audio.playClick(); 
-              setBotModalMode('single');
-              setShowBotEloModal(true); 
-            }}
-            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow border border-indigo-400/50 transition-all flex items-center gap-1"
-            title="Thêm AI thi đấu ngay"
-          >
-            🤖 Thêm Bot
-          </button>
-        )}
+      <div className="min-w-[150px] rounded-xl border border-dashed border-slate-700/70 px-3 py-2 text-center text-[10px] font-semibold text-slate-500">
+        Chờ người chơi phe {isRed ? 'Đỏ' : 'Đen'}
       </div>
     );
   };
@@ -1401,8 +1238,8 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
           {renderPlayerSlot(topSide, topPlayer)}
         </div>
         
-        <div className="flex-1 min-h-0 w-full flex items-center justify-center py-1 relative overflow-hidden">
-          <div className="relative h-full max-h-[calc(100%-0.25rem)] flex items-center justify-center">
+        <div className="flex-1 min-h-0 w-full flex flex-col sm:flex-row items-center justify-center gap-3 py-1 relative overflow-auto">
+          <div className="relative h-full min-h-0 max-h-[calc(100%-0.25rem)] flex items-center justify-center">
             <XiangqiBoard
               board={room.board || []}
               isFlipped={isFlipped}
@@ -1430,6 +1267,42 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
               </div>
             )}
           </div>
+          {!isPlaying && room.status !== 'finished' && (
+            <div className="flex w-full shrink-0 flex-row flex-wrap items-center justify-center gap-2 sm:w-44 sm:flex-col sm:items-stretch">
+              <p className="hidden text-center text-[10px] font-black uppercase tracking-wider text-indigo-200 sm:block">
+                Chọn vị trí
+              </p>
+              {(!room.redPlayer || isUserRed) && (
+                <button
+                  onClick={() => { audio.playClick(); onJoinSide('red'); }}
+                  className="flex-1 rounded-xl border-2 border-dashed border-red-500/50 bg-red-950/30 px-3 py-2 text-xs font-bold text-red-300 transition-colors hover:border-red-400 hover:bg-red-950/60 sm:flex-none"
+                >
+                  ＋ Ngồi Đỏ
+                </button>
+              )}
+              {(!room.blackPlayer || isUserBlack) && (
+                <button
+                  onClick={() => { audio.playClick(); onJoinSide('black'); }}
+                  className="flex-1 rounded-xl border-2 border-dashed border-slate-400/50 bg-slate-800/40 px-3 py-2 text-xs font-bold text-slate-200 transition-colors hover:border-slate-300 hover:bg-slate-800 sm:flex-none"
+                >
+                  ＋ Ngồi Đen
+                </button>
+              )}
+              {onAddBot && (!room.redPlayer || !room.blackPlayer) && (
+                <button
+                  onClick={() => {
+                    audio.playClick();
+                    setBotModalMode('single');
+                    setShowBotEloModal(true);
+                  }}
+                  className="flex-1 rounded-xl border border-indigo-400/50 bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow transition-colors hover:bg-indigo-500 sm:flex-none"
+                  title="Chọn cấp độ và thêm bot"
+                >
+                  🤖 Thêm Bot
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {isPlaying && room.checkSide && (
@@ -1628,7 +1501,6 @@ export default function Games() {
     }
   }, [rooms, activeRoomId]);
 
-  // Bot Smart Auto Move Loop (sử dụng AI Elo engine)
   useEffect(() => {
     if (!activeRoomId) return;
     const room = rooms.find(r => r.id === activeRoomId);
@@ -1638,17 +1510,7 @@ export default function Games() {
     const activePlayer = activeSide === 'red' ? room.redPlayer : room.blackPlayer;
 
     if (activePlayer && activePlayer.isBot) {
-      const timer = setTimeout(() => {
-        const bestMove = getBestMoveByElo(room.board || [], activeSide, activePlayer.elo || 1200);
-        if (!bestMove) return;
-
-        performRoomAction(activeRoomId, 'move', {
-          fromX: bestMove.fromX,
-          fromY: bestMove.fromY,
-          toX: bestMove.toX,
-          toY: bestMove.toY
-        });
-      }, 600);
+      const timer = setTimeout(() => performRoomAction(activeRoomId, 'bot-move'), 600);
 
       return () => clearTimeout(timer);
     }
