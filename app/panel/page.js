@@ -255,8 +255,10 @@ export default function PanelDashboard() {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-xs md:text-sm font-medium text-gray-400 mb-1.5">Hình Ảnh (URL)</label>
-                                    <input type="text" id="em-image" placeholder="https://..." defaultValue="https://placehold.co/600x200/2d3748/ffffff?text=Welcome+Banner" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white focus:border-indigo-500 outline-none" onInput={(event) => {window.app.updateEmbedPreview()}} />
+                                    <label htmlFor="em-image-upload" className="block text-xs md:text-sm font-medium text-gray-400 mb-1.5">Ảnh Banner</label>
+                                    <input type="hidden" id="em-image" defaultValue="https://placehold.co/600x200/2d3748/ffffff?text=Welcome+Banner" />
+                                    <input type="file" id="em-image-upload" accept="image/png,image/jpeg,image/gif,image/webp" onChange={(event) => {window.app.uploadWelcomeBanner(event.currentTarget.files?.[0], event.currentTarget)}} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white file:mr-3 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-1 file:text-white" />
+                                    <p id="em-image-name" className="mt-1.5 text-xs text-gray-500">Chưa chọn ảnh mới</p>
                                 </div>
                                 <button onClick={() => {window.app.saveWelcomeSettings()}} className="w-full mt-2 md:mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm md:text-base py-2 md:py-2.5 rounded-lg transition-colors">
                                     Lưu Cấu Hình

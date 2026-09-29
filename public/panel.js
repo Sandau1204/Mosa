@@ -179,10 +179,42 @@ const app = {
             document.getElementById('em-color').value = settings.color ?? '#5865F2';
             document.getElementById('em-color-picker').value = settings.color ?? '#5865F2';
             document.getElementById('em-image').value = settings.image ?? 'https://placehold.co/600x200/2d3748/ffffff?text=Welcome+Banner';
+            document.getElementById('em-image-name').textContent = settings.image ? 'Đang dùng ảnh đã lưu' : 'Chưa chọn ảnh mới';
             channelSelect.value = settings.channel_id || channels[0]?.id || '';
             this.updateEmbedPreview();
         } catch (error) {
             window.alert(error.message || 'Không thể tải cấu hình Welcome.');
+        }
+    },
+    async uploadWelcomeBanner(file, input) {
+        if (!file) return;
+        const guildId = document.getElementById('welcome-server-select').value;
+        if (!guildId) {
+            input.value = '';
+            window.alert('Vui lòng chọn server trước.');
+            return;
+        }
+        const imageName = document.getElementById('em-image-name');
+        imageName.textContent = 'Đang tải ảnh lên...';
+        input.disabled = true;
+        try {
+            const formData = new FormData();
+            formData.append('image', file);
+            const response = await fetch(`/api/welcome/${guildId}/banner`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || 'Không thể tải ảnh lên.');
+            document.getElementById('em-image').value = result.image_url;
+            imageName.textContent = file.name;
+            this.updateEmbedPreview();
+        } catch (error) {
+            imageName.textContent = 'Chưa chọn ảnh mới';
+            window.alert(error.message || 'Lỗi kết nối khi tải ảnh lên.');
+        } finally {
+            input.disabled = false;
+            input.value = '';
         }
     },
     async saveWelcomeSettings() {

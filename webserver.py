@@ -3,6 +3,7 @@ import asyncio
 import logging
 import re
 import secrets
+import uuid
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from dotenv import load_dotenv
@@ -663,6 +664,62 @@ def api_welcome_settings(guild_id):
         return jsonify({'error': 'Không thể lưu cấu hình Welcome.'}), 500
     add_log(f'Đã lưu cấu hình Welcome cho server {guild_key}.')
     return jsonify({'success': True})
+
+@app.route('/api/welcome/<guild_id>/banner', methods=['POST'])
+@owner_required
+def api_upload_welcome_banner(guild_id):
+    try:
+        guild_id_int = int(guild_id)
+    except ValueError:
+        return jsonify({'error': 'Server ID không hợp lệ.'}), 400
+    if bot_instance is None or bot_instance.get_guild(guild_id_int) is None:
+        return jsonify({'error': 'Không tìm thấy server.'}), 404
+
+    image = request.files.get('image')
+    if image is None or not image.filename:
+        return jsonify({'error': 'Vui lòng chọn ảnh banner.'}), 400
+
+    image_data = image.stream.read(8 * 1024 * 1024 + 1)
+    if len(image_data) > 8 * 1024 * 1024:
+        return jsonify({'error': 'Ảnh phải nhỏ hơn hoặc bằng 8 MB.'}), 413
+
+    image_types = (
+        (b'\x89PNG\r\n\x1a\n', '.png'),
+        (b'\xff\xd8\xff', '.jpg'),
+        (b'GIF87a', '.gif'),
+        (b'GIF89a', '.gif'),
+        (b'RIFF', '.webp'),
+    )
+    extension = next(
+        (
+            extension for signature, extension in image_types
+            if image_data.startswith(signature)
+            and (extension != '.webp' or image_data[8:12] == b'WEBP')
+        ),
+        None
+    )
+    if extension is None:
+        return jsonify({'error': 'Định dạng ảnh không được hỗ trợ. Hãy dùng PNG, JPG, GIF hoặc WEBP.'}), 400
+
+    banner_folder = os.path.join(os.getenv('DATA_FOLDER', 'data'), 'welcome_banners')
+    filename = f'{uuid.uuid4().hex}{extension}'
+    try:
+        os.makedirs(banner_folder, exist_ok=True)
+        with open(os.path.join(banner_folder, filename), 'wb') as banner_file:
+            banner_file.write(image_data)
+    except OSError:
+        app.logger.exception('Could not save uploaded welcome banner.')
+        return jsonify({'error': 'Không thể lưu ảnh banner.'}), 500
+
+    image_url = url_for('welcome_banner', filename=filename, _external=True)
+    return jsonify({'success': True, 'image_url': image_url})
+
+@app.route('/welcome-banners/<filename>')
+def welcome_banner(filename):
+    if not re.fullmatch(r'[0-9a-f]{32}\.(?:png|jpg|gif|webp)', filename):
+        return jsonify({'error': 'Không tìm thấy ảnh banner.'}), 404
+    banner_folder = os.path.join(os.getenv('DATA_FOLDER', 'data'), 'welcome_banners')
+    return send_from_directory(banner_folder, filename, max_age=31536000)
 
 @app.route('/api/games/rooms', methods=['GET', 'POST'])
 def api_game_rooms():

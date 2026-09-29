@@ -187,7 +187,8 @@ Configure `DISCORD_CLIENT_SECRET`, `OWNER_ID`, and a strong, private
 `FLASK_SECRET_KEY` in the Flask environment. Panel administration APIs are
 restricted to the Discord account identified by `OWNER_ID`. Welcome embed
 settings are saved under `DATA_FOLDER` (default `data`) and sent when a member
-joins the selected server.
+joins the selected server. Uploaded welcome banners are stored in
+`DATA_FOLDER/welcome_banners` and served from the Flask app's public URL.
 
 Run `npm run build` to create the static site in `out/`. In production, the Flask
 server redirects `/` to `/games` for Discord Activities and serves the static
