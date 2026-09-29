@@ -323,10 +323,47 @@ def api_server_voice_channels(guild_id):
 @owner_required
 def api_server_members(guild_id):
     if not bot_instance:
-        return jsonify([])
+        return jsonify({'error': 'Bot chưa được khởi tạo.'}), 503
     guild = bot_instance.get_guild(int(guild_id))
     if not guild:
-        return jsonify([]), 404
+        return jsonify({'error': 'Không tìm thấy server.'}), 404
+    async def get_bot_inviter_id():
+        bot_member = guild.me
+        bot_user = bot_instance.user
+        if not bot_member or not bot_member.joined_at or not bot_user:
+            return None
+        try:
+            entries = [
+                entry async for entry in guild.audit_logs(
+                    limit=100,
+                    action=discord.AuditLogAction.bot_add
+                )
+            ]
+        except discord.Forbidden:
+            app.logger.warning(
+                'Cannot identify the bot inviter in guild %s: missing View Audit Log permission.',
+                guild_id
+            )
+            return None
+        except discord.HTTPException:
+            app.logger.exception('Could not load audit logs for guild %s.', guild_id)
+            return None
+
+        matching_entries = [
+            entry for entry in entries
+            if getattr(entry.target, 'id', None) == bot_user.id
+            and entry.user
+            and abs((entry.created_at - bot_member.joined_at).total_seconds()) <= 600
+        ]
+        if not matching_entries:
+            return None
+        closest_entry = min(
+            matching_entries,
+            key=lambda entry: abs((entry.created_at - bot_member.joined_at).total_seconds())
+        )
+        return str(closest_entry.user.id)
+
+    inviter_id = run_coro(get_bot_inviter_id())
     members = []
     for m in guild.members[:100]: # Giới hạn lấy 100 thành viên hiển thị
         role_name = m.top_role.name if m.top_role else "Member"
@@ -335,7 +372,9 @@ def api_server_members(guild_id):
             'name': m.display_name,
             'avatar': str(m.display_avatar.url),
             'role': role_name,
-            'bot': m.bot
+            'bot': m.bot,
+            'joined_at': m.joined_at.isoformat() if m.joined_at else None,
+            'invited_bot': str(m.id) == inviter_id
         })
     return jsonify(members)
 
@@ -344,12 +383,27 @@ def api_server_members(guild_id):
 def api_member_action(guild_id, member_id):
     if not bot_instance:
         return jsonify({'success': False, 'error': 'Bot not initialized'}), 503
-    data = request.json or {}
-    action = data.get('action') # ban, kick, timeout
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'error': 'Dữ liệu yêu cầu không hợp lệ.'}), 400
+    action = data.get('action')
+    if action not in {'kick', 'ban', 'timeout'}:
+        return jsonify({'success': False, 'error': 'Thao tác thành viên không hợp lệ.'}), 400
     reason = data.get('reason', 'Không có lý do')
+    if not isinstance(reason, str):
+        return jsonify({'success': False, 'error': 'Lý do phải là văn bản.'}), 400
+    reason = reason.strip()[:512] or 'Không có lý do'
+    duration = None
+    if action == 'timeout':
+        try:
+            duration = int(data.get('duration', 60))
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Thời hạn hạn chế không hợp lệ.'}), 400
+        if not 1 <= duration <= 28 * 24 * 60 * 60:
+            return jsonify({'success': False, 'error': 'Thời hạn hạn chế phải từ 1 giây đến 28 ngày.'}), 400
     guild = bot_instance.get_guild(int(guild_id))
     if not guild:
-        return jsonify({'success': False, 'error': 'Server not found'}), 404
+        return jsonify({'success': False, 'error': 'Không tìm thấy server.'}), 404
     async def do_action():
         member = guild.get_member(int(member_id))
         if not member:
@@ -359,16 +413,25 @@ def api_member_action(guild_id, member_id):
         elif action == 'ban':
             await member.ban(reason=reason)
         elif action == 'timeout':
-            duration = int(data.get('duration', 60))
-            import datetime
             until = discord.utils.utcnow() + datetime.timedelta(seconds=duration)
             await member.timeout(until, reason=reason)
-        return True
     try:
         run_coro(do_action())
         add_log(f"Thực hiện {action} lên thành viên {member_id} tại server {guild.name}", "warn")
         return jsonify({'success': True})
+    except discord.NotFound:
+        return jsonify({'success': False, 'error': 'Không tìm thấy thành viên trong server.'}), 404
+    except discord.Forbidden:
+        app.logger.exception('Bot lacks permission to perform %s for member %s in guild %s.', action, member_id, guild_id)
+        return jsonify({
+            'success': False,
+            'error': 'Bot thiếu quyền hoặc vai trò của bot thấp hơn thành viên cần thao tác.'
+        }), 403
+    except discord.HTTPException:
+        app.logger.exception('Discord rejected %s for member %s in guild %s.', action, member_id, guild_id)
+        return jsonify({'success': False, 'error': 'Discord không thể thực hiện thao tác này. Vui lòng thử lại.'}), 502
     except Exception as e:
+        app.logger.exception('Failed to perform %s for member %s in guild %s.', action, member_id, guild_id)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/servers/<guild_id>/invite', methods=['POST'])
@@ -380,17 +443,27 @@ def api_create_invite(guild_id):
     if not guild:
         return jsonify({'error': 'Server not found'}), 404
     async def create_inv():
+        if guild.me is None:
+            raise RuntimeError('Bot is not a member of this server')
         for channel in guild.text_channels:
             if channel.permissions_for(guild.me).create_instant_invite:
-                inv = await channel.create_invite(max_uses=1, max_age=3600)
+                inv = await channel.create_invite(max_uses=0, max_age=0)
                 return str(inv.url)
         return None
     try:
         url = run_coro(create_inv())
         if url:
+            add_log(f"Đã tạo link mời cho server {guild.name}")
             return jsonify({'invite_url': url})
-        return jsonify({'error': 'Không tìm thấy kênh có quyền tạo invite'}), 400
+        return jsonify({'error': 'Bot không có quyền tạo link mời ở bất kỳ kênh văn bản nào.'}), 403
+    except discord.Forbidden:
+        app.logger.exception('Bot lacks permission to create an invite for guild %s.', guild_id)
+        return jsonify({'error': 'Bot thiếu quyền tạo link mời trong server này.'}), 403
+    except discord.HTTPException:
+        app.logger.exception('Discord rejected invite creation for guild %s.', guild_id)
+        return jsonify({'error': 'Discord không thể tạo link mời. Vui lòng thử lại.'}), 502
     except Exception as e:
+        app.logger.exception('Failed to create an invite for guild %s.', guild_id)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/servers/<guild_id>/leave', methods=['POST'])
@@ -401,8 +474,16 @@ def api_leave_server(guild_id):
     guild = bot_instance.get_guild(int(guild_id))
     if not guild:
         return jsonify({'error': 'Server not found'}), 404
-    run_coro(guild.leave())
-    return jsonify({'success': True})
+    try:
+        run_coro(guild.leave())
+        add_log(f"Bot đã rời server {guild.name}", "warn")
+        return jsonify({'success': True})
+    except discord.HTTPException:
+        app.logger.exception('Discord rejected leaving guild %s.', guild_id)
+        return jsonify({'success': False, 'error': 'Discord không thể rời server. Vui lòng thử lại.'}), 502
+    except Exception as e:
+        app.logger.exception('Failed to leave guild %s.', guild_id)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # --- API Kênh & Chat ---
 @app.route('/api/chat/servers')
@@ -792,6 +873,13 @@ def api_game_room_action(room_id, action):
         room = games_cog.move_piece(room_id, user_id, *coordinates)
     elif action == 'surrender':
         room = games_cog.surrender(room_id, user_id)
+    elif action == 'draw-request':
+        room = games_cog.request_draw(room_id, user_id)
+    elif action == 'draw-response':
+        accepted = data.get('accepted')
+        if type(accepted) is not bool:
+            return jsonify({'error': 'Phản hồi đề nghị hòa không hợp lệ.'}), 400
+        room = games_cog.respond_draw(room_id, user_id, accepted)
     elif action == 'rename':
         name = data.get('name')
         if not isinstance(name, str) or not name.strip() or len(name.strip()) > 60:

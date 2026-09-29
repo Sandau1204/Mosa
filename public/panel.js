@@ -254,52 +254,117 @@ const app = {
         document.getElementById('detail-server-name').innerText = name;
         try {
             const res = await fetch(`/api/servers/${id}/members`);
-            if(!res.ok) return;
             const members = await res.json();
+            if (!res.ok) throw new Error(members.error || 'Không thể tải thành viên server.');
             const tbody = document.getElementById('member-list-tbody');
             tbody.innerHTML = '';
             members.forEach(m => {
-                const botBadge = m.bot ? `<span class="bg-indigo-500 text-[10px] font-bold px-1 rounded text-white ml-2">BOT</span>` : '';
-                tbody.innerHTML += `
-                    <tr>
-                        <td class="py-3">
-                            <div class="flex items-center gap-3">
-                                <img src="${m.avatar}" onerror="this.src='https://placehold.co/100/333/fff'" class="w-8 h-8 rounded-full">
-                                <span class="font-medium text-gray-200 truncate w-32">${m.name} ${botBadge}</span>
-                            </div>
-                        </td>
-                        <td class="py-3 text-gray-400"><span class="bg-gray-700/50 px-2 py-0.5 rounded text-xs border border-gray-700">${m.role}</span></td>
-                        <td class="py-3 text-right">
-                            <div class="relative inline-block text-left group">
-                                <button class="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors">
-                                    <i class="ph-bold ph-dots-three-vertical"></i>
-                                </button>
-                                <div class="absolute right-0 mt-1 w-32 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 overflow-hidden">
-                                    <button onclick="app.openMemberAction('timeout', '${m.name.replace(/'/g, "\\'")}', '${m.avatar}', '${m.id}')" class="w-full text-left px-4 py-2 text-xs text-yellow-400 hover:bg-gray-700">Hạn chế (Mute)</button>
-                                    <button onclick="app.openMemberAction('kick', '${m.name.replace(/'/g, "\\'")}', '${m.avatar}', '${m.id}')" class="w-full text-left px-4 py-2 text-xs text-orange-400 hover:bg-gray-700">Kick</button>
-                                    <button onclick="app.openMemberAction('ban', '${m.name.replace(/'/g, "\\'")}', '${m.avatar}', '${m.id}')" class="w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-gray-700">Ban</button>
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                `;
+                const row = document.createElement('tr');
+                const memberCell = document.createElement('td');
+                memberCell.className = 'py-3';
+                const memberInfo = document.createElement('div');
+                memberInfo.className = 'flex items-center gap-3';
+                const avatar = document.createElement('img');
+                avatar.src = m.avatar;
+                avatar.onerror = () => { avatar.src = 'https://placehold.co/100/333/fff'; };
+                avatar.className = 'w-8 h-8 rounded-full';
+                avatar.alt = '';
+                const memberName = document.createElement('span');
+                memberName.className = 'font-medium text-gray-200 truncate w-32';
+                memberName.textContent = m.name;
+                if (m.bot) {
+                    const badge = document.createElement('span');
+                    badge.className = 'bg-indigo-500 text-[10px] font-bold px-1 rounded text-white ml-2';
+                    badge.textContent = 'BOT';
+                    memberName.append(badge);
+                }
+                if (m.invited_bot) {
+                    const inviterBadge = document.createElement('span');
+                    inviterBadge.className = 'text-amber-400 ml-1';
+                    inviterBadge.title = 'Đã mời bot vào máy chủ';
+                    inviterBadge.setAttribute('aria-label', 'Đã mời bot vào máy chủ');
+                    inviterBadge.innerHTML = '<i class="ph-fill ph-star"></i>';
+                    memberName.append(inviterBadge);
+                }
+                memberInfo.append(avatar, memberName);
+                memberCell.append(memberInfo);
+
+                const joinedAtCell = document.createElement('td');
+                joinedAtCell.className = 'py-3 text-gray-400 text-xs whitespace-nowrap';
+                const joinedAt = m.joined_at ? new Date(m.joined_at) : null;
+                joinedAtCell.textContent = joinedAt && !Number.isNaN(joinedAt.getTime())
+                    ? joinedAt.toLocaleString('vi-VN')
+                    : 'Không rõ';
+                if (joinedAt && !Number.isNaN(joinedAt.getTime())) {
+                    joinedAtCell.title = joinedAt.toLocaleString('vi-VN');
+                }
+
+                const roleCell = document.createElement('td');
+                roleCell.className = 'py-3 text-gray-400';
+                const roleBadge = document.createElement('span');
+                roleBadge.className = 'bg-gray-700/50 px-2 py-0.5 rounded text-xs border border-gray-700';
+                roleBadge.textContent = m.role;
+                roleCell.append(roleBadge);
+
+                const actionCell = document.createElement('td');
+                actionCell.className = 'py-3 text-right';
+                const actionWrapper = document.createElement('div');
+                actionWrapper.className = 'relative inline-block text-left';
+                const menuButton = document.createElement('button');
+                menuButton.type = 'button';
+                menuButton.className = 'p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors';
+                menuButton.setAttribute('aria-label', `Thao tác với ${m.name}`);
+                menuButton.setAttribute('aria-expanded', 'false');
+                menuButton.innerHTML = '<i class="ph-bold ph-dots-three-vertical"></i>';
+                const menu = document.createElement('div');
+                menu.className = 'absolute right-0 mt-1 w-32 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-20 overflow-hidden';
+                menu.hidden = true;
+                const actions = [
+                    { type: 'timeout', label: 'Hạn chế (Mute)', className: 'text-yellow-400' },
+                    { type: 'kick', label: 'Kick', className: 'text-orange-400' },
+                    { type: 'ban', label: 'Ban', className: 'text-red-500' }
+                ];
+                actions.forEach(action => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = `w-full text-left px-4 py-2 text-xs ${action.className} hover:bg-gray-700`;
+                    button.textContent = action.label;
+                    button.addEventListener('click', () => {
+                        menu.hidden = true;
+                        menuButton.setAttribute('aria-expanded', 'false');
+                        this.openMemberAction(action.type, m.name, m.avatar, m.id);
+                    });
+                    menu.append(button);
+                });
+                menuButton.addEventListener('click', () => {
+                    menu.hidden = !menu.hidden;
+                    menuButton.setAttribute('aria-expanded', String(!menu.hidden));
+                });
+                actionWrapper.append(menuButton, menu);
+                actionCell.append(actionWrapper);
+                row.append(memberCell, joinedAtCell, roleCell, actionCell);
+                tbody.append(row);
             });
-        } catch(e) { console.error("Lỗi lấy thành viên", e); }
+        } catch(e) {
+            console.error("Lỗi lấy thành viên", e);
+            window.alert(e.message || 'Không thể tải thành viên server.');
+        }
     },
     async leaveServer(guildId) {
         if(!guildId) guildId = this.data.currentGuildId;
+        if (!guildId) {
+            window.alert('Vui lòng chọn server cần rời.');
+            return;
+        }
         if(!confirm("Bạn có chắc muốn Bot rời khỏi máy chủ này?")) return;
         try {
             const res = await fetch(`/api/servers/${guildId}/leave`, { method: 'POST' });
             const data = await res.json();
-            if(data.success) {
-                window.alert("Bot đã rời máy chủ.");
-                this.showServerList();
-                this.loadServers();
-            } else {
-                window.alert("Lỗi: " + data.error);
-            }
-        } catch(e) { window.alert("Có lỗi xảy ra khi rời server"); }
+            if (!res.ok || !data.success) throw new Error(data.error || 'Không thể rời server.');
+            window.alert("Bot đã rời máy chủ.");
+            this.showServerList();
+            this.loadServers();
+        } catch(e) { window.alert(e.message || "Có lỗi xảy ra khi rời server."); }
     },
 
     async openServerInviteModal() {
@@ -309,13 +374,13 @@ const app = {
         try {
             const res = await fetch(`/api/servers/${this.data.currentGuildId}/invite`, { method: 'POST' });
             const data = await res.json();
-            if(data.invite_url) {
+            if (res.ok && data.invite_url) {
                 document.getElementById('server-invite-link').innerText = data.invite_url;
             } else {
-                document.getElementById('server-invite-link').innerText = "Không thể tạo link (Thiếu quyền)";
+                document.getElementById('server-invite-link').innerText = data.error || "Không thể tạo link mời.";
             }
         } catch(e) {
-            document.getElementById('server-invite-link').innerText = "Lỗi kết nối";
+            document.getElementById('server-invite-link').innerText = e.message || "Lỗi kết nối";
         }
     },
     openMemberAction(actionType, name, avatar, id) {
@@ -354,6 +419,8 @@ const app = {
         if(actionType === 'timeout') {
             payload.duration = parseInt(document.getElementById('action-duration').value);
         }
+        const submitButton = document.getElementById('action-submit-btn');
+        submitButton.disabled = true;
         try {
             const res = await fetch(`/api/servers/${this.data.currentGuildId}/members/${id}/action`, {
                 method: 'POST',
@@ -361,14 +428,15 @@ const app = {
                 body: JSON.stringify(payload)
             });
             const data = await res.json();
-            if(data.success) {
-                window.alert("Thực hiện thành công!");
-                this.closeAllModals();
-                this.viewServer(this.data.currentGuildId, document.getElementById('detail-server-name').innerText); // Reload list
-            } else {
-                window.alert("Lỗi: " + data.error);
-            }
-        } catch(e) { window.alert("Lỗi kết nối khi gửi yêu cầu."); }
+            if (!res.ok || !data.success) throw new Error(data.error || 'Không thể thực hiện thao tác.');
+            window.alert("Thực hiện thành công!");
+            this.closeAllModals();
+            this.viewServer(this.data.currentGuildId, document.getElementById('detail-server-name').innerText);
+        } catch(e) {
+            window.alert(e.message || "Lỗi kết nối khi gửi yêu cầu.");
+        } finally {
+            submitButton.disabled = false;
+        }
     },
     // --- BẢNG NHẮN TIN (CHAT) ---
     async loadChatData() {

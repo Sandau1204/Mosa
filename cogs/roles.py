@@ -126,6 +126,54 @@ class Roles(commands.Cog):
             await interaction.followup.send("❌ Không tìm thấy tin nhắn! Hãy chắc chắn bạn đang dùng lệnh này ở cùng kênh chứa tin nhắn bảng role.")
         except discord.HTTPException:
             await interaction.followup.send("❌ Icon (Emoji) không hợp lệ. Vui lòng thử lại với emoji mặc định của Discord.")
+    @app_commands.command(name="remove_reaction_role", description="[Admin] Xóa icon nhận role khỏi tin nhắn Reaction Role")
+    @app_commands.describe(message_id="ID của tin nhắn nhận role", emoji="Icon cần xóa (Ví dụ: 🍎)")
+    @app_commands.checks.has_permissions(manage_roles=True)
+    async def remove_reaction_role(self, interaction: discord.Interaction, message_id: str, emoji: str):
+        await interaction.response.defer(ephemeral=True)
+        channel = interaction.channel
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.followup.send("❌ Lệnh này chỉ hoạt động trong kênh văn bản.")
+            return
+        try:
+            message = await channel.fetch_message(int(message_id))
+        except ValueError:
+            await interaction.followup.send("❌ ID tin nhắn không hợp lệ.")
+            return
+        except discord.NotFound:
+            await interaction.followup.send("❌ Không tìm thấy tin nhắn trong kênh hiện tại.")
+            return
+        except discord.Forbidden:
+            await interaction.followup.send("❌ Bot không có quyền truy cập tin nhắn này.")
+            return
+
+        data = self.load_data()
+        guild_id = str(interaction.guild_id)
+        reaction_roles = data.get(guild_id, {}).get("reaction_roles", {})
+        message_roles = reaction_roles.get(message_id)
+        if not message_roles or emoji not in message_roles:
+            await interaction.followup.send("❌ Không tìm thấy icon này trong cấu hình nhận role của tin nhắn.")
+            return
+
+        try:
+            await message.clear_reaction(emoji)
+        except discord.Forbidden:
+            await interaction.followup.send("❌ Bot không có quyền xóa reaction trên tin nhắn này.")
+            return
+        except discord.HTTPException as error:
+            await interaction.followup.send(f"❌ Không thể xóa icon khỏi tin nhắn: {error}")
+            return
+
+        del message_roles[emoji]
+        if not message_roles:
+            del reaction_roles[message_id]
+        if not reaction_roles:
+            del data[guild_id]["reaction_roles"]
+        self.save_data(data)
+        await interaction.followup.send(
+            f"✅ Đã xóa icon {emoji} khỏi cấu hình nhận role của tin nhắn `{message_id}`. "
+            "Role đã được cấp trước đó sẽ không tự động bị thu hồi."
+        )
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         """Sự kiện kích hoạt khi ai đó thả icon vào tin nhắn"""
@@ -234,6 +282,7 @@ class Roles(commands.Cog):
     @set_autorole.error
     @create_role_panel.error
     @add_reaction_role.error
+    @remove_reaction_role.error
     async def error_handler(self, interaction: discord.Interaction, error):
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)

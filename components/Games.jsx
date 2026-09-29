@@ -522,7 +522,7 @@ const XiangqiBoard = ({ board, isFlipped = false, isPlaying = false, activeSide,
   );
 };
 
-const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, onSurrender, onRenameRoom, onRequestSwap, onAcceptSwap, onRejectSwap, onCancelSwap }) => {
+const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, onSurrender, onRequestDraw, onRespondDraw, onRenameRoom, onRequestSwap, onAcceptSwap, onRejectSwap, onCancelSwap }) => {
   const [clockNow, setClockNow] = useState(Date.now());
   const [isEditingName, setIsEditingName] = useState(false);
   const [roomNameDraft, setRoomNameDraft] = useState(room.name);
@@ -546,6 +546,10 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
   const swapRequest = room.swapRequest;
   const isTargetOfSwap = !isPlaying && swapRequest && swapRequest.targetId === currentUser.id;
   const isRequesterOfSwap = !isPlaying && swapRequest && swapRequest.requesterId === currentUser.id;
+  const drawOffer = room.drawOffer;
+  const isTargetOfDraw = isPlaying && drawOffer?.status === 'pending' && drawOffer.targetId === currentUser.id;
+  const isRequesterOfDraw = isPlaying && drawOffer?.status === 'pending' && drawOffer.requesterId === currentUser.id;
+  const isDrawDeclined = isPlaying && drawOffer?.status === 'declined' && drawOffer.requesterId === currentUser.id;
 
   useEffect(() => {
     setSelectedPiece(null);
@@ -744,6 +748,28 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
         </div>
       )}
 
+      {isTargetOfDraw && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-slate-950/95 border-2 border-amber-400 p-4 rounded-2xl shadow-[0_0_30px_rgba(245,158,11,0.5)] flex flex-col items-center gap-2.5 animate-fade-in backdrop-blur-md max-w-xs w-full">
+          <p className="text-xs font-bold text-amber-200 text-center">
+            🤝 <span className="text-white font-black">{drawOffer.requesterName}</span> muốn đề nghị hòa. Bạn đồng ý không?
+          </p>
+          <div className="flex gap-3 w-full justify-center">
+            <button
+              onClick={() => { audio.playClick(); onRespondDraw(true); }}
+              className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95"
+            >
+              ✓ Đồng ý
+            </button>
+            <button
+              onClick={() => { audio.playClick(); onRespondDraw(false); }}
+              className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95"
+            >
+              ✕ Từ chối
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header Phòng */}
       <div className="bg-slate-950/60 p-4 px-6 border-b border-slate-700/50 flex justify-between items-center z-10 shrink-0">
         <div>
@@ -788,16 +814,40 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
             </p>
           </div>
         </div>
-        <button 
-          onClick={() => {
-            audio.playClick();
-            if (isPlaying && (isUserRed || isUserBlack)) onSurrender();
-            else onLeave();
-          }}
-          className="bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-gray-300 px-4 py-2 rounded-xl text-sm font-bold transition-colors border border-slate-700"
-        >
-          {isPlaying && (isUserRed || isUserBlack) ? 'Đầu Hàng' : 'Rời Phòng'}
-        </button>
+        <div className="flex items-center gap-2">
+          {isPlaying && (isUserRed || isUserBlack) && (
+            <>
+              {isRequesterOfDraw && (
+                <span role="status" className="rounded-xl border border-amber-500/50 bg-amber-950/60 px-3 py-2 text-xs font-bold text-amber-200">
+                  Đang chờ phản hồi hòa...
+                </span>
+              )}
+              {isDrawDeclined && (
+                <span role="status" className="rounded-xl border border-rose-500/50 bg-rose-950/60 px-3 py-2 text-xs font-bold text-rose-200">
+                  Đối thủ đã từ chối hòa
+                </span>
+              )}
+              {(!drawOffer || drawOffer.status === 'declined') && (
+                <button
+                  onClick={() => { audio.playClick(); onRequestDraw(); }}
+                  className="bg-amber-700 hover:bg-amber-600 text-amber-50 px-4 py-2 rounded-xl text-sm font-bold transition-colors border border-amber-500/60"
+                >
+                  Xin hòa
+                </button>
+              )}
+            </>
+          )}
+          <button
+            onClick={() => {
+              audio.playClick();
+              if (isPlaying && (isUserRed || isUserBlack)) onSurrender();
+              else onLeave();
+            }}
+            className="bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-gray-300 px-4 py-2 rounded-xl text-sm font-bold transition-colors border border-slate-700"
+          >
+            {isPlaying && (isUserRed || isUserBlack) ? 'Đầu Hàng' : 'Rời Phòng'}
+          </button>
+        </div>
       </div>
 
       {/* Main Content (Vertical Board & Top/Bottom Player Slots) */}
@@ -826,7 +876,7 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
             {room.status === 'finished' && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 rounded-xl border-4 border-amber-900 bg-slate-950/75 px-6 text-center shadow-inner backdrop-blur-[2px]">
                 <p className="text-xs font-black uppercase tracking-[0.25em] text-amber-300">Ván đấu kết thúc</p>
-                <p role="status" className={`max-w-[340px] text-base font-black md:text-xl ${isUserRed || isUserBlack ? room.winner === (isUserRed ? 'red' : 'black') ? 'text-emerald-300' : 'text-rose-300' : 'text-amber-100'}`}>
+                <p role="status" className={`max-w-[340px] text-base font-black md:text-xl ${room.winner === null || !(isUserRed || isUserBlack) ? 'text-amber-100' : room.winner === (isUserRed ? 'red' : 'black') ? 'text-emerald-300' : 'text-rose-300'}`}>
                   {room.result || 'Ván đấu đã kết thúc.'}
                 </p>
                 {room.winner && (isUserRed || isUserBlack) && (
@@ -1128,6 +1178,7 @@ export default function Games() {
         blackReady: false,
         clock: null,
         revision: 0,
+        drawOffer: null,
         redPlayer: null,
         blackPlayer: null,
         observers: [userProfile] // Creator joins as observer initially
@@ -1271,6 +1322,8 @@ export default function Games() {
   const handleMove = (fromX, fromY, toX, toY) =>
     performRoomAction(activeRoomId, 'move', { fromX, fromY, toX, toY });
   const handleSurrender = () => performRoomAction(activeRoomId, 'surrender');
+  const handleRequestDraw = () => performRoomAction(activeRoomId, 'draw-request');
+  const handleRespondDraw = (accepted) => performRoomAction(activeRoomId, 'draw-response', { accepted });
   const handleRenameRoom = (name) => performRoomAction(activeRoomId, 'rename', { name });
 
   const activeRoomData = rooms.find(r => r.id === activeRoomId);
@@ -1354,6 +1407,8 @@ export default function Games() {
                 onReady={handleReady}
                 onMove={handleMove}
                 onSurrender={handleSurrender}
+                onRequestDraw={handleRequestDraw}
+                onRespondDraw={handleRespondDraw}
                 onRenameRoom={handleRenameRoom}
                 onRequestSwap={handleRequestSwap}
                 onAcceptSwap={handleAcceptSwap}

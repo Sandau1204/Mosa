@@ -147,6 +147,9 @@ export default function PanelDashboard() {
                                         <i className="ph ph-arrow-left"></i>
                                     </button>
                                     <h3 id="detail-server-name" className="font-semibold text-white text-sm md:text-base">Tên Server</h3>
+                                    <span className="text-amber-400 text-[10px] md:text-xs flex items-center gap-1 whitespace-nowrap" title="Dấu sao cạnh tên thành viên đánh dấu người đã mời bot">
+                                        <i className="ph-fill ph-star"></i> <span className="hidden sm:inline">Người mời bot</span>
+                                    </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button onClick={() => {window.app.openServerInviteModal()}} className="bg-indigo-500 hover:bg-indigo-600 text-white text-[10px] md:text-xs font-medium py-1.5 px-2 md:px-3 rounded-lg flex items-center gap-1.5 transition-colors">
@@ -158,10 +161,11 @@ export default function PanelDashboard() {
                                 </div>
                             </div>
                             <div className="flex-1 overflow-x-auto p-2 md:p-4">
-                                <table className="w-full text-left border-collapse min-w-[400px]">
+                                <table className="w-full text-left border-collapse min-w-[600px]">
                                     <thead>
                                         <tr className="text-gray-400 text-[10px] md:text-xs uppercase border-b border-gray-800">
                                             <th className="pb-2 pl-2 font-medium">Thành viên</th>
+                                            <th className="pb-2 font-medium">Ngày tham gia</th>
                                             <th className="pb-2 font-medium">Vai trò Top</th>
                                             <th className="pb-2 pr-2 font-medium text-right">Thao tác</th>
                                         </tr>

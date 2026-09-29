@@ -247,6 +247,7 @@ class Game(commands.Cog):
         for room in active_rooms.values():
             room.setdefault("board", initial_board())
             room.setdefault("checkSide", None)
+            room.setdefault("drawOffer", None)
         if active_rooms != rooms:
             self._rooms = active_rooms
             self._save_rooms()
@@ -300,6 +301,7 @@ class Game(commands.Cog):
                             "blackReady": False,
                             "clock": None,
                             "swapRequest": None,
+                            "drawOffer": None,
                         })
                     room["slots"] = f"{int(bool(room.get('redPlayer'))) + int(bool(room.get('blackPlayer')))}/2"
                     room["revision"] = room.get("revision", 0) + 1
@@ -325,6 +327,7 @@ class Game(commands.Cog):
                     room["status"] = "finished"
                     room["winner"] = "black" if active_side == "red" else "red"
                     room["result"] = f"Hết giờ: Phe {'Đen' if active_side == 'red' else 'Đỏ'} thắng."
+                    room["drawOffer"] = None
                     room["revision"] = room.get("revision", 0) + 1
                     changed = True
             if changed:
@@ -361,6 +364,7 @@ class Game(commands.Cog):
             room["checkSide"] = None
             room["clock"] = None
             room["selectablePieces"] = []
+            room["drawOffer"] = None
             self._rooms[room_id] = room
             for user_id in self._participant_ids(room):
                 self._last_seen[(room_id, str(user_id))] = time.time()
@@ -399,9 +403,11 @@ class Game(commands.Cog):
                 "winner",
                 "result",
                 "lastWinner",
+                "drawOffer",
             ):
                 if field in previous_room:
                     room[field] = previous_room[field]
+            room["drawOffer"] = previous_room.get("drawOffer")
             if seats_changed:
                 room["redReady"] = False
                 room["blackReady"] = False
@@ -459,6 +465,7 @@ class Game(commands.Cog):
                     "lastWinner": None,
                     "redReady": False,
                     "blackReady": False,
+                    "drawOffer": None,
                 })
             room[f"{side}Ready"] = bool(ready)
             if room.get("redReady") and room.get("blackReady"):
@@ -471,6 +478,7 @@ class Game(commands.Cog):
                     "selectablePieces": [],
                     "winner": None,
                     "result": None,
+                    "drawOffer": None,
                     "clock": {
                         "redMs": INITIAL_CLOCK_MS,
                         "blackMs": INITIAL_CLOCK_MS,
@@ -558,6 +566,7 @@ class Game(commands.Cog):
                 room["status"] = "finished"
                 room["winner"] = "black" if active_side == "red" else "red"
                 room["result"] = f"Hết giờ: Phe {'Đen' if active_side == 'red' else 'Đỏ'} thắng."
+                room["drawOffer"] = None
             else:
                 next_side = "black" if active_side == "red" else "red"
                 updated_board = [
@@ -573,6 +582,13 @@ class Game(commands.Cog):
                 clock["activeSide"] = next_side
                 clock["turnStartedAt"] = now
                 room["board"] = updated_board
+                draw_offer = room.get("drawOffer")
+                if (
+                    isinstance(draw_offer, dict)
+                    and draw_offer.get("status") == "pending"
+                    and draw_offer.get("targetId") == user_id
+                ):
+                    draw_offer["status"] = "declined"
                 in_check = self._is_in_check(updated_board, next_side)
                 room["checkSide"] = next_side if in_check else None
                 opponent_moves = self._all_legal_moves(updated_board, next_side)
@@ -582,12 +598,91 @@ class Game(commands.Cog):
                     room["winner"] = active_side
                     room["clock"]["turnStartedAt"] = None
                     room["selectablePieces"] = []
+                    room["drawOffer"] = None
                     room["result"] = (
                         f"Chiếu bí! Phe {'Đỏ' if active_side == 'red' else 'Đen'} thắng."
                         if in_check
                         else f"Hết nước đi! Phe {'Đỏ' if active_side == 'red' else 'Đen'} thắng."
                     )
 
+            room["revision"] = room.get("revision", 0) + 1
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[str(room_id)] = previous_room
+                raise
+            return self._room_state(room)
+
+    def request_draw(self, room_id: int, user_id: str) -> dict[str, Any] | None:
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            current_offer = room.get("drawOffer") if room else None
+            if (
+                room is None
+                or room.get("status") != "playing"
+                or isinstance(current_offer, dict) and current_offer.get("status") == "pending"
+            ):
+                return None
+            side = next(
+                (
+                    player_side
+                    for player_side in ("red", "black")
+                    if (room.get(f"{player_side}Player") or {}).get("id") == user_id
+                ),
+                None,
+            )
+            if side is None:
+                return None
+            opponent_side = "black" if side == "red" else "red"
+            opponent = room.get(f"{opponent_side}Player")
+            if not opponent:
+                return None
+
+            previous_room = deepcopy(room)
+            room["drawOffer"] = {
+                "requesterId": user_id,
+                "requesterName": room[f"{side}Player"].get("name", "Người chơi"),
+                "targetId": opponent["id"],
+                "status": "pending",
+            }
+            room["revision"] = room.get("revision", 0) + 1
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[str(room_id)] = previous_room
+                raise
+            return self._room_state(room)
+
+    def respond_draw(
+        self,
+        room_id: int,
+        user_id: str,
+        accepted: bool,
+    ) -> dict[str, Any] | None:
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            offer = room.get("drawOffer") if room else None
+            if (
+                room is None
+                or room.get("status") != "playing"
+                or not isinstance(offer, dict)
+                or offer.get("targetId") != user_id
+            ):
+                return None
+            previous_room = deepcopy(room)
+            if accepted:
+                room["drawOffer"] = None
+                clock = room.get("clock")
+                if isinstance(clock, dict):
+                    clock["turnStartedAt"] = None
+                room.update({
+                    "status": "finished",
+                    "winner": None,
+                    "result": "Hai bên đã đồng ý hòa.",
+                    "selectablePieces": [],
+                })
+            else:
+                offer["status"] = "declined"
             room["revision"] = room.get("revision", 0) + 1
             try:
                 self._save_rooms()
@@ -622,6 +717,7 @@ class Game(commands.Cog):
                 "selectablePieces": [],
                 "clock": None,
                 "swapRequest": None,
+                "drawOffer": None,
                 "winner": None,
                 "result": f"{'Phe Đỏ' if side == 'red' else 'Phe Đen'} đầu hàng. Bàn cờ đã được đặt lại.",
                 "revision": room.get("revision", 0) + 1,
