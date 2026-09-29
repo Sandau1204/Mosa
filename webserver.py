@@ -579,8 +579,42 @@ def api_update_game_room(room_id):
     if not isinstance(room, dict) or type(room.get('id')) is not int or room['id'] != room_id:
         return jsonify({'error': 'Dữ liệu phòng không hợp lệ.'}), 400
 
-    if not games_cog.update_room(room_id, room):
+    result = games_cog.update_room(room_id, room)
+    if result is None:
         return jsonify({'error': 'Không tìm thấy phòng.'}), 404
+    if result == 'deleted':
+        return jsonify({'deleted': True})
+    return jsonify(room)
+
+@app.route('/api/games/rooms/<int:room_id>/<action>', methods=['POST'])
+def api_game_room_action(room_id, action):
+    games_cog = bot_instance.get_cog('Game') if bot_instance else None
+    if games_cog is None:
+        return jsonify({'error': 'Game service is not available.'}), 503
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('userId'), str):
+        return jsonify({'error': 'Thiếu thông tin người dùng.'}), 400
+
+    user_id = data['userId']
+    if action == 'presence':
+        return jsonify({'active': games_cog.heartbeat(room_id, user_id)})
+    if action == 'ready':
+        room = games_cog.set_ready(room_id, user_id, data.get('ready') is True)
+    elif action == 'turn':
+        room = games_cog.complete_turn(room_id, user_id)
+    elif action == 'surrender':
+        room = games_cog.surrender(room_id, user_id)
+    elif action == 'rename':
+        name = data.get('name')
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 60:
+            return jsonify({'error': 'Tên phòng phải có từ 1 đến 60 ký tự.'}), 400
+        room = games_cog.rename_room(room_id, user_id, name.strip())
+    else:
+        return jsonify({'error': 'Thao tác phòng không hợp lệ.'}), 404
+
+    if room is None:
+        return jsonify({'error': 'Không thể thực hiện thao tác với phòng này.'}), 409
     return jsonify(room)
 
 #--- Trang Music Player ---

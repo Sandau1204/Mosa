@@ -191,4 +191,7 @@ Activity and backend use the same Discord application.
 
 The Games Activity shares its room state through the `cogs.games` bot extension
 and persists it in `data/games.json`. Keep the configured `DATA_FOLDER`
-available to the bot so game rooms survive restarts.
+available to the bot so game rooms survive restarts. Xiangqi uses a 20-minute
+clock per side with a 5-second increment after each confirmed turn; both players
+must be ready before the clock starts. Room membership heartbeats expire after
+20 seconds, so rooms are removed after their final participant disconnects.

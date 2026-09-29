@@ -471,7 +471,10 @@ const XiangqiBoard = ({ isFlipped = false, isPlaying = false, isUserRed = false,
   );
 };
 
-const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onStartGame, onRequestSwap, onAcceptSwap, onRejectSwap, onCancelSwap }) => {
+const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onCompleteTurn, onSurrender, onRenameRoom, onRequestSwap, onAcceptSwap, onRejectSwap, onCancelSwap }) => {
+  const [clockNow, setClockNow] = useState(Date.now());
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [roomNameDraft, setRoomNameDraft] = useState(room.name);
   const isPlaying = room.status === 'playing';
   // Nếu người dùng đang đóng vai Phe Đen -> Đảo ngược góc nhìn bàn cờ để Đen ở dưới
   const isUserBlack = room.blackPlayer?.id === currentUser.id;
@@ -485,13 +488,13 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onStartGame, onRe
   const bottomPlayer = isFlipped ? room.blackPlayer : room.redPlayer;
   
   const swapRequest = room.swapRequest;
-  const isTargetOfSwap = swapRequest && swapRequest.targetId === currentUser.id;
-  const isRequesterOfSwap = swapRequest && swapRequest.requesterId === currentUser.id;
+  const isTargetOfSwap = !isPlaying && swapRequest && swapRequest.targetId === currentUser.id;
+  const isRequesterOfSwap = !isPlaying && swapRequest && swapRequest.requesterId === currentUser.id;
 
   const renderPlayerSlot = (side, player) => {
     const isRed = side === 'red';
     const isCurrentUser = player?.id === currentUser.id;
-    const isOpponent = player && !isCurrentUser && (isUserRed || isUserBlack);
+    const isOpponent = player && !isCurrentUser && (isUserRed || isUserBlack) && !isPlaying;
 
     if (player) {
       return (
@@ -564,6 +567,26 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onStartGame, onRe
     );
   };
 
+  useEffect(() => {
+    setRoomNameDraft(room.name);
+  }, [room.name]);
+
+  useEffect(() => {
+    if (!isPlaying) return undefined;
+    const intervalId = window.setInterval(() => setClockNow(Date.now()), 250);
+    return () => window.clearInterval(intervalId);
+  }, [isPlaying]);
+
+  const getClockLabel = (side) => {
+    const clock = room.clock;
+    if (!clock) return '20:00';
+    const elapsed = isPlaying && clock.activeSide === side
+      ? Math.max(0, clockNow - clock.turnStartedAt)
+      : 0;
+    const seconds = Math.ceil(Math.max(0, clock[`${side}Ms`] - elapsed) / 1000);
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-slate-900/80 backdrop-blur-xl rounded-[2.5rem] border-2 border-rose-500/30 overflow-hidden shadow-2xl relative animate-fade-in h-full">
       {/* Thông báo / Hộp thoại Yêu Cầu Đổi Phe */}
@@ -607,12 +630,40 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onStartGame, onRe
       {/* Header Phòng */}
       <div className="bg-slate-950/60 p-4 px-6 border-b border-slate-700/50 flex justify-between items-center z-10 shrink-0">
         <div>
-          <h2 className="text-xl font-black text-rose-300 flex items-center gap-2">
-            <span className="text-2xl">♟️</span> {room.name}
-          </h2>
+          {isEditingName ? (
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onRenameRoom(roomNameDraft).then(saved => {
+                  if (saved) setIsEditingName(false);
+                });
+              }}
+            >
+              <input
+                aria-label="Tên phòng"
+                autoFocus
+                maxLength={60}
+                value={roomNameDraft}
+                onChange={event => setRoomNameDraft(event.target.value)}
+                className="min-w-0 rounded-lg border border-rose-400/50 bg-slate-900 px-2 py-1 text-white"
+              />
+              <button className="rounded-lg bg-emerald-700 px-3 py-1 text-sm font-bold text-white" type="submit">Lưu</button>
+              <button className="rounded-lg bg-slate-700 px-3 py-1 text-sm font-bold text-white" type="button" onClick={() => { setRoomNameDraft(room.name); setIsEditingName(false); }}>Hủy</button>
+            </form>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-black text-rose-300 flex items-center gap-2">
+                <span className="text-2xl">♟️</span> {room.name}
+              </h2>
+              {room.ownerId === currentUser.id && (
+                <button className="rounded-md border border-slate-600 px-2 py-1 text-xs font-bold text-slate-300 hover:text-white" onClick={() => setIsEditingName(true)}>Đổi tên</button>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-3 mt-1">
             <p className="text-xs text-gray-400">
-              Trạng thái: {isPlaying ? <span className="text-emerald-400 animate-pulse font-bold">Đang thi đấu</span> : <span className="text-amber-400 font-bold">Đang chờ...</span>}
+              Trạng thái: {isPlaying ? <span className="text-emerald-400 font-bold">Đang thi đấu</span> : room.status === 'finished' ? <span className="text-rose-300 font-bold">Đã kết thúc</span> : <span className="text-amber-400 font-bold">Đang chờ...</span>}
             </p>
             <span className="text-slate-600">•</span>
             <p className="text-xs text-indigo-300 bg-indigo-950/80 border border-indigo-700/50 px-2.5 py-0.5 rounded-full font-semibold">
@@ -621,10 +672,14 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onStartGame, onRe
           </div>
         </div>
         <button 
-          onClick={() => { audio.playClick(); onLeave(); }}
+          onClick={() => {
+            audio.playClick();
+            if (isPlaying && (isUserRed || isUserBlack)) onSurrender();
+            else onLeave();
+          }}
           className="bg-slate-800 hover:bg-rose-950 hover:text-rose-300 text-gray-300 px-4 py-2 rounded-xl text-sm font-bold transition-colors border border-slate-700"
         >
-          {isPlaying && (isUserRed || isUserBlack) ? 'Đầu Hàng & Rời' : 'Rời Phòng'}
+          {isPlaying && (isUserRed || isUserBlack) ? 'Đầu Hàng' : 'Rời Phòng'}
         </button>
       </div>
 
@@ -643,14 +698,14 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onStartGame, onRe
             isUserRed={isUserRed}
             isUserBlack={isUserBlack}
           />
-          {isPlaying && (
-            <div className="absolute inset-0 bg-black/20 flex items-center justify-center pointer-events-none rounded-2xl backdrop-blur-[1px]">
-              <div className="bg-rose-900/90 text-white px-5 py-2.5 rounded-xl font-black text-lg md:text-xl border-2 border-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.5)] transform -rotate-6 backdrop-blur-sm">
-                TRẬN ĐẤU ĐANG DIỄN RA
-              </div>
-            </div>
-          )}
         </div>
+
+        <div className="flex w-full max-w-[440px] items-center justify-between gap-3 rounded-xl bg-slate-950/80 px-4 py-2 font-mono text-lg font-black">
+          <span className={room.clock?.activeSide === 'red' && isPlaying ? 'text-amber-300' : 'text-red-300'}>Đỏ {getClockLabel('red')}</span>
+          <span className="text-xs font-sans text-slate-400">{isPlaying ? `Lượt ${room.clock?.activeSide === 'red' ? 'Đỏ' : 'Đen'}` : '20 phút + 5 giây/nước'}</span>
+          <span className={room.clock?.activeSide === 'black' && isPlaying ? 'text-amber-300' : 'text-slate-200'}>Đen {getClockLabel('black')}</span>
+        </div>
+        {room.result && <p role="status" className="max-w-[440px] text-center text-sm font-bold text-amber-300">{room.result}</p>}
 
         {/* Bottom Player Slot (Bạn / Phe phía dưới) */}
         <div className="shrink-0 flex items-center justify-center">
@@ -665,17 +720,27 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onStartGame, onRe
             👁️ Đang xem ({room.observers.length})
           </h3>
           
-          {!isPlaying && (
-            <button 
-              onClick={() => { audio.playClick(); onStartGame(); }}
-              disabled={!room.redPlayer || !room.blackPlayer}
-              className={`px-6 py-2 rounded-xl font-bold transition-all shadow-[0_3px_0_rgba(0,0,0,0.3)] 
-                ${(!room.redPlayer || !room.blackPlayer) 
-                  ? 'bg-slate-700 text-gray-500 cursor-not-allowed' 
-                  : 'bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 text-white active:translate-y-1 active:shadow-none'}`}
-            >
-              Bắt Đầu Trận Đấu
+          {isPlaying && (isUserRed || isUserBlack) && room.clock?.activeSide === (isUserRed ? 'red' : 'black') && (
+            <button onClick={onCompleteTurn} className="rounded-xl bg-indigo-600 px-5 py-2 font-bold text-white hover:bg-indigo-500">
+              Xác nhận nước đi (+5 giây)
             </button>
+          )}
+          {!isPlaying && room.status !== 'finished' && (
+            <div className="flex items-center gap-3">
+              <span className={`text-xs font-bold ${room.redReady ? 'text-emerald-300' : 'text-slate-400'}`}>Đỏ {room.redReady ? '✓ Sẵn sàng' : 'Chưa sẵn sàng'}</span>
+              <span className={`text-xs font-bold ${room.blackReady ? 'text-emerald-300' : 'text-slate-400'}`}>Đen {room.blackReady ? '✓ Sẵn sàng' : 'Chưa sẵn sàng'}</span>
+              {(isUserRed || isUserBlack) && (
+                <button
+                  onClick={() => onReady(!(isUserRed ? room.redReady : room.blackReady))}
+                  className={`rounded-xl px-5 py-2 font-bold text-white ${((isUserRed && room.redReady) || (isUserBlack && room.blackReady)) ? 'bg-amber-700 hover:bg-amber-600' : 'bg-emerald-700 hover:bg-emerald-600'}`}
+                >
+                  {((isUserRed && room.redReady) || (isUserBlack && room.blackReady)) ? 'Bỏ sẵn sàng' : 'Sẵn sàng'}
+                </button>
+              )}
+            </div>
+          )}
+          {room.status === 'finished' && (isUserRed || isUserBlack) && (
+            <button onClick={() => onReady(true)} className="rounded-xl bg-emerald-700 px-5 py-2 font-bold text-white hover:bg-emerald-600">Sẵn sàng ván mới</button>
           )}
         </div>
         
@@ -784,6 +849,43 @@ export default function Games() {
   }, []);
 
   useEffect(() => {
+    if (activeRoomId && !rooms.some(room => room.id === activeRoomId)) {
+      setActiveRoomId(null);
+      setCurrentView('games');
+      setRoomError('Phòng đã tự đóng vì không còn người tham gia.');
+    }
+  }, [rooms, activeRoomId]);
+
+  useEffect(() => {
+    if (!activeRoomId || !userProfile) return undefined;
+    let isActive = true;
+    const heartbeat = async () => {
+      try {
+        const response = await fetch(`/api/games/rooms/${activeRoomId}/presence`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: userProfile.id })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.active) {
+          throw new Error(result.error || 'Bạn không còn là thành viên của phòng này.');
+        }
+      } catch (error) {
+        if (isActive) {
+          setRoomError(error instanceof Error ? error.message : 'Không thể duy trì kết nối phòng.');
+        }
+      }
+    };
+
+    heartbeat();
+    const intervalId = window.setInterval(heartbeat, 5000);
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [activeRoomId, userProfile]);
+
+  useEffect(() => {
     let isActive = true;
     connectDiscordActivity()
       .then((profile) => {
@@ -821,33 +923,61 @@ export default function Games() {
     }
   };
 
-  const updateRoom = (roomId, update) => {
+  const updateRoom = async (roomId, update) => {
     const currentRoom = roomsRef.current.find(room => room.id === roomId);
     if (!currentRoom) {
       setRoomError('Không tìm thấy phòng cần cập nhật.');
-      return;
+      return false;
     }
 
-    const updatedRoom = update(currentRoom);
+    let updatedRoom = update(currentRoom);
     const updatedRooms = roomsRef.current.map(room => room.id === roomId ? updatedRoom : room);
     roomsRef.current = updatedRooms;
     setRooms(updatedRooms);
 
-    fetch(`/api/games/rooms/${roomId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedRoom)
-    })
-      .then(async response => {
-        const result = await response.json();
+    const sendUpdate = async candidate => {
+      const response = await fetch(`/api/games/rooms/${roomId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(candidate)
+      });
+      return { response, result: await response.json() };
+    };
+
+    try {
+      let { response, result } = await sendUpdate(updatedRoom);
+      if (response.status === 404) {
+        const listResponse = await fetch('/api/games/rooms', { cache: 'no-store' });
+        const latestRooms = await listResponse.json();
+        const latestRoom = latestRooms.find(room => room.id === roomId);
+        if (!latestRoom) {
+          const remainingRooms = roomsRef.current.filter(room => room.id !== roomId);
+          roomsRef.current = remainingRooms;
+          setRooms(remainingRooms);
+          return false;
+        }
+        updatedRoom = update(latestRoom);
+        ({ response, result } = await sendUpdate(updatedRoom));
+      }
+
         if (!response.ok) {
           throw new Error(result.error || 'Không thể cập nhật phòng.');
         }
+        if (result.deleted) {
+          const remainingRooms = roomsRef.current.filter(room => room.id !== roomId);
+          roomsRef.current = remainingRooms;
+          setRooms(remainingRooms);
+        } else {
+          const synchronizedRooms = roomsRef.current.map(room => room.id === roomId ? result : room);
+          roomsRef.current = synchronizedRooms;
+          setRooms(synchronizedRooms);
+        }
         setRoomError('');
-      })
-      .catch(error => {
-        setRoomError(error instanceof Error ? error.message : 'Không thể cập nhật phòng.');
-      });
+        return true;
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : 'Không thể cập nhật phòng.');
+      return false;
+    }
   };
 
   const handleCreateRoom = async (gameData) => {
@@ -855,11 +985,16 @@ export default function Games() {
       const newRoom = {
         id: Date.now(),
         name: `Phòng Cờ Tướng của ${userProfile.name}`,
+        ownerId: userProfile.id,
         game: gameData.title,
         slots: "0/2",
         color: "bg-rose-950 text-rose-300 border-rose-700/50",
         type: 'xiangqi',
         status: 'waiting',
+        redReady: false,
+        blackReady: false,
+        clock: null,
+        revision: 0,
         redPlayer: null,
         blackPlayer: null,
         observers: [userProfile] // Creator joins as observer initially
@@ -886,13 +1021,13 @@ export default function Games() {
     }
   };
 
-  const handleJoinRoom = (roomId) => {
+  const handleJoinRoom = async (roomId) => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
     
     if (room.type === 'xiangqi') {
       // Logic add user to observers if not already anywhere in room
-      updateRoom(roomId, currentRoom => {
+      const joined = await updateRoom(roomId, currentRoom => {
         const isRed = currentRoom.redPlayer?.id === userProfile.id;
         const isBlack = currentRoom.blackPlayer?.id === userProfile.id;
         const isObs = currentRoom.observers.some(observer => observer.id === userProfile.id);
@@ -902,6 +1037,7 @@ export default function Games() {
         }
         return currentRoom;
       });
+      if (!joined) return;
       setActiveRoomId(roomId);
       setCurrentView('room');
     }
@@ -976,9 +1112,32 @@ export default function Games() {
     updateRoom(activeRoomId, room => ({ ...room, swapRequest: null }));
   };
 
-  const handleStartGame = () => {
-    updateRoom(activeRoomId, room => ({ ...room, status: 'playing', swapRequest: null }));
+  const performRoomAction = async (roomId, action, payload = {}) => {
+    try {
+      const response = await fetch(`/api/games/rooms/${roomId}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userProfile.id, ...payload })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Không thể cập nhật phòng.');
+      }
+      const synchronizedRooms = roomsRef.current.map(room => room.id === roomId ? result : room);
+      roomsRef.current = synchronizedRooms;
+      setRooms(synchronizedRooms);
+      setRoomError('');
+      return true;
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : 'Không thể cập nhật phòng.');
+      return false;
+    }
   };
+
+  const handleReady = (ready) => performRoomAction(activeRoomId, 'ready', { ready });
+  const handleCompleteTurn = () => performRoomAction(activeRoomId, 'turn');
+  const handleSurrender = () => performRoomAction(activeRoomId, 'surrender');
+  const handleRenameRoom = (name) => performRoomAction(activeRoomId, 'rename', { name });
 
   const activeRoomData = rooms.find(r => r.id === activeRoomId);
 
@@ -1058,7 +1217,10 @@ export default function Games() {
                 currentUser={userProfile}
                 onLeave={handleLeaveRoom}
                 onJoinSide={handleJoinSide}
-                onStartGame={handleStartGame}
+                onReady={handleReady}
+                onCompleteTurn={handleCompleteTurn}
+                onSurrender={handleSurrender}
+                onRenameRoom={handleRenameRoom}
                 onRequestSwap={handleRequestSwap}
                 onAcceptSwap={handleAcceptSwap}
                 onRejectSwap={handleRejectSwap}
