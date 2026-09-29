@@ -885,10 +885,6 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
   const isUserBlack = room.blackPlayer?.id === currentUser.id;
   const isUserRed = room.redPlayer?.id === currentUser.id;
   const isFlipped = isUserBlack;
-  const topSide = isFlipped ? 'red' : 'black';
-  const topPlayer = room[`${topSide}Player`];
-  const bottomSide = isFlipped ? 'black' : 'red';
-  const bottomPlayer = room[`${bottomSide}Player`];
 
   const swapRequest = room.swapRequest;
   const isTargetOfSwap = !isPlaying && swapRequest && swapRequest.targetId === currentUser.id;
@@ -979,7 +975,7 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
               onRequestSwap(player);
             }
           }}
-          className={`flex items-center gap-2 bg-slate-950/80 border px-2.5 py-1 rounded-xl animate-fade-in group relative min-w-[150px] sm:min-w-[170px] transition-all
+          className={`flex w-full min-w-0 items-center gap-2 bg-slate-950/80 border px-2.5 py-1 rounded-xl animate-fade-in group relative transition-all
             ${isOpponent 
               ? 'border-amber-500/50 hover:border-amber-400 hover:bg-slate-900/90 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
               : 'border-slate-700/60'}`}
@@ -1242,12 +1238,13 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
       </div>
 
       {/* Main Arena Content */}
-      <div className="flex-1 min-h-0 flex flex-col p-1.5 sm:p-2 gap-1 z-10 overflow-hidden w-full max-w-4xl mx-auto">
-        <div className="shrink-0 flex min-h-10 items-center justify-center">
-          {renderPlayerSlot(topSide, topPlayer)}
+      <div className="grid flex-1 min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-1.5 p-1.5 sm:gap-2 sm:p-2 z-10 overflow-hidden w-full max-w-4xl mx-auto">
+        <div className="flex min-w-0 flex-col justify-center gap-2">
+          {renderPlayerSlot('red', room.redPlayer)}
+          {renderPlayerSlot('black', room.blackPlayer)}
         </div>
 
-        <div className="flex-1 min-h-0 min-w-0 w-full flex items-center justify-center overflow-hidden py-1">
+        <div className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden py-1">
           <div className="relative flex h-full min-h-0 min-w-0 items-center justify-center">
             <XiangqiBoard
               board={room.board || []}
@@ -1278,17 +1275,14 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
           </div>
         </div>
 
-        <div className="shrink-0 flex min-h-10 items-center justify-center">
-          {renderPlayerSlot(bottomSide, bottomPlayer)}
+        <div className="flex min-w-0 flex-col items-center justify-center gap-2 text-center">
+          {isPlaying && room.checkSide && (
+            <p role="alert" className="animate-check-pulse rounded-lg border border-rose-500 bg-rose-950/90 px-2 py-1 text-[10px] font-black text-rose-200 sm:px-3 sm:text-xs">
+              CHIẾU TƯỚNG — Phe {room.checkSide === 'red' ? 'Đỏ' : 'Đen'} phải cứu tướng!
+            </p>
+          )}
+          {moveError && <p role="alert" className="text-xs font-bold text-rose-300">{moveError}</p>}
         </div>
-
-        {isPlaying && room.checkSide && (
-          <p role="alert" className="animate-check-pulse rounded-lg border border-rose-500 bg-rose-950/90 px-3 py-1 text-xs font-black text-rose-200 shrink-0">
-            CHIẾU TƯỚNG — Phe {room.checkSide === 'red' ? 'Đỏ' : 'Đen'} phải cứu tướng!
-          </p>
-        )}
-        {moveError && <p role="alert" className="text-xs font-bold text-rose-300 shrink-0">{moveError}</p>}
-
       </div>
 
       {/* Bottom Controls & Observers Bar */}
@@ -1825,7 +1819,7 @@ export default function Games() {
         )}
 
         {/* Sidebar: Danh Sách Phòng */}
-        <aside className={`xl:w-[380px] w-full flex flex-col mb-2 xl:mb-0 transition-all ${currentView === 'room' ? 'hidden xl:flex' : 'flex'}`}>
+        <aside className={`xl:w-[380px] w-full flex flex-col mb-2 xl:mb-0 transition-all ${currentView === 'room' ? 'hidden' : 'flex'}`}>
           <div className="bg-slate-900/80 backdrop-blur-xl rounded-[2rem] shadow-2xl p-4 sm:p-5 border-2 border-indigo-500/40 flex-1 flex flex-col h-full xl:max-h-[72vh]">
             <div className="flex justify-between items-center mb-3 shrink-0">
               <h3 className="text-lg font-black text-amber-400 flex items-center gap-2">
