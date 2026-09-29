@@ -37,7 +37,10 @@ const app = {
                 this.loadStats();
                 this.loadServers();
                 this.loadChatData();
+                this.loadWelcomeServers();
                 this.startLogPolling();
+            } else if (authData.error) {
+                document.querySelector('#login-screen p').innerText = authData.error;
             }
         } catch(e) {
             console.error("Chưa đăng nhập", e);
@@ -51,7 +54,7 @@ const app = {
         });
     },
     login() {
-        window.location.href = '/login';
+        window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
     },
     logout() {
         window.location.href = '/logout';
@@ -137,6 +140,75 @@ const app = {
         `;
         // Đóng menu
         document.getElementById('status-dropdown-menu').classList.add('hidden');
+    },
+    async loadWelcomeServers() {
+        const serverSelect = document.getElementById('welcome-server-select');
+        if (!serverSelect) return;
+        try {
+            const response = await fetch('/api/servers');
+            const servers = await response.json();
+            if (!response.ok) throw new Error(servers.error || 'Không thể tải danh sách server.');
+            serverSelect.innerHTML = '<option value="">Chọn server...</option>';
+            servers.forEach(server => {
+                serverSelect.add(new Option(server.name, server.id));
+            });
+            if (servers.length > 0) {
+                serverSelect.value = servers[0].id;
+                await this.selectWelcomeServer(servers[0].id);
+            }
+        } catch (error) {
+            window.alert(error.message || 'Không thể tải danh sách server.');
+        }
+    },
+    async selectWelcomeServer(guildId) {
+        const channelSelect = document.getElementById('welcome-channel-select');
+        channelSelect.innerHTML = '<option value="">Chọn kênh...</option>';
+        if (!guildId) return;
+        try {
+            const [channelsResponse, settingsResponse] = await Promise.all([
+                fetch(`/api/servers/${guildId}/text_channels`),
+                fetch(`/api/welcome/${guildId}`)
+            ]);
+            const channels = await channelsResponse.json();
+            const settings = await settingsResponse.json();
+            if (!channelsResponse.ok) throw new Error(channels.error || 'Không thể tải danh sách kênh.');
+            if (!settingsResponse.ok) throw new Error(settings.error || 'Không thể tải cấu hình Welcome.');
+            channels.forEach(channel => channelSelect.add(new Option(`# ${channel.name}`, channel.id)));
+            document.getElementById('em-title').value = settings.title ?? 'Chào mừng đến với Server!';
+            document.getElementById('em-desc').value = settings.description ?? 'Rất vui khi bạn tham gia server. 🌟 Vui lòng đọc luật và chọn role để nhận thông báo.';
+            document.getElementById('em-color').value = settings.color ?? '#5865F2';
+            document.getElementById('em-color-picker').value = settings.color ?? '#5865F2';
+            document.getElementById('em-image').value = settings.image ?? 'https://placehold.co/600x200/2d3748/ffffff?text=Welcome+Banner';
+            channelSelect.value = settings.channel_id || channels[0]?.id || '';
+            this.updateEmbedPreview();
+        } catch (error) {
+            window.alert(error.message || 'Không thể tải cấu hình Welcome.');
+        }
+    },
+    async saveWelcomeSettings() {
+        const guildId = document.getElementById('welcome-server-select').value;
+        if (!guildId) {
+            window.alert('Vui lòng chọn server trước.');
+            return;
+        }
+        try {
+            const response = await fetch(`/api/welcome/${guildId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    channel_id: document.getElementById('welcome-channel-select').value,
+                    title: document.getElementById('em-title').value,
+                    description: document.getElementById('em-desc').value,
+                    color: document.getElementById('em-color').value,
+                    image: document.getElementById('em-image').value
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || 'Không thể lưu cấu hình Welcome.');
+            window.alert('Đã lưu cấu hình Welcome thành công!');
+        } catch (error) {
+            window.alert(error.message || 'Lỗi kết nối khi lưu cấu hình Welcome.');
+        }
     },
     showServerList() {
         document.getElementById('server-detail-view').classList.add('hidden-tab');
@@ -482,7 +554,8 @@ const app = {
                 this.cancelReply();
                 this.selectChannel(this.data.currentChannelId, document.getElementById('current-chat-channel').innerText);
             } else {
-                window.alert("Lỗi khi gửi tin nhắn");
+                const result = await res.json();
+                window.alert("Lỗi khi gửi tin nhắn: " + (result.error || 'Yêu cầu không thành công.'));
             }
         } catch(err) {
             window.alert("Mất kết nối");
@@ -555,8 +628,15 @@ const app = {
             } catch(e) {}
         }, 2000);
     },
-    clearLogs() {
-        document.getElementById('log-container').innerHTML = '<div class="text-indigo-400">[System] Logs cleared (UI only).</div>';
+    async clearLogs() {
+        try {
+            const response = await fetch('/api/logs', { method: 'DELETE' });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || 'Không thể xóa nhật ký.');
+            document.getElementById('log-container').innerHTML = '<div class="text-gray-500">[System] Nhật ký đã được xóa.</div>';
+        } catch (error) {
+            window.alert(error.message || 'Lỗi kết nối khi xóa nhật ký.');
+        }
     },
     // --- UTILITIES ---
     openModal(modalId) {

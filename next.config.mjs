@@ -13,6 +13,14 @@ const nextConfig = {
         async rewrites() {
           return [
             {
+              source: '/login',
+              destination: `${flaskApiUrl}/login`
+            },
+            {
+              source: '/logout',
+              destination: `${flaskApiUrl}/logout`
+            },
+            {
               source: '/api/:path*',
               destination: `${flaskApiUrl}/api/:path*`
             }

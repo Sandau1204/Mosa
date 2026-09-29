@@ -4,6 +4,7 @@ import json
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
+from welcome_settings import load_welcome_settings
 
 # Đường dẫn lưu trữ dữ liệu Role
 load_dotenv()  # Load biến môi trường từ file .env
@@ -43,6 +44,28 @@ class Roles(commands.Cog):
                     await member.add_roles(role, reason="Tự động cấp role cho thành viên mới")
                 except discord.Forbidden:
                     print(f"Lỗi: Bot không đủ quyền để cấp role {role.name} trong server {member.guild.name}")
+
+        welcome = load_welcome_settings().get(guild_id)
+        if not welcome:
+            return
+        channel = member.guild.get_channel(int(welcome['channel_id']))
+        if not isinstance(channel, discord.TextChannel):
+            print(f"Lỗi: Không tìm thấy kênh Welcome trong server {member.guild.name}")
+            return
+
+        embed = discord.Embed(
+            title=welcome['title'],
+            description=welcome['description'],
+            color=int(welcome['color'].lstrip('#'), 16)
+        )
+        if welcome.get('image'):
+            embed.set_image(url=welcome['image'])
+        try:
+            await channel.send(content=member.mention, embed=embed)
+        except discord.Forbidden:
+            print(f"Lỗi: Bot không có quyền gửi tin nhắn Welcome tại {channel.name}")
+        except discord.HTTPException as error:
+            print(f"Lỗi Discord khi gửi tin nhắn Welcome: {error}")
     @app_commands.command(name="set_autorole", description="[Admin] Cài đặt role tự động cho thành viên mới")
     @app_commands.describe(role="Chọn role muốn cấp tự động")
     @app_commands.checks.has_permissions(manage_roles=True)

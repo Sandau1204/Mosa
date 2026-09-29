@@ -1,16 +1,25 @@
 import os
 import asyncio
 import logging
+import re
+import secrets
+from functools import wraps
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from dotenv import load_dotenv
 import discord
 from typing import Optional
 import datetime
+from welcome_settings import load_welcome_settings, save_welcome_settings
 
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv('FLASK_SECRET_KEY', 'super_secret_key_mosa')
+app.secret_key = os.getenv('FLASK_SECRET_KEY')
+if not app.secret_key:
+    app.secret_key = secrets.token_hex(32)
+    logging.getLogger(__name__).warning(
+        'FLASK_SECRET_KEY is not configured; sessions will be invalidated on restart.'
+    )
 app.permanent_session_lifetime = datetime.timedelta(days=30)
 
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
@@ -20,8 +29,6 @@ logging.getLogger('werkzeug').setLevel(logging.WARNING)
 CLIENT_ID = os.getenv('DISCORD_CLIENT_ID')
 CLIENT_SECRET = os.getenv('DISCORD_CLIENT_SECRET')
 REDIRECT_URI = os.getenv('DISCORD_REDIRECT_URI', 'http://localhost:5000/callback')
-OWNER_ID = os.getenv('OWNER_ID') # ID tài khoản Discord được phép truy cập panel
-
 bot_instance: Optional[discord.Client] = None  # Báo cho VSCode biết đây là Discord Client hoặc None
 bot_loop = None
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
@@ -58,6 +65,20 @@ def run_coro(coro):
     future = asyncio.run_coroutine_threadsafe(coro, bot_instance.loop)
     return future.result()
 
+
+def owner_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        user = session.get('user')
+        if not user:
+            return jsonify({'error': 'Vui lòng đăng nhập.'}), 401
+        owner_id = os.getenv('OWNER_ID')
+        if not owner_id or str(user.get('id')) != str(owner_id):
+            return jsonify({'error': 'Bạn không có quyền quản trị panel.'}), 403
+        return view(*args, **kwargs)
+    return wrapped
+
+
 # Bộ nhớ log thời gian thực
 realtime_logs = [
     {"time": datetime.datetime.now().strftime("%H:%M:%S"), "msg": "Web Panel đã được khởi động. Đang chờ kết nối với Bot...", "level": "info"}
@@ -74,20 +95,16 @@ def index():
     # Discord Activity mở URL gốc, nên chuyển thẳng tới trang Games.
     return redirect(url_for('games'))
 
-OWNER_ID = os.getenv('OWNER_ID')
-
 @app.route('/panel')
 def panel():
-    if 'user' not in session:
-        return send_from_directory(FRONTEND_DIR, 'panel.html')
-    OWNER_ID = os.getenv('OWNER_ID')
-    if str(session['user']['id']) != str(OWNER_ID):
-        # ... (giữ nguyên code trả về HTML báo lỗi 403[cite: 1])
-        pass
+    session['next_url'] = url_for('panel')
     return send_from_directory(FRONTEND_DIR, 'panel.html')
 
 @app.route('/login')
 def login():
+    next_url = request.args.get('next', '')
+    if next_url.startswith('/') and not next_url.startswith('//') and '\\' not in next_url:
+        session['next_url'] = next_url
     auth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
     return redirect(auth_url)
 
@@ -112,7 +129,7 @@ def callback():
     access_token = token_data['access_token']
     user_resp = requests.get('https://discord.com/api/users/@me', headers={'Authorization': f'Bearer {access_token}'})
     user_data = user_resp.json()
-    # BỎ KIỂM TRA OWNER_ID Ở ĐÂY ĐỂ AI CŨNG CÓ THỂ ĐĂNG NHẬP!
+    # OAuth is shared with the music page; panel admin APIs enforce OWNER_ID.
     avatar_hash = user_data.get('avatar')
     if avatar_hash:
         # Kiểm tra nếu hash bắt đầu bằng "a_" thì đó là ảnh GIF động
@@ -227,10 +244,17 @@ def logout():
 def api_user():
     if 'user' not in session:
         return jsonify({'authenticated': False}), 401
+    owner_id = os.getenv('OWNER_ID')
+    if not owner_id or str(session['user'].get('id')) != str(owner_id):
+        return jsonify({
+            'authenticated': False,
+            'error': 'Tài khoản Discord này không có quyền quản trị panel.'
+        }), 403
     return jsonify({'authenticated': True, 'user': session['user']})
 
 # --- API Thống kê Bot ---
 @app.route('/api/stats')
+@owner_required
 def api_stats():
     if not bot_instance or not bot_instance.is_ready():
         return jsonify({'error': 'Bot offline'}), 503
@@ -250,6 +274,7 @@ def api_stats():
 
 # --- API Quản lý Server & Thành viên ---
 @app.route('/api/servers')
+@owner_required
 def api_servers():
     if not bot_instance:
         return jsonify([])
@@ -277,6 +302,7 @@ def api_servers():
     return jsonify(servers)
 
 @app.route('/api/servers/<guild_id>/voice_channels')
+@owner_required
 def api_server_voice_channels(guild_id):
     if not bot_instance:
         return jsonify([])
@@ -293,6 +319,7 @@ def api_server_voice_channels(guild_id):
     return jsonify(channels)
 
 @app.route('/api/servers/<guild_id>/members')
+@owner_required
 def api_server_members(guild_id):
     if not bot_instance:
         return jsonify([])
@@ -312,6 +339,7 @@ def api_server_members(guild_id):
     return jsonify(members)
 
 @app.route('/api/servers/<guild_id>/members/<member_id>/action', methods=['POST'])
+@owner_required
 def api_member_action(guild_id, member_id):
     if not bot_instance:
         return jsonify({'success': False, 'error': 'Bot not initialized'}), 503
@@ -343,6 +371,7 @@ def api_member_action(guild_id, member_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/servers/<guild_id>/invite', methods=['POST'])
+@owner_required
 def api_create_invite(guild_id):
     if not bot_instance:
         return jsonify({'error': 'Bot not initialized'}), 503
@@ -364,6 +393,7 @@ def api_create_invite(guild_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/servers/<guild_id>/leave', methods=['POST'])
+@owner_required
 def api_leave_server(guild_id):
     if not bot_instance:
         return jsonify({'error': 'Bot not initialized'}), 503
@@ -375,6 +405,7 @@ def api_leave_server(guild_id):
 
 # --- API Kênh & Chat ---
 @app.route('/api/chat/servers')
+@owner_required
 def api_chat_servers():
     if not bot_instance:
         return jsonify([])
@@ -389,6 +420,7 @@ def api_chat_servers():
     return jsonify(result)
 
 @app.route('/api/channels/<channel_id>/messages', methods=['GET', 'POST'])
+@owner_required
 def api_channel_messages(channel_id):
     try:
         if bot_instance is None:
@@ -514,6 +546,7 @@ def api_channel_messages(channel_id):
 
 # --- API Trạng thái Bot ---
 @app.route('/api/bot/status', methods=['POST'])
+@owner_required
 def api_update_status():
     if not bot_instance:
         return jsonify({'success': False, 'error': 'Bot not initialized'}), 503
@@ -546,9 +579,90 @@ def api_update_status():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # --- API Logs thời gian thực ---
-@app.route('/api/logs')
+@app.route('/api/logs', methods=['GET', 'DELETE'])
+@owner_required
 def api_logs():
+    if request.method == 'DELETE':
+        realtime_logs.clear()
+        return jsonify({'success': True})
     return jsonify(realtime_logs)
+
+@app.route('/api/servers/<guild_id>/text_channels')
+@owner_required
+def api_server_text_channels(guild_id):
+    if not bot_instance:
+        return jsonify({'error': 'Bot is not ready.'}), 503
+    try:
+        guild = bot_instance.get_guild(int(guild_id))
+    except ValueError:
+        return jsonify({'error': 'Server ID không hợp lệ.'}), 400
+    if not guild:
+        return jsonify({'error': 'Không tìm thấy server.'}), 404
+    return jsonify([
+        {'id': str(channel.id), 'name': channel.name}
+        for channel in guild.text_channels
+    ])
+
+@app.route('/api/welcome/<guild_id>', methods=['GET', 'PUT'])
+@owner_required
+def api_welcome_settings(guild_id):
+    try:
+        guild_id_int = int(guild_id)
+    except ValueError:
+        return jsonify({'error': 'Server ID không hợp lệ.'}), 400
+    if bot_instance is None or bot_instance.get_guild(guild_id_int) is None:
+        return jsonify({'error': 'Không tìm thấy server.'}), 404
+
+    try:
+        settings = load_welcome_settings()
+    except (OSError, ValueError):
+        app.logger.exception('Could not load welcome settings.')
+        return jsonify({'error': 'Không thể đọc cấu hình Welcome.'}), 500
+
+    guild_key = str(guild_id_int)
+    if request.method == 'GET':
+        return jsonify(settings.get(guild_key, {}))
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Dữ liệu cấu hình không hợp lệ.'}), 400
+
+    title = data.get('title')
+    description = data.get('description')
+    color = data.get('color')
+    image = data.get('image', '')
+    channel_id = data.get('channel_id')
+    if not isinstance(title, str) or len(title) > 256:
+        return jsonify({'error': 'Tiêu đề tối đa 256 ký tự.'}), 400
+    if not isinstance(description, str) or len(description) > 4096:
+        return jsonify({'error': 'Mô tả tối đa 4096 ký tự.'}), 400
+    if not isinstance(color, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', color):
+        return jsonify({'error': 'Mã màu phải có định dạng #RRGGBB.'}), 400
+    if not isinstance(image, str) or (
+        image and (len(image) > 2000 or not image.startswith(('https://', 'http://')))
+    ):
+        return jsonify({'error': 'URL hình ảnh phải bắt đầu bằng http:// hoặc https://.'}), 400
+    if not isinstance(channel_id, str) or not channel_id.isdecimal():
+        return jsonify({'error': 'Vui lòng chọn kênh gửi tin nhắn chào mừng.'}), 400
+
+    channel = bot_instance.get_channel(int(channel_id))
+    if not isinstance(channel, discord.TextChannel) or channel.guild.id != guild_id_int:
+        return jsonify({'error': 'Kênh không thuộc server đã chọn.'}), 400
+
+    settings[guild_key] = {
+        'channel_id': channel_id,
+        'title': title,
+        'description': description,
+        'color': color,
+        'image': image
+    }
+    try:
+        save_welcome_settings(settings)
+    except OSError:
+        app.logger.exception('Could not save welcome settings.')
+        return jsonify({'error': 'Không thể lưu cấu hình Welcome.'}), 500
+    add_log(f'Đã lưu cấu hình Welcome cho server {guild_key}.')
+    return jsonify({'success': True})
 
 @app.route('/api/games/rooms', methods=['GET', 'POST'])
 def api_game_rooms():

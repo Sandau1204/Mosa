@@ -2,6 +2,10 @@
 
 import Script from 'next/script';
 
+const botInviteUrl = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID
+    ? `https://discord.com/oauth2/authorize?client_id=${process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID}&permissions=8&scope=bot%20applications.commands`
+    : null;
+
 export default function PanelDashboard() {
   return (
     <>
@@ -206,7 +210,7 @@ export default function PanelDashboard() {
                             </div>
                             {/* Input */}
                             <div className="p-2 md:p-4 bg-gray-900/50 border-t border-gray-700 shrink-0">
-                                <form onsubmit="app.sendMessage(event)" className="relative flex items-center">
+                                <form onSubmit={(event) => { window.app.sendMessage(event) }} className="relative flex items-center">
                                     <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." className="w-full bg-gray-950 border border-gray-700 rounded-lg pl-3 md:pl-4 pr-10 md:pr-12 py-2.5 md:py-3 text-xs md:text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
                                     <button type="submit" aria-label="Gửi tin nhắn" className="absolute right-2 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-indigo-400 transition-colors">
                                         <i className="ph-fill ph-paper-plane-right text-lg"></i>
@@ -222,27 +226,39 @@ export default function PanelDashboard() {
                         <div className="flex-1 bg-gray-800 border border-gray-700 rounded-2xl p-4 md:p-6 overflow-y-auto">
                             <h3 className="text-base md:text-lg font-semibold text-white mb-4 md:mb-6">Cài Đặt Embed Chào Mừng</h3>
                             <div className="space-y-4 md:space-y-5">
+                                <div>
+                                    <label className="block text-xs md:text-sm font-medium text-gray-400 mb-1.5">Máy chủ</label>
+                                    <select id="welcome-server-select" onChange={(event) => {window.app.selectWelcomeServer(event.currentTarget.value)}} className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white">
+                                        <option value="">Đang tải...</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs md:text-sm font-medium text-gray-400 mb-1.5">Kênh gửi lời chào</label>
+                                    <select id="welcome-channel-select" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white">
+                                        <option value="">Chọn server trước...</option>
+                                    </select>
+                                </div>
                                 {/* Các field input cấu hình giữ nguyên form cũ */}
                                 <div>
                                     <label className="block text-xs md:text-sm font-medium text-gray-400 mb-1.5">Tiêu đề (Title)</label>
-                                    <input type="text" id="em-title" value="Chào mừng đến với Server!" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white focus:border-indigo-500 outline-none" onInput={(event) => {window.app.updateEmbedPreview()}} />
+                                    <input type="text" id="em-title" defaultValue="Chào mừng đến với Server!" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white focus:border-indigo-500 outline-none" onInput={(event) => {window.app.updateEmbedPreview()}} />
                                 </div>
                                 <div>
                                     <label className="block text-xs md:text-sm font-medium text-gray-400 mb-1.5">Mô tả (Description)</label>
-                                    <textarea id="em-desc" rows="3" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white focus:border-indigo-500 outline-none resize-none" onInput={(event) => {window.app.updateEmbedPreview()}}>Rất vui khi bạn tham gia server. 🌟 Vui lòng đọc luật và chọn role để nhận thông báo.</textarea>
+                                    <textarea id="em-desc" rows="3" defaultValue="Rất vui khi bạn tham gia server. 🌟 Vui lòng đọc luật và chọn role để nhận thông báo." className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white focus:border-indigo-500 outline-none resize-none" onInput={(event) => {window.app.updateEmbedPreview()}} />
                                 </div>
                                 <div>
                                     <label className="block text-xs md:text-sm font-medium text-gray-400 mb-1.5">Màu sắc (Color Hex)</label>
                                     <div className="flex gap-2">
-                                        <input type="color" id="em-color-picker" value="#5865F2" className="h-9 md:h-10 w-9 md:w-10 rounded cursor-pointer border-0 p-0" onInput={(event) => {document.getElementById('em-color').value = event.currentTarget.value; window.app.updateEmbedPreview()}} />
-                                        <input type="text" id="em-color" value="#5865F2" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white focus:border-indigo-500 outline-none uppercase" onInput={(event) => {document.getElementById('em-color-picker').value = event.currentTarget.value; window.app.updateEmbedPreview()}} />
+                                        <input type="color" id="em-color-picker" defaultValue="#5865F2" className="h-9 md:h-10 w-9 md:w-10 rounded cursor-pointer border-0 p-0" onInput={(event) => {document.getElementById('em-color').value = event.currentTarget.value; window.app.updateEmbedPreview()}} />
+                                        <input type="text" id="em-color" defaultValue="#5865F2" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white focus:border-indigo-500 outline-none uppercase" onInput={(event) => {document.getElementById('em-color-picker').value = event.currentTarget.value; window.app.updateEmbedPreview()}} />
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-xs md:text-sm font-medium text-gray-400 mb-1.5">Hình Ảnh (URL)</label>
-                                    <input type="text" id="em-image" placeholder="https://..." value="https://placehold.co/600x200/2d3748/ffffff?text=Welcome+Banner" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white focus:border-indigo-500 outline-none" onInput={(event) => {window.app.updateEmbedPreview()}} />
+                                    <input type="text" id="em-image" placeholder="https://..." defaultValue="https://placehold.co/600x200/2d3748/ffffff?text=Welcome+Banner" className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 md:px-4 py-2 text-xs md:text-sm text-white focus:border-indigo-500 outline-none" onInput={(event) => {window.app.updateEmbedPreview()}} />
                                 </div>
-                                <button onClick={() => {window.alert('Đã lưu cấu hình Welcome thành công!')}} className="w-full mt-2 md:mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm md:text-base py-2 md:py-2.5 rounded-lg transition-colors">
+                                <button onClick={() => {window.app.saveWelcomeSettings()}} className="w-full mt-2 md:mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm md:text-base py-2 md:py-2.5 rounded-lg transition-colors">
                                     Lưu Cấu Hình
                                 </button>
                             </div>
@@ -294,7 +310,10 @@ export default function PanelDashboard() {
                                         </button>
                                         {/* Dropdown menu items giữ nguyên... */}
                                         <div id="status-dropdown-menu" className="hidden absolute top-full left-0 w-full mt-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 py-1 overflow-hidden">
-                                             {/* Lược bớt HTML menu ở đây (Giữ nguyên như cũ) */}
+                                            <button type="button" onClick={() => {window.app.selectStatus('online', 'Trực tuyến (Online)')}} className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700">Trực tuyến (Online)</button>
+                                            <button type="button" onClick={() => {window.app.selectStatus('idle', 'Vắng mặt (Idle)')}} className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700">Vắng mặt (Idle)</button>
+                                            <button type="button" onClick={() => {window.app.selectStatus('dnd', 'Không làm phiền (DND)')}} className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700">Không làm phiền (DND)</button>
+                                            <button type="button" onClick={() => {window.app.selectStatus('invisible', 'Ẩn (Invisible)')}} className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700">Ẩn (Invisible)</button>
                                         </div>
                                     </div>
                                 </div>
@@ -361,9 +380,9 @@ export default function PanelDashboard() {
                     </div>
                     <p className="text-gray-300 text-sm text-center mb-6">Bạn có thể mời bot vào server bất kỳ bằng link dưới đây (Cần quyền quản trị bot).</p>
                     <div className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 flex items-center justify-between gap-2 mb-4">
-                        <span className="text-xs text-gray-400 truncate flex-1 font-mono">https://discord.com/api/oauth2/authorize?...</span>
+                        <span className="text-xs text-gray-400 truncate flex-1 font-mono">{botInviteUrl || 'Thiếu DISCORD_CLIENT_ID'}</span>
                     </div>
-                    <button onClick={() => {window.open('https://discord.com/api/oauth2/authorize?client_id=YOUR_BOT_ID&permissions=8&scope=bot', '_blank')}} className="w-full bg-discord hover:bg-discordHover text-white font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center gap-2">
+                    <button onClick={() => {if (botInviteUrl) window.open(botInviteUrl, '_blank', 'noopener,noreferrer'); else window.alert('Chưa cấu hình Discord Client ID.')}} className="w-full bg-discord hover:bg-discordHover text-white font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center gap-2">
                         <i className="ph ph-arrow-square-out"></i> Lấy Link Thực Tế
                     </button>
                 </div>
