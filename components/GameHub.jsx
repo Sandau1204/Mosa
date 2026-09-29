@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { DiscordSDK } from '@discord/embedded-app-sdk';
 
-// Removed process.env reference to fix ReferenceError in browser environment
-const DISCORD_CLIENT_ID = "mock_client_id";
+const DISCORD_CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
 let discordActivityConnection;
 
 function withTimeout(promise, step, timeoutMs = 15000) {
@@ -22,19 +22,46 @@ function withTimeout(promise, step, timeoutMs = 15000) {
 function connectDiscordActivity() {
   if (!discordActivityConnection) {
     discordActivityConnection = (async () => {
-      // Mock Discord authentication to prevent build errors in preview environment
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
+      if (!DISCORD_CLIENT_ID) {
+        throw new Error('Thiếu NEXT_PUBLIC_DISCORD_CLIENT_ID trong cấu hình.');
+      }
+
+      const discordSdk = new DiscordSDK(DISCORD_CLIENT_ID);
+      await withTimeout(discordSdk.ready(), 'khởi tạo Activity');
+      const { code } = await withTimeout(discordSdk.commands.authorize({
+        client_id: DISCORD_CLIENT_ID,
+        response_type: 'code',
+        state: '',
+        prompt: 'none',
+        scope: ['identify']
+      }), 'ủy quyền Discord');
+
+      const response = await withTimeout(fetch('/api/discord-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      }), 'xác thực hồ sơ');
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Không thể xác thực tài khoản Discord.');
+      }
+
+      await withTimeout(discordSdk.commands.authenticate({ access_token: result.access_token }), 'xác thực Activity');
+      const user = result.user;
+      if (!user?.id || !user?.username) {
+        throw new Error('Discord không trả về hồ sơ người dùng hợp lệ.');
+      }
+
       return {
-        id: 'test-user',
-        name: 'Demo Player',
-        handle: '@demo_player',
-        avatarUrl: 'https://placehold.co/128x128/5865F2/ffffff?text=P1',
-        coins: 1500,
-        level: 10,
-        stats: { wins: 24, winRate: 65 }
+        id: user.id,
+        name: user.username,
+        handle: `@${user.username}`,
+        avatarUrl: user.avatar
       };
-    })();
+    })().catch((error) => {
+      discordActivityConnection = undefined;
+      throw error;
+    });
   }
   return discordActivityConnection;
 }
@@ -279,7 +306,7 @@ const DiscordUserWidget = ({ user, onClickProfile, isConnected }) => {
             src={user.avatarUrl}
             alt={user.name}
             className="w-full h-full object-cover rounded-full"
-            onError={(e) => { e.target.src = "https://placehold.co/100x100/5865F2/ffffff?text=DC"; }}
+            onError={(e) => { e.target.src = 'https://cdn.discordapp.com/embed/avatars/0.png'; }}
           />
         </div>
         <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 ${isConnected ? 'bg-emerald-500' : 'bg-slate-500'} border-2 border-slate-900 rounded-full shadow-sm`}></span>
@@ -291,11 +318,7 @@ const DiscordUserWidget = ({ user, onClickProfile, isConnected }) => {
           </span>
           <span className="bg-indigo-600/80 text-indigo-100 text-[10px] font-bold px-1.5 py-0.2 rounded-md border border-indigo-400/40">PLAYER</span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-amber-300 font-bold">
-          <span>🪙 {user.coins?.toLocaleString() || 0}</span>
-          <span className="text-gray-400">•</span>
-          <span className="text-purple-300">Lv.{user.level || 1}</span>
-        </div>
+        <span className="text-xs text-gray-400">Discord</span>
       </div>
     </div>
   );
@@ -322,24 +345,9 @@ const ProfileModal = ({ user, onClose }) => {
         <h3 className="text-xl font-black text-white text-center">{user.name}</h3>
         <p className="text-xs text-indigo-300 font-medium mb-4">{user.handle || '@player'}</p>
 
-        {/* User Stats Grid */}
-        <div className="grid grid-cols-2 gap-3 w-full mb-5">
-          <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 text-center">
-            <span className="text-xs text-gray-400 block font-bold mb-1">Cấp Độ</span>
-            <span className="text-lg font-black text-purple-400">Lv.{user.level || 1}</span>
-          </div>
-          <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 text-center">
-            <span className="text-xs text-gray-400 block font-bold mb-1">Xu Sở Hữu</span>
-            <span className="text-lg font-black text-amber-400">🪙 {user.coins?.toLocaleString() || 0}</span>
-          </div>
-          <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 text-center">
-            <span className="text-xs text-gray-400 block font-bold mb-1">Số Trận Thắng</span>
-            <span className="text-lg font-black text-emerald-400">{user.stats?.wins || 0}</span>
-          </div>
-          <div className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 text-center">
-            <span className="text-xs text-gray-400 block font-bold mb-1">Tỷ Lệ Thắng</span>
-            <span className="text-lg font-black text-indigo-400">{user.stats?.winRate || 0}%</span>
-          </div>
+        <div className="w-full mb-5 rounded-2xl bg-slate-800/80 border border-slate-700/80 p-3 text-center">
+          <span className="text-xs text-gray-400 block font-bold mb-1">Discord ID</span>
+          <span className="text-sm font-mono text-indigo-200 break-all">{user.id}</span>
         </div>
 
         {/* Close Button */}
@@ -715,9 +723,6 @@ const GameCard = ({ game, onClick }) => {
 
 const gamesData = [
   { id: 1, title: 'Cờ Tướng', desc: 'Đấu trí đỉnh cao', colorBg: 'bg-gradient-to-b from-red-500 to-red-800', icon: <XiangqiPieceIcon />, type: 'xiangqi' },
-  { id: 2, title: 'Cờ Vua', desc: 'Chiến thuật hoàng gia', colorBg: 'bg-gradient-to-b from-blue-500 to-indigo-700', icon: '♟️', type: 'chess' },
-  { id: 3, title: 'Cờ Tỷ Phú', desc: 'Làm giàu không khó', colorBg: 'bg-gradient-to-b from-emerald-400 to-green-600', icon: '💸', type: 'monopoly' },
-  { id: 4, title: 'Bài Uno', desc: 'Hủy diệt tình bạn', colorBg: 'bg-gradient-to-b from-amber-400 to-orange-600', icon: <UnoCardIcon />, type: 'uno' },
 ];
 
 export default function GameHub() {
@@ -733,14 +738,9 @@ export default function GameHub() {
   const [activeRoomId, setActiveRoomId] = useState(null);
   
   // Dynamic Rooms State
-  const [rooms, setRooms] = useState([
-    { id: 101, name: "Phòng chơi siêu cấp vip pro", game: "Cờ Tỷ Phú", slots: "4/4", color: "bg-emerald-950 text-emerald-300 border-emerald-700/50", type: "monopoly" },
-    { id: 102, name: "Giao hữu cờ vua", game: "Cờ Vua", slots: "1/2", color: "bg-indigo-950 text-indigo-300 border-indigo-700/50", type: "chess" },
-  ]);
+  const [rooms, setRooms] = useState([]);
 
-  const [userProfile, setUserProfile] = useState({
-    id: 'guest', name: 'Khách', handle: '', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png', coins: 0, level: 1, stats: { wins: 0, winRate: 0 }
-  });
+  const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
     let isActive = true;
@@ -797,8 +797,6 @@ export default function GameHub() {
       setRooms(prev => [newRoom, ...prev]);
       setActiveRoomId(newRoom.id);
       setCurrentView('room');
-    } else {
-      console.log('Chưa hỗ trợ tạo phòng cho game này');
     }
   };
 
@@ -822,8 +820,6 @@ export default function GameHub() {
       }));
       setActiveRoomId(roomId);
       setCurrentView('room');
-    } else {
-      console.log('Chỉ hỗ trợ mở phòng Cờ Tướng trong demo này');
     }
   };
 
@@ -935,6 +931,20 @@ export default function GameHub() {
   };
 
   const activeRoomData = rooms.find(r => r.id === activeRoomId);
+
+  if (connectionState !== 'connected') {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center text-white">
+        <h1 className="text-2xl font-black">{connectionState === 'connecting' ? 'Đang kết nối Discord...' : 'Không thể kết nối Discord'}</h1>
+        {connectionError && <p className="max-w-lg text-sm text-rose-300">{connectionError}</p>}
+        {connectionState === 'error' && (
+          <button onClick={() => setRetryCount(count => count + 1)} className="rounded-lg bg-indigo-600 px-4 py-2 font-bold hover:bg-indigo-500">
+            Thử kết nối lại
+          </button>
+        )}
+      </main>
+    );
+  }
 
   return (
     <div className="isolate min-h-screen font-sans text-gray-100 overflow-hidden flex flex-col justify-between selection:bg-indigo-500 selection:text-white" onClick={handleGlobalInteraction}>

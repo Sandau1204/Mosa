@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 
-class GameHub(commands.Cog):
+class Game(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
@@ -10,4 +10,4 @@ class GameHub(commands.Cog):
 
 # BẮT BUỘC: Hàm setup ở cuối file để bot có thể load extension này
 async def setup(bot):
-    await bot.add_cog(GameHub(bot))
+    await bot.add_cog(Game(bot))
