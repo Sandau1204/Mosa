@@ -885,6 +885,10 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
   const isUserBlack = room.blackPlayer?.id === currentUser.id;
   const isUserRed = room.redPlayer?.id === currentUser.id;
   const isFlipped = isUserBlack;
+  const topSide = isFlipped ? 'red' : 'black';
+  const topPlayer = room[`${topSide}Player`];
+  const bottomSide = isFlipped ? 'black' : 'red';
+  const bottomPlayer = room[`${bottomSide}Player`];
 
   const swapRequest = room.swapRequest;
   const isTargetOfSwap = !isPlaying && swapRequest && swapRequest.targetId === currentUser.id;
@@ -1239,8 +1243,12 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
 
       {/* Main Arena Content */}
       <div className="flex-1 min-h-0 flex flex-col p-1.5 sm:p-2 gap-1 z-10 overflow-hidden w-full max-w-4xl mx-auto">
-        <div className="flex-1 min-h-0 w-full flex flex-col sm:flex-row items-center justify-center gap-3 py-1 relative overflow-auto">
-          <div className="relative min-h-0 min-w-0 flex-1 flex items-center justify-center">
+        <div className="shrink-0 flex min-h-10 items-center justify-center">
+          {renderPlayerSlot(topSide, topPlayer)}
+        </div>
+
+        <div className="flex-1 min-h-0 min-w-0 w-full flex items-center justify-center overflow-hidden py-1">
+          <div className="relative flex h-full min-h-0 min-w-0 items-center justify-center">
             <XiangqiBoard
               board={room.board || []}
               isFlipped={isFlipped}
@@ -1268,26 +1276,10 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
               </div>
             )}
           </div>
-          <aside className="flex w-full shrink-0 flex-row flex-wrap items-center justify-center gap-2 sm:w-44 sm:flex-col sm:items-stretch">
-            <p className="hidden text-center text-[10px] font-black uppercase tracking-wider text-indigo-200 sm:block">
-              Người chơi
-            </p>
-            {renderPlayerSlot('red', room.redPlayer)}
-            {renderPlayerSlot('black', room.blackPlayer)}
-            {!isPlaying && room.status !== 'finished' && onAddBot && (!room.redPlayer || !room.blackPlayer) && (
-              <button
-                onClick={() => {
-                  audio.playClick();
-                  setBotModalMode('single');
-                  setShowBotEloModal(true);
-                }}
-                className="w-full rounded-xl border border-indigo-400/50 bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow transition-colors hover:bg-indigo-500"
-                title="Chọn cấp độ và thêm bot"
-              >
-                🤖 Thêm Bot
-              </button>
-            )}
-          </aside>
+        </div>
+
+        <div className="shrink-0 flex min-h-10 items-center justify-center">
+          {renderPlayerSlot(bottomSide, bottomPlayer)}
         </div>
 
         {isPlaying && room.checkSide && (
@@ -1329,6 +1321,19 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
                   className={`rounded-lg px-2.5 py-1 text-xs font-bold text-white shadow transition-all ${((isUserRed && room.redReady) || (isUserBlack && room.blackReady)) ? 'bg-amber-700 hover:bg-amber-600' : 'bg-emerald-700 hover:bg-emerald-600'}`}
                 >
                   {((isUserRed && room.redReady) || (isUserBlack && room.blackReady)) ? 'Bỏ sẵn sàng' : 'Sẵn sàng'}
+                </button>
+              )}
+              {onAddBot && (!room.redPlayer || !room.blackPlayer) && (
+                <button
+                  onClick={() => {
+                    audio.playClick();
+                    setBotModalMode('single');
+                    setShowBotEloModal(true);
+                  }}
+                  className="rounded-lg border border-indigo-400/50 bg-indigo-600 px-2.5 py-1 text-xs font-bold text-white shadow transition-colors hover:bg-indigo-500"
+                  title="Chọn cấp độ và thêm bot"
+                >
+                  🤖 Thêm Bot
                 </button>
               )}
             </div>
