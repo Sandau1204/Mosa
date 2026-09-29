@@ -17,6 +17,8 @@ GAME_DATA_FILE = os.path.join(DATA_FOLDER, "games.json")
 INITIAL_CLOCK_MS = 20 * 60 * 1000
 MOVE_INCREMENT_MS = 5 * 1000
 PRESENCE_TIMEOUT_SECONDS = 60
+MAX_ROOM_MESSAGES = 100
+MAX_ROOM_MESSAGE_LENGTH = 500
 
 
 def initial_board():
@@ -38,6 +40,7 @@ class Game(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._rooms_lock = threading.RLock()
+        self._room_messages: dict[str, list[dict[str, Any]]] = {}
         self._rooms: dict[str, dict[str, Any]] = self._load_rooms()
         now = time.time()
         self._last_seen: dict[tuple[str, str], float] = {
@@ -512,6 +515,11 @@ class Game(commands.Cog):
                     self._rooms = previous_rooms
                     self._last_seen = previous_last_seen
                     raise
+            self._room_messages = {
+                room_id: messages
+                for room_id, messages in self._room_messages.items()
+                if room_id in self._rooms
+            }
             return [self._room_state(room) for room in reversed(list(self._rooms.values()))]
 
     def heartbeat(self, room_id: int, user_id: str) -> bool:
@@ -524,6 +532,59 @@ class Game(commands.Cog):
                 return False
             self._last_seen[(room_key, user_id)] = time.time()
             return True
+
+    def get_room_messages(self, room_id: int, user_id: str) -> list[dict[str, Any]] | None:
+        with self._rooms_lock:
+            room_key = str(room_id)
+            room = self._rooms.get(room_key)
+            if room is None or user_id not in self._participant_ids(room):
+                return None
+            return deepcopy(self._room_messages.get(room_key, []))
+
+    def send_room_message(
+        self,
+        room_id: int,
+        user_id: str,
+        content: str,
+    ) -> dict[str, Any] | None:
+        content = content.strip()
+        if not content or len(content) > MAX_ROOM_MESSAGE_LENGTH:
+            return None
+
+        with self._rooms_lock:
+            room_key = str(room_id)
+            room = self._rooms.get(room_key)
+            if room is None or user_id not in self._participant_ids(room):
+                return None
+            sender = next(
+                (
+                    participant
+                    for participant in (
+                        room.get("redPlayer"),
+                        room.get("blackPlayer"),
+                        *room.get("observers", []),
+                    )
+                    if isinstance(participant, dict)
+                    and participant.get("id") == user_id
+                    and not participant.get("isBot")
+                ),
+                None,
+            )
+            if sender is None:
+                return None
+
+            message = {
+                "id": uuid.uuid4().hex,
+                "userId": user_id,
+                "name": sender.get("name") or "Người chơi",
+                "avatarUrl": sender.get("avatarUrl", ""),
+                "content": content,
+                "createdAt": int(time.time() * 1000),
+            }
+            messages = self._room_messages.setdefault(room_key, [])
+            messages.append(message)
+            del messages[:-MAX_ROOM_MESSAGES]
+            return deepcopy(message)
 
     def join_room(
         self,
@@ -639,6 +700,7 @@ class Game(commands.Cog):
                     raise
                 for participant_id in self._participant_ids(previous_room):
                     self._last_seen.pop((room_key, participant_id), None)
+                self._room_messages.pop(room_key, None)
                 return None
 
             try:
@@ -885,6 +947,7 @@ class Game(commands.Cog):
                 for user_id in self._participant_ids(room):
                     self._last_seen.pop((room_id, str(user_id)), None)
                 raise
+            self._room_messages.pop(room_id, None)
             return self._room_state(room)
 
     def update_room(self, room_id: int, room: dict[str, Any]) -> bool | str | None:
@@ -934,6 +997,7 @@ class Game(commands.Cog):
                     raise
                 for user_id in self._participant_ids(previous_room):
                     self._last_seen.pop((key, str(user_id)), None)
+                self._room_messages.pop(key, None)
                 return "deleted"
             self._rooms[key] = room
             try:

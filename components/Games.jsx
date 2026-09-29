@@ -105,7 +105,7 @@ function connectDiscordActivity(onProgress) {
 
 const createAudioEngine = () => {
   let ctx = null;
-  let isMuted = true;
+  let isMuted = false;
   let bgmInterval = null;
   const init = () => {
     if (!ctx) {
@@ -205,24 +205,41 @@ const createAudioEngine = () => {
   const startBGM = () => {
     if (bgmInterval) return;
     let step = 0;
-    const notes = [329.63, 392.00, 440.00, 523.25, 659.25, 523.25, 440.00, 392.00]; 
+    const melody = [
+      587.33, 739.99, 880.00, 739.99, 659.25, 739.99, 587.33, 493.88,
+      523.25, 659.25, 783.99, 659.25, 587.33, 523.25, 493.88, 523.25
+    ];
+    const bass = [146.83, 196.00, 164.81, 220.00];
     const playNote = () => {
       if (ctx && !isMuted) {
         const time = ctx.currentTime;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = notes[step % notes.length];
-        gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(0.02, time + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(time);
-        osc.stop(time + 0.3);
+        const melodyOsc = ctx.createOscillator();
+        const melodyGain = ctx.createGain();
+        melodyOsc.type = 'triangle';
+        melodyOsc.frequency.setValueAtTime(melody[step % melody.length], time);
+        melodyGain.gain.setValueAtTime(0.0001, time);
+        melodyGain.gain.linearRampToValueAtTime(0.018, time + 0.02);
+        melodyGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.19);
+        melodyOsc.connect(melodyGain);
+        melodyGain.connect(ctx.destination);
+        melodyOsc.start(time);
+        melodyOsc.stop(time + 0.2);
+
+        if (step % 4 === 0) {
+          const bassOsc = ctx.createOscillator();
+          const bassGain = ctx.createGain();
+          bassOsc.type = 'sine';
+          bassOsc.frequency.setValueAtTime(bass[Math.floor(step / 4) % bass.length], time);
+          bassGain.gain.setValueAtTime(0.035, time);
+          bassGain.gain.exponentialRampToValueAtTime(0.0001, time + 0.42);
+          bassOsc.connect(bassGain);
+          bassGain.connect(ctx.destination);
+          bassOsc.start(time);
+          bassOsc.stop(time + 0.43);
+        }
       }
       step++;
-      bgmInterval = setTimeout(playNote, 250);
+      bgmInterval = setTimeout(playNote, 180);
     };
     playNote();
   };
@@ -230,6 +247,12 @@ const createAudioEngine = () => {
     isMuted = mutedStatus;
     if (!mutedStatus && ctx && ctx.state === 'suspended') {
       ctx.resume();
+    }
+    if (mutedStatus) {
+      clearTimeout(bgmInterval);
+      bgmInterval = null;
+    } else {
+      startBGM();
     }
   };
   return { init, playHover, playClick, playMove, playCheck, startBGM, setMuted };
@@ -873,6 +896,13 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [legalMoves, setLegalMoves] = useState([]);
   const [moveError, setMoveError] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatDraft, setChatDraft] = useState('');
+  const [chatError, setChatError] = useState('');
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const chatEndRef = useRef(null);
+  const chatListRef = useRef(null);
+  const shouldAutoScrollChat = useRef(true);
   
   // Bot Elo selection state
   const [showBotEloModal, setShowBotEloModal] = useState(false);
@@ -925,6 +955,88 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
     }
     previousCheckSide.current = room.checkSide;
   }, [room.checkSide]);
+
+  useEffect(() => {
+    let isActive = true;
+    let isLoading = false;
+    setChatMessages([]);
+    setChatDraft('');
+    setChatError('');
+    shouldAutoScrollChat.current = true;
+
+    const refreshChat = async () => {
+      if (isLoading) return;
+      isLoading = true;
+      try {
+        const response = await fetch(
+          `/api/games/rooms/${room.id}/chat?userId=${encodeURIComponent(currentUser.id)}`,
+          { cache: 'no-store' }
+        );
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Không thể tải tin nhắn trong phòng.');
+        }
+        if (!Array.isArray(result)) {
+          throw new Error('Dữ liệu tin nhắn từ máy chủ không hợp lệ.');
+        }
+        if (isActive) {
+          setChatMessages((messages) => {
+            const lastMessage = messages[messages.length - 1];
+            const latestMessage = result[result.length - 1];
+            return messages.length === result.length && lastMessage?.id === latestMessage?.id
+              ? messages
+              : result;
+          });
+          setChatError('');
+        }
+      } catch (error) {
+        if (isActive) {
+          setChatError(error instanceof Error ? error.message : 'Không thể tải tin nhắn trong phòng.');
+        }
+      } finally {
+        isLoading = false;
+      }
+    };
+
+    refreshChat();
+    const intervalId = window.setInterval(refreshChat, 2000);
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [room.id, currentUser.id]);
+
+  useEffect(() => {
+    if (shouldAutoScrollChat.current) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
+
+  const handleSendChat = async (event) => {
+    event.preventDefault();
+    const content = chatDraft.trim();
+    if (!content || isSendingChat) return;
+
+    setIsSendingChat(true);
+    setChatError('');
+    try {
+      const response = await fetch(`/api/games/rooms/${room.id}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.id, content })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Không thể gửi tin nhắn.');
+      }
+      setChatMessages((messages) => [...messages, result].slice(-100));
+      setChatDraft('');
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : 'Không thể gửi tin nhắn.');
+    } finally {
+      setIsSendingChat(false);
+    }
+  };
 
   const handleSelectPiece = async (x, y) => {
     try {
@@ -1240,6 +1352,7 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
       </div>
 
       {/* Main Arena Content */}
+      <div className="flex flex-1 min-h-0 min-w-0 flex-col lg:flex-row">
       <div className="grid flex-1 min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-1.5 p-1.5 sm:gap-2 sm:p-2 z-10 overflow-hidden w-full max-w-4xl mx-auto">
         <div className="flex min-w-0 flex-col justify-center gap-2">
           {renderPlayerSlot(otherSide, room[`${otherSide}Player`])}
@@ -1285,6 +1398,67 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
           )}
           {moveError && <p role="alert" className="text-xs font-bold text-rose-300">{moveError}</p>}
         </div>
+      </div>
+
+      <aside className="flex h-[32%] min-h-[150px] shrink-0 flex-col border-t border-slate-700/70 bg-slate-950/55 lg:h-auto lg:min-h-0 lg:w-72 lg:border-l lg:border-t-0 xl:w-80">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-700/60 px-3 py-2">
+          <h3 className="text-xs font-black text-indigo-100">💬 Chat phòng</h3>
+          <span className="text-[10px] text-slate-400">Tối đa 500 ký tự</span>
+        </div>
+        <div
+          aria-live="polite"
+          aria-label="Tin nhắn trong phòng"
+          ref={chatListRef}
+          onScroll={() => {
+            const list = chatListRef.current;
+            if (list) {
+              shouldAutoScrollChat.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+            }
+          }}
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 py-2"
+        >
+          {chatMessages.length === 0 && !chatError && (
+            <p className="m-auto text-center text-[11px] text-slate-500">Chưa có tin nhắn. Hãy bắt đầu trò chuyện!</p>
+          )}
+          {chatMessages.map((message) => (
+            <div key={message.id} className={`flex items-start gap-2 ${message.userId === currentUser.id ? 'flex-row-reverse' : ''}`}>
+              {message.avatarUrl ? (
+                <img src={message.avatarUrl} alt="" className="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-slate-800 object-cover" />
+              ) : (
+                <span aria-hidden="true" className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[10px]">♟</span>
+              )}
+              <div className={`min-w-0 max-w-[85%] rounded-xl border px-2.5 py-1.5 ${message.userId === currentUser.id ? 'border-indigo-500/30 bg-indigo-950/70 text-right' : 'border-slate-700/70 bg-slate-900/80'}`}>
+                <div className="flex items-baseline gap-2">
+                  <span className="truncate text-[10px] font-bold text-indigo-200">{message.userId === currentUser.id ? 'Bạn' : message.name}</span>
+                  <time className="shrink-0 text-[9px] text-slate-500">
+                    {new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                  </time>
+                </div>
+                <p className="break-words text-xs text-slate-100">{message.content}</p>
+              </div>
+            </div>
+          ))}
+          {chatError && <p role="alert" className="rounded-lg bg-rose-950/70 px-2 py-1 text-[10px] text-rose-200">{chatError}</p>}
+          <div ref={chatEndRef} />
+        </div>
+        <form onSubmit={handleSendChat} className="flex shrink-0 gap-1.5 border-t border-slate-700/60 p-2">
+          <input
+            aria-label="Tin nhắn"
+            maxLength={500}
+            value={chatDraft}
+            onChange={(event) => setChatDraft(event.target.value)}
+            placeholder="Nhập tin nhắn..."
+            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white outline-none placeholder:text-slate-500 focus:border-indigo-400"
+          />
+          <button
+            type="submit"
+            disabled={!chatDraft.trim() || isSendingChat}
+            className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Gửi
+          </button>
+        </form>
+      </aside>
       </div>
 
       {/* Bottom Controls & Observers Bar */}
@@ -1385,7 +1559,7 @@ const gamesData = [
 ];
 
 export default function Games() {
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showAuthTimeline, setShowAuthTimeline] = useState(true);
@@ -1539,17 +1713,17 @@ export default function Games() {
     audio.playClick();
     const newMuted = !isMuted;
     setIsMuted(newMuted);
-    audio.setMuted(newMuted);
     if (!newMuted && !hasStarted) {
       audio.init();
-      audio.startBGM();
       setHasStarted(true);
     }
+    audio.setMuted(newMuted);
   };
 
   const handleGlobalInteraction = () => {
     if (!hasStarted) {
       audio.init();
+      if (!isMuted) audio.startBGM();
       setHasStarted(true);
     }
   };
@@ -1764,7 +1938,10 @@ export default function Games() {
         <div className="flex items-center gap-2.5">
           <DiscordUserWidget user={userProfile} isConnected={connectionState === 'connected'} onClickProfile={() => setShowProfile(true)} />
           <button
-            onClick={toggleMute}
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleMute();
+            }}
             onMouseEnter={() => audio.playHover()}
             className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-800 text-yellow-400 flex items-center justify-center border-2 border-indigo-500/50 hover:border-yellow-400 shadow-[0_4px_0_#1e1b4b,0_6px_15px_rgba(0,0,0,0.4)] transition-all duration-100 ease-in-out active:translate-y-[2px] active:shadow-[0_1px_0_#1e1b4b] hover:bg-slate-700"
           >
@@ -1786,7 +1963,7 @@ export default function Games() {
               <span>🔥</span> Chọn Game Để Tạo Phòng
             </h2>
             <div
-              className="flex gap-5 overflow-x-auto overscroll-x-contain px-2 py-6 snap-x snap-proximity hide-scrollbar"
+              className="flex gap-5 overflow-x-auto overscroll-x-contain px-16 py-16 snap-x snap-proximity hide-scrollbar"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', touchAction: 'pan-x' }}
             >
               {gamesData.map((game) => (

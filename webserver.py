@@ -839,6 +839,32 @@ def api_update_game_room(room_id):
         return jsonify({'deleted': True})
     return jsonify(room)
 
+@app.route('/api/games/rooms/<int:room_id>/chat', methods=['GET', 'POST'])
+def api_game_room_chat(room_id):
+    games_cog = bot_instance.get_cog('Game') if bot_instance else None
+    if games_cog is None:
+        return jsonify({'error': 'Game service is not available.'}), 503
+
+    if request.method == 'GET':
+        user_id = request.args.get('userId')
+        if not user_id:
+            return jsonify({'error': 'Thiếu thông tin người dùng.'}), 400
+        messages = games_cog.get_room_messages(room_id, user_id)
+        if messages is None:
+            return jsonify({'error': 'Bạn không phải thành viên của phòng này.'}), 409
+        return jsonify(messages)
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('userId'), str):
+        return jsonify({'error': 'Thiếu thông tin người dùng.'}), 400
+    content = data.get('content')
+    if not isinstance(content, str) or not content.strip() or len(content.strip()) > 500:
+        return jsonify({'error': 'Tin nhắn phải có từ 1 đến 500 ký tự.'}), 400
+    message = games_cog.send_room_message(room_id, data['userId'], content)
+    if message is None:
+        return jsonify({'error': 'Không thể gửi tin nhắn trong phòng này.'}), 409
+    return jsonify(message), 201
+
 @app.route('/api/games/rooms/<int:room_id>/<action>', methods=['POST'])
 def api_game_room_action(room_id, action):
     games_cog = bot_instance.get_cog('Game') if bot_instance else None
