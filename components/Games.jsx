@@ -757,7 +757,7 @@ const DiscordAuthTimelineModal = ({ steps, connectionState, error, onClose, onRe
         <div className="mt-6 flex justify-center gap-3">
           {isConnected ? (
             <button onClick={onClose} className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold hover:bg-indigo-500">
-              Vào giao diện Games
+              Đóng
             </button>
           ) : connectionState === 'error' ? (
             <button onClick={onRetry} className="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold hover:bg-indigo-500">
@@ -885,6 +885,8 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
   const isUserBlack = room.blackPlayer?.id === currentUser.id;
   const isUserRed = room.redPlayer?.id === currentUser.id;
   const isFlipped = isUserBlack;
+  const userSide = isUserRed ? 'red' : isUserBlack ? 'black' : 'red';
+  const otherSide = userSide === 'red' ? 'black' : 'red';
 
   const swapRequest = room.swapRequest;
   const isTargetOfSwap = !isPlaying && swapRequest && swapRequest.targetId === currentUser.id;
@@ -1240,8 +1242,8 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
       {/* Main Arena Content */}
       <div className="grid flex-1 min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-1.5 p-1.5 sm:gap-2 sm:p-2 z-10 overflow-hidden w-full max-w-4xl mx-auto">
         <div className="flex min-w-0 flex-col justify-center gap-2">
-          {renderPlayerSlot('red', room.redPlayer)}
-          {renderPlayerSlot('black', room.blackPlayer)}
+          {renderPlayerSlot(otherSide, room[`${otherSide}Player`])}
+          {renderPlayerSlot(userSide, room[`${userSide}Player`])}
         </div>
 
         <div className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden py-1">
@@ -1513,6 +1515,7 @@ export default function Games() {
           setUserProfile(profile);
           setConnectionState('connected');
           setConnectionError('');
+          setShowAuthTimeline(false);
         }
       })
       .catch((error) => {
