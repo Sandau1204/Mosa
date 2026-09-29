@@ -550,9 +550,6 @@ export default function GameHub() {
       {/* Header & Avatar Người Dùng Discord */}
       <header className="flex justify-between items-center p-4 md:p-6 z-20">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl shadow-lg border border-indigo-400/50">
-            🎮
-          </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] tracking-tight">
               GAME HUB <span className="text-yellow-300">MOSA</span>
@@ -661,7 +658,7 @@ export default function GameHub() {
           <div className="bg-slate-900/80 backdrop-blur-xl rounded-[2rem] shadow-2xl p-5 border-2 border-indigo-500/40 flex-1 flex flex-col max-h-[500px] xl:max-h-[580px]">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-black text-amber-400 flex items-center gap-2">
-                <span>💬</span> Phòng Mẫu
+                <span>💬</span> Phòng
               </h3>
               <button
                 onMouseEnter={() => audio.playHover()}
