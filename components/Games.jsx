@@ -1419,8 +1419,8 @@ export default function Games() {
           </section>
         )}
 
-        {/* Sidebar: Danh Sách Phòng (Luôn Hiển Thị) */}
-        <aside className={`xl:w-[400px] w-full flex flex-col mb-4 xl:mb-0 transition-all ${currentView === 'room' ? 'hidden xl:flex' : 'flex'}`}>
+        {/* Sidebar: Danh Sách Phòng */}
+        <aside className={`xl:w-[400px] w-full flex flex-col mb-4 xl:mb-0 transition-all ${currentView === 'room' ? 'hidden' : 'flex'}`}>
           <div className="bg-slate-900/80 backdrop-blur-xl rounded-[2rem] shadow-2xl p-5 border-2 border-indigo-500/40 flex-1 flex flex-col h-full xl:max-h-[70vh]">
             <div className="flex justify-between items-center mb-4 shrink-0">
               <h3 className="text-xl font-black text-amber-400 flex items-center gap-2">
