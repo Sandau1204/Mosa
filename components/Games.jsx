@@ -105,6 +105,50 @@ const createAudioEngine = () => {
     osc.start();
     osc.stop(ctx.currentTime + 0.15);
   };
+  const playMove = (pieceType, isCapture) => {
+    if (isMuted || !ctx) return;
+
+    const time = ctx.currentTime;
+    const duration = isCapture ? 0.085 : 0.055;
+    const noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duration), ctx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let index = 0; index < noiseData.length; index++) {
+      noiseData[index] = (Math.random() * 2 - 1) * (1 - index / noiseData.length);
+    }
+
+    const noise = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const noiseGain = ctx.createGain();
+    noise.buffer = noiseBuffer;
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(isCapture ? 1800 : 1250, time);
+    noiseGain.gain.setValueAtTime(isCapture ? 0.22 : 0.15, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start(time);
+    noise.stop(time + duration);
+
+    const capturePitches = { K: 125, A: 185, E: 220, H: 285, R: 105, C: 350, P: 420 };
+    const impact = ctx.createOscillator();
+    const impactGain = ctx.createGain();
+    impact.type = isCapture ? 'triangle' : 'sine';
+    impact.frequency.setValueAtTime(
+      isCapture ? capturePitches[pieceType] : 190,
+      time
+    );
+    impact.frequency.exponentialRampToValueAtTime(
+      isCapture ? Math.max(55, capturePitches[pieceType] * 0.55) : 95,
+      time + (isCapture ? 0.12 : 0.08)
+    );
+    impactGain.gain.setValueAtTime(isCapture ? 0.12 : 0.08, time);
+    impactGain.gain.exponentialRampToValueAtTime(0.001, time + (isCapture ? 0.12 : 0.08));
+    impact.connect(impactGain);
+    impactGain.connect(ctx.destination);
+    impact.start(time);
+    impact.stop(time + (isCapture ? 0.13 : 0.09));
+  };
   const playCheck = () => {
     if (isMuted || !ctx) return;
     const time = ctx.currentTime;
@@ -152,7 +196,7 @@ const createAudioEngine = () => {
       ctx.resume();
     }
   };
-  return { init, playHover, playClick, playCheck, startBGM, setMuted };
+  return { init, playHover, playClick, playMove, playCheck, startBGM, setMuted };
 };
 
 const audio = createAudioEngine();
@@ -438,7 +482,7 @@ const XiangqiBoard = ({ board, isFlipped = false, isPlaying = false, activeSide,
                   key={`move-${x}-${y}`}
                   aria-label={`Di chuyển đến ${x + 1}, ${y + 1}`}
                   onClick={() => onMove(selectedPiece.x, selectedPiece.y, x, y)}
-                  className={`absolute z-20 h-[clamp(18px,2.5vw,30px)] w-[clamp(18px,2.5vw,30px)] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-emerald-800/80 bg-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.8)] hover:scale-125`}
+                  className={`absolute z-20 h-[clamp(10px,1.6vw,18px)] w-[clamp(10px,1.6vw,18px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-800/80 bg-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.8)] hover:scale-125`}
                   style={{ left: `${(x / 8) * 100}%`, top: `${(y / 9) * 100}%` }}
                 />
               );
@@ -486,6 +530,7 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
   const [legalMoves, setLegalMoves] = useState([]);
   const [moveError, setMoveError] = useState('');
   const previousCheckSide = useRef(room.checkSide);
+  const previousBoard = useRef({ roomId: room.id, revision: room.revision, board: room.board || [] });
   const isPlaying = room.status === 'playing';
   // Nếu người dùng đang đóng vai Phe Đen -> Đảo ngược góc nhìn bàn cờ để Đen ở dưới
   const isUserBlack = room.blackPlayer?.id === currentUser.id;
@@ -507,6 +552,23 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
     setLegalMoves([]);
     setMoveError('');
   }, [room.id, room.revision]);
+
+  useEffect(() => {
+    const previous = previousBoard.current;
+    const board = room.board || [];
+    if (previous.roomId === room.id && previous.revision !== room.revision) {
+      const previousSquares = new Map(previous.board.map(piece => [`${piece.x},${piece.y}`, piece]));
+      const currentSquares = new Map(board.map(piece => [`${piece.x},${piece.y}`, piece]));
+      const from = [...previousSquares.entries()].find(([square]) => !currentSquares.has(square));
+      const to = [...currentSquares.entries()].find(([square]) => !previousSquares.has(square));
+
+      if (from && to && from[1].side === to[1].side && from[1].type === to[1].type) {
+        const [toX, toY] = to[0].split(',').map(Number);
+        audio.playMove(from[1].type, previousSquares.has(`${toX},${toY}`));
+      }
+    }
+    previousBoard.current = { roomId: room.id, revision: room.revision, board };
+  }, [room.id, room.revision, room.board]);
 
   useEffect(() => {
     if (room.checkSide && room.checkSide !== previousCheckSide.current) {
@@ -747,19 +809,34 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
         
         {/* Board Container */}
         <div className="relative my-1 flex items-center justify-center shrink-0 w-full">
-          <XiangqiBoard 
-            board={room.board || []}
-            isFlipped={isFlipped} 
-            isPlaying={isPlaying}
-            activeSide={room.clock?.activeSide}
-            playerSide={isUserRed ? 'red' : isUserBlack ? 'black' : null}
-            selectablePieces={room.selectablePieces || []}
-            selectedPiece={selectedPiece}
-            legalMoves={legalMoves}
-            checkSide={room.checkSide}
-            onSelectPiece={handleSelectPiece}
-            onMove={handleMove}
-          />
+          <div className="relative">
+            <XiangqiBoard
+              board={room.board || []}
+              isFlipped={isFlipped}
+              isPlaying={isPlaying}
+              activeSide={room.clock?.activeSide}
+              playerSide={isUserRed ? 'red' : isUserBlack ? 'black' : null}
+              selectablePieces={room.selectablePieces || []}
+              selectedPiece={selectedPiece}
+              legalMoves={legalMoves}
+              checkSide={room.checkSide}
+              onSelectPiece={handleSelectPiece}
+              onMove={handleMove}
+            />
+            {room.status === 'finished' && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 rounded-xl border-4 border-amber-900 bg-slate-950/75 px-6 text-center shadow-inner backdrop-blur-[2px]">
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-amber-300">Ván đấu kết thúc</p>
+                <p role="status" className={`max-w-[340px] text-base font-black md:text-xl ${isUserRed || isUserBlack ? room.winner === (isUserRed ? 'red' : 'black') ? 'text-emerald-300' : 'text-rose-300' : 'text-amber-100'}`}>
+                  {room.result || 'Ván đấu đã kết thúc.'}
+                </p>
+                {room.winner && (isUserRed || isUserBlack) && (
+                  <p className={`text-sm font-bold ${room.winner === (isUserRed ? 'red' : 'black') ? 'text-emerald-200' : 'text-rose-200'}`}>
+                    {room.winner === (isUserRed ? 'red' : 'black') ? 'Bạn thắng!' : 'Bạn thua!'}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {isPlaying && room.checkSide && (
@@ -768,12 +845,6 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onMove, 
           </p>
         )}
         {moveError && <p role="alert" className="text-sm font-bold text-rose-300">{moveError}</p>}
-        {room.result && (
-          <p role="status" className={`max-w-[440px] text-center text-sm font-black ${isUserRed || isUserBlack ? room.winner === (isUserRed ? 'red' : 'black') ? 'text-emerald-300' : 'text-rose-300' : 'text-amber-300'}`}>
-            {room.result} {room.winner && (isUserRed || isUserBlack) ? (room.winner === (isUserRed ? 'red' : 'black') ? 'Bạn thắng!' : 'Bạn thua!') : ''}
-          </p>
-        )}
-
         {/* Bottom Player Slot (Bạn / Phe phía dưới) */}
         <div className="shrink-0 flex items-center justify-center">
           {renderPlayerSlot(bottomSide, bottomPlayer)}
