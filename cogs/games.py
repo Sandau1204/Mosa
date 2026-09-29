@@ -1,19 +1,21 @@
 import json
+import logging
 import os
 import threading
 import time
+import uuid
 from copy import deepcopy
 from typing import Any
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 
 DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
 GAME_DATA_FILE = os.path.join(DATA_FOLDER, "games.json")
 INITIAL_CLOCK_MS = 20 * 60 * 1000
 MOVE_INCREMENT_MS = 5 * 1000
-PRESENCE_TIMEOUT_SECONDS = 20
+PRESENCE_TIMEOUT_SECONDS = 60
 
 
 def initial_board():
@@ -42,6 +44,21 @@ class Game(commands.Cog):
             for room_id, room in self._rooms.items()
             for user_id in self._participant_ids(room)
         }
+        self.cleanup_inactive_rooms.start()
+
+    def cog_unload(self):
+        self.cleanup_inactive_rooms.cancel()
+
+    @tasks.loop(seconds=10)
+    async def cleanup_inactive_rooms(self):
+        try:
+            self.get_rooms()
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to clean up inactive game rooms.")
+
+    @cleanup_inactive_rooms.before_loop
+    async def before_cleanup_inactive_rooms(self):
+        await self.bot.wait_until_ready()
 
     @staticmethod
     def _participant_ids(room: dict[str, Any]) -> list[str]:
@@ -50,7 +67,11 @@ class Game(commands.Cog):
         return [
             person["id"]
             for person in [*players, *observers]
-            if isinstance(person, dict) and isinstance(person.get("id"), str)
+            if (
+                isinstance(person, dict)
+                and not person.get("isBot")
+                and isinstance(person.get("id"), str)
+            )
         ]
 
     @staticmethod
@@ -242,7 +263,7 @@ class Game(commands.Cog):
         active_rooms = {
             room_id: room
             for room_id, room in rooms.items()
-            if room.get("redPlayer") or room.get("blackPlayer") or room.get("observers")
+            if self._participant_ids(room)
         }
         for room in active_rooms.values():
             room.setdefault("board", initial_board())
@@ -274,6 +295,16 @@ class Game(commands.Cog):
             previous_rooms = deepcopy(self._rooms)
             previous_last_seen = dict(self._last_seen)
             for room_id, room in list(self._rooms.items()):
+                if not self._participant_ids(room):
+                    self._rooms.pop(room_id, None)
+                    self._last_seen = {
+                        key: seen_at
+                        for key, seen_at in self._last_seen.items()
+                        if key[0] != room_id
+                    }
+                    changed = True
+                    continue
+
                 previous_participants = self._participant_ids(room)
                 stale_ids = {
                     user_id
@@ -350,7 +381,342 @@ class Game(commands.Cog):
             self._last_seen[(room_key, user_id)] = time.time()
             return True
 
-    def create_room(self, room: dict[str, Any]) -> bool:
+    def join_room(
+        self,
+        room_id: int,
+        user: dict[str, Any],
+        side: str | None = None,
+    ) -> dict[str, Any] | None:
+        user_id = user.get("id")
+        if (
+            not isinstance(user_id, str)
+            or not user_id
+            or not isinstance(user.get("name"), str)
+            or not user["name"].strip()
+            or side not in (None, "red", "black", "observer")
+        ):
+            return None
+
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            if room is None:
+                return None
+            previous_room = deepcopy(room)
+            existing_side = next(
+                (
+                    player_side
+                    for player_side in ("red", "black")
+                    if (room.get(f"{player_side}Player") or {}).get("id") == user_id
+                ),
+                None,
+            )
+            observers = room.setdefault("observers", [])
+            if any(observer.get("id") == user_id for observer in observers):
+                observers[:] = [observer for observer in observers if observer.get("id") != user_id]
+
+            if side in ("red", "black", "observer") and room.get("status") == "playing":
+                if side == "observer" and existing_side is None:
+                    observers.append(user)
+                elif side != existing_side:
+                    self._rooms[str(room_id)] = previous_room
+                    return None
+            elif side == "observer":
+                for player_side in ("red", "black"):
+                    if (room.get(f"{player_side}Player") or {}).get("id") == user_id:
+                        room[f"{player_side}Player"] = None
+                        room[f"{player_side}Ready"] = False
+                observers.append(user)
+            elif side in ("red", "black"):
+                current_player = room.get(f"{side}Player")
+                if current_player and current_player.get("id") != user_id:
+                    self._rooms[str(room_id)] = previous_room
+                    return None
+                for player_side in ("red", "black"):
+                    if player_side != side and (room.get(f"{player_side}Player") or {}).get("id") == user_id:
+                        room[f"{player_side}Player"] = None
+                        room[f"{player_side}Ready"] = False
+                room[f"{side}Player"] = user
+                room[f"{side}Ready"] = False
+            elif existing_side is None:
+                observers.append(user)
+
+            room["slots"] = f"{int(bool(room.get('redPlayer'))) + int(bool(room.get('blackPlayer')))}/2"
+            room["revision"] = room.get("revision", 0) + 1
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[str(room_id)] = previous_room
+                raise
+            self._last_seen[(str(room_id), user_id)] = time.time()
+            return self._room_state(room)
+
+    def leave_room(self, room_id: int, user_id: str) -> dict[str, Any] | None:
+        room_key = str(room_id)
+        with self._rooms_lock:
+            room = self._rooms.get(room_key)
+            if room is None:
+                return None
+            if user_id not in self._participant_ids(room):
+                return self._room_state(room)
+            previous_room = deepcopy(room)
+            player_left = False
+            for side in ("red", "black"):
+                player = room.get(f"{side}Player")
+                if player and player.get("id") == user_id:
+                    room[f"{side}Player"] = None
+                    room[f"{side}Ready"] = False
+                    player_left = True
+            room["observers"] = [
+                observer
+                for observer in room.get("observers", [])
+                if observer.get("id") != user_id
+            ]
+            self._last_seen.pop((room_key, user_id), None)
+
+            if player_left:
+                room.update({
+                    "status": "waiting",
+                    "redReady": False,
+                    "blackReady": False,
+                    "clock": None,
+                    "swapRequest": None,
+                    "drawOffer": None,
+                })
+            room["slots"] = f"{int(bool(room.get('redPlayer'))) + int(bool(room.get('blackPlayer')))}/2"
+            room["revision"] = room.get("revision", 0) + 1
+
+            if not self._participant_ids(room):
+                self._rooms.pop(room_key, None)
+                try:
+                    self._save_rooms()
+                except Exception:
+                    self._rooms[room_key] = previous_room
+                    self._last_seen[(room_key, user_id)] = time.time()
+                    raise
+                for participant_id in self._participant_ids(previous_room):
+                    self._last_seen.pop((room_key, participant_id), None)
+                return None
+
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[room_key] = previous_room
+                self._last_seen[(room_key, user_id)] = time.time()
+                raise
+            return self._room_state(room)
+
+    def add_bot(self, room_id: int, user_id: str, elo: int) -> dict[str, Any] | None:
+        if elo not in (800, 1200, 1600, 2000):
+            return None
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            if (
+                room is None
+                or room.get("status") not in ("waiting", "finished")
+                or user_id not in self._participant_ids(room)
+            ):
+                return None
+            side = next(
+                (candidate for candidate in ("red", "black") if not room.get(f"{candidate}Player")),
+                None,
+            )
+            if side is None:
+                return None
+            previous_room = deepcopy(room)
+            room[f"{side}Player"] = {
+                "id": f"bot_{uuid.uuid4().hex}",
+                "name": "Mosa Bot Alpha" if side == "red" else "Mosa Bot Beta",
+                "isBot": True,
+                "elo": elo,
+                "avatarUrl": "https://cdn.discordapp.com/embed/avatars/0.png",
+            }
+            room[f"{side}Ready"] = True
+            room["slots"] = f"{int(bool(room.get('redPlayer'))) + int(bool(room.get('blackPlayer')))}/2"
+            room["revision"] = room.get("revision", 0) + 1
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[str(room_id)] = previous_room
+                raise
+            return self._room_state(room)
+
+    def add_two_bots(
+        self,
+        room_id: int,
+        user_id: str,
+        elo_red: int,
+        elo_black: int,
+    ) -> dict[str, Any] | None:
+        if elo_red not in (800, 1200, 1600, 2000) or elo_black not in (800, 1200, 1600, 2000):
+            return None
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            if (
+                room is None
+                or room.get("status") not in ("waiting", "finished")
+                or user_id not in self._participant_ids(room)
+            ):
+                return None
+            previous_room = deepcopy(room)
+            observers = room.setdefault("observers", [])
+            for side in ("red", "black"):
+                player = room.get(f"{side}Player")
+                if player and not player.get("isBot") and not any(
+                    observer.get("id") == player.get("id") for observer in observers
+                ):
+                    observers.append(player)
+                room[f"{side}Player"] = {
+                    "id": f"bot_{uuid.uuid4().hex}",
+                    "name": "Mosa Alpha" if side == "red" else "Mosa Beta",
+                    "isBot": True,
+                    "elo": elo_red if side == "red" else elo_black,
+                    "avatarUrl": "https://cdn.discordapp.com/embed/avatars/0.png",
+                }
+                room[f"{side}Ready"] = True
+            now = int(time.time() * 1000)
+            room.update({
+                "status": "playing",
+                "board": initial_board(),
+                "checkSide": None,
+                "selectablePieces": self._selectable_pieces(initial_board(), "red"),
+                "winner": None,
+                "result": None,
+                "drawOffer": None,
+                "clock": {
+                    "redMs": INITIAL_CLOCK_MS,
+                    "blackMs": INITIAL_CLOCK_MS,
+                    "incrementMs": MOVE_INCREMENT_MS,
+                    "activeSide": "red",
+                    "turnStartedAt": now,
+                },
+                "slots": "2/2",
+                "revision": room.get("revision", 0) + 1,
+            })
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[str(room_id)] = previous_room
+                raise
+            return self._room_state(room)
+
+    def remove_bot(self, room_id: int, user_id: str, side: str) -> dict[str, Any] | None:
+        if side not in ("red", "black"):
+            return None
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            player = room.get(f"{side}Player") if room else None
+            if (
+                room is None
+                or room.get("status") not in ("waiting", "finished")
+                or user_id not in self._participant_ids(room)
+                or not player
+                or not player.get("isBot")
+            ):
+                return None
+            previous_room = deepcopy(room)
+            room[f"{side}Player"] = None
+            room[f"{side}Ready"] = False
+            room["slots"] = f"{int(bool(room.get('redPlayer'))) + int(bool(room.get('blackPlayer')))}/2"
+            room["revision"] = room.get("revision", 0) + 1
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[str(room_id)] = previous_room
+                raise
+            return self._room_state(room)
+
+    def request_swap(
+        self,
+        room_id: int,
+        user_id: str,
+        target_user_id: str,
+    ) -> dict[str, Any] | None:
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            requester_side = next(
+                (
+                    side for side in ("red", "black")
+                    if (room.get(f"{side}Player") or {}).get("id") == user_id
+                ),
+                None,
+            ) if room else None
+            target_side = "black" if requester_side == "red" else "red"
+            target = room.get(f"{target_side}Player") if room else None
+            if (
+                room is None
+                or room.get("status") not in ("waiting", "finished")
+                or requester_side is None
+                or not target
+                or target.get("isBot")
+                or target.get("id") != target_user_id
+                or room.get("swapRequest")
+            ):
+                return None
+            previous_room = deepcopy(room)
+            room["swapRequest"] = {
+                "requesterId": user_id,
+                "requesterName": room[f"{requester_side}Player"].get("name"),
+                "targetId": target_user_id,
+            }
+            room["revision"] = room.get("revision", 0) + 1
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[str(room_id)] = previous_room
+                raise
+            return self._room_state(room)
+
+    def respond_swap(
+        self,
+        room_id: int,
+        user_id: str,
+        accepted: bool,
+    ) -> dict[str, Any] | None:
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            swap_request = room.get("swapRequest") if room else None
+            if (
+                room is None
+                or room.get("status") not in ("waiting", "finished")
+                or not isinstance(swap_request, dict)
+                or swap_request.get("targetId") != user_id
+            ):
+                return None
+            previous_room = deepcopy(room)
+            if accepted:
+                room["redPlayer"], room["blackPlayer"] = room.get("blackPlayer"), room.get("redPlayer")
+                room["redReady"] = False
+                room["blackReady"] = False
+            room["swapRequest"] = None
+            room["revision"] = room.get("revision", 0) + 1
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[str(room_id)] = previous_room
+                raise
+            return self._room_state(room)
+
+    def cancel_swap(self, room_id: int, user_id: str) -> dict[str, Any] | None:
+        with self._rooms_lock:
+            room = self._rooms.get(str(room_id))
+            swap_request = room.get("swapRequest") if room else None
+            if (
+                room is None
+                or not isinstance(swap_request, dict)
+                or swap_request.get("requesterId") != user_id
+            ):
+                return None
+            previous_room = deepcopy(room)
+            room["swapRequest"] = None
+            room["revision"] = room.get("revision", 0) + 1
+            try:
+                self._save_rooms()
+            except Exception:
+                self._rooms[str(room_id)] = previous_room
+                raise
+            return self._room_state(room)
+
+    def create_room(self, room: dict[str, Any]) -> dict[str, Any] | None:
         room_id = str(room["id"])
         with self._rooms_lock:
             if room_id in self._rooms:
@@ -375,7 +741,7 @@ class Game(commands.Cog):
                 for user_id in self._participant_ids(room):
                     self._last_seen.pop((room_id, str(user_id)), None)
                 raise
-            return True
+            return self._room_state(room)
 
     def update_room(self, room_id: int, room: dict[str, Any]) -> bool | str | None:
         key = str(room_id)
@@ -415,7 +781,7 @@ class Game(commands.Cog):
                 room["redReady"] = previous_room.get("redReady", False)
                 room["blackReady"] = previous_room.get("blackReady", False)
             room["revision"] = previous_room.get("revision", 0) + 1
-            if not (room.get("redPlayer") or room.get("blackPlayer") or room.get("observers")):
+            if not self._participant_ids(room):
                 del self._rooms[key]
                 try:
                     self._save_rooms()

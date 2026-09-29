@@ -268,44 +268,6 @@ const BOT_ELO_PRESETS = [
   },
 ];
 
-const INITIAL_XIANGQI_BOARD = [
-  // Black pieces (y: 0..3)
-  { id: 'b_r1', type: 'R', side: 'black', x: 0, y: 0 },
-  { id: 'b_h1', type: 'H', side: 'black', x: 1, y: 0 },
-  { id: 'b_e1', type: 'E', side: 'black', x: 2, y: 0 },
-  { id: 'b_a1', type: 'A', side: 'black', x: 3, y: 0 },
-  { id: 'b_k',  type: 'K', side: 'black', x: 4, y: 0 },
-  { id: 'b_a2', type: 'A', side: 'black', x: 5, y: 0 },
-  { id: 'b_e2', type: 'E', side: 'black', x: 6, y: 0 },
-  { id: 'b_h2', type: 'H', side: 'black', x: 7, y: 0 },
-  { id: 'b_r2', type: 'R', side: 'black', x: 8, y: 0 },
-  { id: 'b_c1', type: 'C', side: 'black', x: 1, y: 2 },
-  { id: 'b_c2', type: 'C', side: 'black', x: 7, y: 2 },
-  { id: 'b_p1', type: 'P', side: 'black', x: 0, y: 3 },
-  { id: 'b_p2', type: 'P', side: 'black', x: 2, y: 3 },
-  { id: 'b_p3', type: 'P', side: 'black', x: 4, y: 3 },
-  { id: 'b_p4', type: 'P', side: 'black', x: 6, y: 3 },
-  { id: 'b_p5', type: 'P', side: 'black', x: 8, y: 3 },
-
-  // Red pieces (y: 6..9)
-  { id: 'r_r1', type: 'R', side: 'red', x: 0, y: 9 },
-  { id: 'r_h1', type: 'H', side: 'red', x: 1, y: 9 },
-  { id: 'r_e1', type: 'E', side: 'red', x: 2, y: 9 },
-  { id: 'r_a1', type: 'A', side: 'red', x: 3, y: 9 },
-  { id: 'r_k',  type: 'K', side: 'red', x: 4, y: 9 },
-  { id: 'r_a2', type: 'A', side: 'red', x: 5, y: 9 },
-  { id: 'r_e2', type: 'E', side: 'red', x: 6, y: 9 },
-  { id: 'r_h2', type: 'H', side: 'red', x: 7, y: 9 },
-  { id: 'r_r2', type: 'R', side: 'red', x: 8, y: 9 },
-  { id: 'r_c1', type: 'C', side: 'red', x: 1, y: 7 },
-  { id: 'r_c2', type: 'C', side: 'red', x: 7, y: 7 },
-  { id: 'r_p1', type: 'P', side: 'red', x: 0, y: 6 },
-  { id: 'r_p2', type: 'P', side: 'red', x: 2, y: 6 },
-  { id: 'r_p3', type: 'P', side: 'red', x: 4, y: 6 },
-  { id: 'r_p4', type: 'P', side: 'red', x: 6, y: 6 },
-  { id: 'r_p5', type: 'P', side: 'red', x: 8, y: 6 },
-];
-
 function getPieceAt(board, x, y) {
   return board.find(p => p.x === x && p.y === y) || null;
 }
@@ -604,205 +566,6 @@ function getBestMoveByElo(board, botSide, elo = 1200) {
   // 2000 ELO (Đại Kiện Tướng): Minimax Depth 3
   const result = minimax(board, 3, -Infinity, Infinity, true, botSide);
   return result.move || allMoves[0];
-}
-
-function performLocalRoomAction(room, action, payload, currentUser) {
-  const cloned = JSON.parse(JSON.stringify(room));
-
-  if (action === 'ready') {
-    if (cloned.redPlayer?.id === currentUser.id) cloned.redReady = payload.ready;
-    if (cloned.blackPlayer?.id === currentUser.id) cloned.blackReady = payload.ready;
-
-    const redIsReady = cloned.redPlayer && (cloned.redReady || cloned.redPlayer.isBot);
-    const blackIsReady = cloned.blackPlayer && (cloned.blackReady || cloned.blackPlayer.isBot);
-
-    if (redIsReady && blackIsReady) {
-      cloned.status = 'playing';
-      cloned.board = INITIAL_XIANGQI_BOARD;
-      cloned.clock = { activeSide: 'red', redMs: 1200000, blackMs: 1200000, turnStartedAt: Date.now() };
-      cloned.selectablePieces = getSelectablePiecesLocal(cloned.board, 'red');
-      cloned.checkSide = isKingInCheck(cloned.board, 'red') ? 'red' : null;
-    }
-    cloned.revision++;
-    return cloned;
-  }
-
-  if (action === 'add-bot') {
-    const elo = payload.elo || 1200;
-    const preset = BOT_ELO_PRESETS.find(p => p.elo === elo) || BOT_ELO_PRESETS[1];
-    const isRedTaken = !!cloned.redPlayer;
-    const botNum = isRedTaken ? 2 : 1;
-    const botUser = {
-      id: `bot_${Date.now()}_${botNum}`,
-      name: `Mosa Bot ${botNum === 1 ? 'Alpha' : 'Beta'}`,
-      isBot: true,
-      elo: preset.elo,
-      eloTitle: preset.title,
-      badgeColor: preset.badgeColor,
-      avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
-    };
-    if (!cloned.redPlayer) {
-      cloned.redPlayer = botUser;
-      cloned.redReady = true;
-    } else if (!cloned.blackPlayer) {
-      cloned.blackPlayer = botUser;
-      cloned.blackReady = true;
-    }
-    cloned.slots = `${(cloned.redPlayer ? 1 : 0) + (cloned.blackPlayer ? 1 : 0)}/2`;
-    cloned.revision++;
-    return cloned;
-  }
-
-  if (action === 'add-two-bots') {
-    const elo1 = payload.elo1 || 1200;
-    const elo2 = payload.elo2 || 1600;
-    const preset1 = BOT_ELO_PRESETS.find(p => p.elo === elo1) || BOT_ELO_PRESETS[1];
-    const preset2 = BOT_ELO_PRESETS.find(p => p.elo === elo2) || BOT_ELO_PRESETS[2];
-
-    if (cloned.redPlayer && !cloned.redPlayer.isBot) {
-      if (!cloned.observers.some(o => o.id === cloned.redPlayer.id)) {
-        cloned.observers.push(cloned.redPlayer);
-      }
-    }
-    if (cloned.blackPlayer && !cloned.blackPlayer.isBot) {
-      if (!cloned.observers.some(o => o.id === cloned.blackPlayer.id)) {
-        cloned.observers.push(cloned.blackPlayer);
-      }
-    }
-
-    cloned.redPlayer = {
-      id: `bot_alpha_${Date.now()}`,
-      name: "Mosa Alpha 🤖",
-      isBot: true,
-      elo: preset1.elo,
-      eloTitle: preset1.title,
-      badgeColor: preset1.badgeColor,
-      avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
-    };
-    cloned.redReady = true;
-
-    cloned.blackPlayer = {
-      id: `bot_beta_${Date.now()}`,
-      name: "Mosa Beta 🤖",
-      isBot: true,
-      elo: preset2.elo,
-      eloTitle: preset2.title,
-      badgeColor: preset2.badgeColor,
-      avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png'
-    };
-    cloned.blackReady = true;
-
-    cloned.slots = "2/2";
-    cloned.status = 'playing';
-    cloned.board = INITIAL_XIANGQI_BOARD;
-    cloned.clock = { activeSide: 'red', redMs: 1200000, blackMs: 1200000, turnStartedAt: Date.now() };
-    cloned.selectablePieces = getSelectablePiecesLocal(cloned.board, 'red');
-    cloned.checkSide = isKingInCheck(cloned.board, 'red') ? 'red' : null;
-    cloned.revision++;
-    return cloned;
-  }
-
-  if (action === 'remove-bot') {
-    const targetSide = payload.side;
-    if (targetSide === 'red' && cloned.redPlayer?.isBot) {
-      cloned.redPlayer = null;
-      cloned.redReady = false;
-    } else if (targetSide === 'black' && cloned.blackPlayer?.isBot) {
-      cloned.blackPlayer = null;
-      cloned.blackReady = false;
-    } else {
-      if (cloned.redPlayer?.isBot) {
-        cloned.redPlayer = null;
-        cloned.redReady = false;
-      } else if (cloned.blackPlayer?.isBot) {
-        cloned.blackPlayer = null;
-        cloned.blackReady = false;
-      }
-    }
-    cloned.slots = `${(cloned.redPlayer ? 1 : 0) + (cloned.blackPlayer ? 1 : 0)}/2`;
-    cloned.revision++;
-    return cloned;
-  }
-
-  if (action === 'move') {
-    const { fromX, fromY, toX, toY } = payload;
-    const currentBoard = cloned.board || [];
-    const activeSide = cloned.clock?.activeSide || 'red';
-
-    const movingPiece = getPieceAt(currentBoard, fromX, fromY);
-    if (!movingPiece || movingPiece.side !== activeSide) return cloned;
-
-    const nextBoard = currentBoard
-      .filter(p => !(p.x === toX && p.y === toY))
-      .map(p => (p.x === fromX && p.y === fromY ? { ...p, x: toX, y: toY } : p));
-
-    const nextSide = activeSide === 'red' ? 'black' : 'red';
-    const checkSide = isKingInCheck(nextBoard, nextSide) ? nextSide : null;
-    const nextSelectables = getSelectablePiecesLocal(nextBoard, nextSide);
-
-    const enemyKingCaptured = !nextBoard.some(p => p.type === 'K' && p.side === nextSide);
-    const isCheckmate = nextSelectables.length === 0;
-
-    cloned.board = nextBoard;
-    cloned.revision++;
-    cloned.checkSide = checkSide;
-
-    if (enemyKingCaptured || isCheckmate) {
-      cloned.status = 'finished';
-      cloned.winner = activeSide;
-      cloned.result = enemyKingCaptured
-        ? `Tướng phe ${nextSide === 'red' ? 'Đỏ' : 'Đen'} đã bị bắt!`
-        : `Phe ${nextSide === 'red' ? 'Đỏ' : 'Đen'} hết nước đi (Bị chiếu bí/Hết nước)!`;
-    } else {
-      cloned.clock = {
-        ...cloned.clock,
-        activeSide: nextSide,
-        turnStartedAt: Date.now()
-      };
-      cloned.selectablePieces = nextSelectables;
-    }
-    return cloned;
-  }
-
-  if (action === 'surrender') {
-    const userSide = cloned.redPlayer?.id === currentUser.id ? 'red' : 'black';
-    const winnerSide = userSide === 'red' ? 'black' : 'red';
-    cloned.status = 'finished';
-    cloned.winner = winnerSide;
-    cloned.result = `Phe ${userSide === 'red' ? 'Đỏ' : 'Đen'} đã xin đầu hàng.`;
-    cloned.revision++;
-    return cloned;
-  }
-
-  if (action === 'draw-request') {
-    const targetPlayer = cloned.redPlayer?.id === currentUser.id ? cloned.blackPlayer : cloned.redPlayer;
-    if (targetPlayer) {
-      cloned.drawOffer = { requesterId: currentUser.id, requesterName: currentUser.name, targetId: targetPlayer.id, status: 'pending' };
-      cloned.revision++;
-    }
-    return cloned;
-  }
-
-  if (action === 'draw-response') {
-    if (payload.accepted) {
-      cloned.status = 'finished';
-      cloned.winner = null;
-      cloned.result = 'Ván đấu hòa do hai bên đồng ý.';
-      cloned.drawOffer = null;
-    } else {
-      if (cloned.drawOffer) cloned.drawOffer.status = 'declined';
-    }
-    cloned.revision++;
-    return cloned;
-  }
-
-  if (action === 'rename') {
-    if (payload.name) cloned.name = payload.name;
-    cloned.revision++;
-    return cloned;
-  }
-
-  return cloned;
 }
 
 const CanvasBackground = () => {
@@ -1240,7 +1003,7 @@ const XiangqiBoard = ({ board, isFlipped = false, isPlaying = false, activeSide,
   );
 };
 
-const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onAddBot, onAddTwoBots, onRemoveBot, onMove, onSurrender, onRequestDraw, onRespondDraw, onRenameRoom, onRequestSwap, onAcceptSwap, onRejectSwap, onCancelSwap }) => {
+const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onReady, onAddBot, onAddTwoBots, onRemoveBot, onMove, onSurrender, onRequestDraw, onRespondDraw, onRenameRoom, onRequestSwap, onAcceptSwap, onRejectSwap, onCancelSwap }) => {
   const [clockNow, setClockNow] = useState(Date.now());
   const [isEditingName, setIsEditingName] = useState(false);
   const [roomNameDraft, setRoomNameDraft] = useState(room.name);
@@ -1473,6 +1236,11 @@ const XiangqiRoom = ({ room, currentUser, onLeave, onJoinSide, onReady, onAddBot
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-900/80 backdrop-blur-xl rounded-2xl sm:rounded-[2rem] border-2 border-rose-500/30 overflow-hidden shadow-2xl relative animate-fade-in h-full">
+      {roomError && (
+        <p role="alert" className="absolute left-1/2 top-2 z-[60] w-[min(92%,36rem)] -translate-x-1/2 rounded-lg border border-rose-500/50 bg-rose-950/95 px-3 py-2 text-center text-xs font-bold text-rose-200 shadow-lg">
+          {roomError}
+        </p>
+      )}
       {showBotEloModal && (
         <BotEloModal
           mode={botModalMode}
@@ -1818,6 +1586,48 @@ export default function Games() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeRoomId || !userProfile) return undefined;
+    let isActive = true;
+
+    const sendHeartbeat = async () => {
+      try {
+        const response = await fetch(`/api/games/rooms/${activeRoomId}/presence`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: userProfile.id })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Không thể duy trì kết nối với phòng.');
+        }
+        if (isActive && !result.active) {
+          setRoomError('Bạn không còn được ghi nhận trong phòng này. Hãy tham gia lại từ sảnh chờ.');
+          setActiveRoomId(null);
+          setCurrentView('games');
+        }
+      } catch (error) {
+        if (isActive) {
+          setRoomError(error instanceof Error ? error.message : 'Không thể duy trì kết nối với phòng.');
+        }
+      }
+    };
+
+    sendHeartbeat();
+    const intervalId = window.setInterval(sendHeartbeat, 10000);
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [activeRoomId, userProfile]);
+
+  useEffect(() => {
+    if (activeRoomId && !rooms.some((room) => room.id === activeRoomId)) {
+      setActiveRoomId(null);
+      setCurrentView('games');
+    }
+  }, [rooms, activeRoomId]);
+
   // Bot Smart Auto Move Loop (sử dụng AI Elo engine)
   useEffect(() => {
     if (!activeRoomId) return;
@@ -1941,71 +1751,81 @@ export default function Games() {
     }
   };
 
+  const syncRoomFromServer = (roomId, result) => {
+    const updated = result.deleted
+      ? roomsRef.current.filter((room) => room.id !== roomId)
+      : [result, ...roomsRef.current.filter((room) => room.id !== roomId)];
+    roomsRef.current = updated;
+    setRooms(updated);
+  };
+
   const handleJoinRoom = async (roomId) => {
     const targetRoom = rooms.find(r => r.id === roomId);
     if (!targetRoom) return;
 
-    setActiveRoomId(roomId);
-    setCurrentView('room');
-
-    const updated = roomsRef.current.map(r => {
-      if (r.id !== roomId) return r;
-      const isRed = r.redPlayer?.id === userProfile.id;
-      const isBlack = r.blackPlayer?.id === userProfile.id;
-      const isObs = r.observers.some(obs => obs.id === userProfile.id);
-      if (!isRed && !isBlack && !isObs) {
-        return { ...r, observers: [...r.observers, userProfile] };
+    try {
+      const response = await fetch(`/api/games/rooms/${roomId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userProfile.id, user: userProfile })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Không thể tham gia phòng.');
       }
-      return r;
-    });
-    roomsRef.current = updated;
-    setRooms(updated);
+      syncRoomFromServer(roomId, result);
+      setRoomError('');
+      setActiveRoomId(roomId);
+      setCurrentView('room');
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : 'Không thể tham gia phòng.');
+    }
   };
 
-  const handleLeaveRoom = () => {
+  const handleLeaveRoom = async () => {
     if (!activeRoomId) return;
-    const updated = roomsRef.current.map(r => {
-      if (r.id !== activeRoomId) return r;
-      return {
-        ...r,
-        redPlayer: r.redPlayer?.id === userProfile.id ? null : r.redPlayer,
-        blackPlayer: r.blackPlayer?.id === userProfile.id ? null : r.blackPlayer,
-        observers: r.observers.filter(obs => obs.id !== userProfile.id),
-        swapRequest: null
-      };
-    });
-    roomsRef.current = updated;
-    setRooms(updated);
-    setActiveRoomId(null);
-    setCurrentView('games');
+    const roomId = activeRoomId;
+    try {
+      const response = await fetch(`/api/games/rooms/${roomId}/leave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: userProfile.id })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Không thể rời phòng.');
+      }
+      syncRoomFromServer(roomId, result);
+      setRoomError('');
+      setActiveRoomId(null);
+      setCurrentView('games');
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : 'Không thể rời phòng.');
+    }
   };
 
-  const handleJoinSide = (side) => {
+  const handleJoinSide = async (side) => {
     if (!activeRoomId) return;
-    const updated = roomsRef.current.map(r => {
-      if (r.id !== activeRoomId) return r;
-      let newRed = r.redPlayer;
-      let newBlack = r.blackPlayer;
-      let newObservers = r.observers.filter(obs => obs.id !== userProfile.id);
-
-      if (newRed?.id === userProfile.id) newRed = null;
-      if (newBlack?.id === userProfile.id) newBlack = null;
-
-      if (side === 'red') newRed = userProfile;
-      else if (side === 'black') newBlack = userProfile;
-      else newObservers = [...newObservers, userProfile];
-
-      return {
-        ...r,
-        redPlayer: newRed,
-        blackPlayer: newBlack,
-        observers: newObservers,
-        swapRequest: null,
-        slots: `${(newRed ? 1 : 0) + (newBlack ? 1 : 0)}/2`
-      };
-    });
-    roomsRef.current = updated;
-    setRooms(updated);
+    const roomId = activeRoomId;
+    try {
+      const response = await fetch(`/api/games/rooms/${roomId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userProfile.id,
+          user: userProfile,
+          side: side || 'observer'
+        })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Không thể đổi vị trí trong phòng.');
+      }
+      syncRoomFromServer(roomId, result);
+      setRoomError('');
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : 'Không thể đổi vị trí trong phòng.');
+    }
   };
 
   const performRoomAction = async (roomId, action, payload = {}) => {
@@ -2017,23 +1837,14 @@ export default function Games() {
       });
       if (response.ok) {
         const result = await response.json();
-        const synchronized = roomsRef.current.map(room => room.id === roomId ? result : room);
-        roomsRef.current = synchronized;
-        setRooms(synchronized);
+        syncRoomFromServer(roomId, result);
         setRoomError('');
         return true;
       }
-      throw new Error('Fallback local action');
-    } catch {
-      const targetRoom = roomsRef.current.find(r => r.id === roomId);
-      if (targetRoom) {
-        const localResult = performLocalRoomAction(targetRoom, action, payload, userProfile);
-        const synchronized = roomsRef.current.map(room => room.id === roomId ? localResult : room);
-        roomsRef.current = synchronized;
-        setRooms(synchronized);
-        setRoomError('');
-        return true;
-      }
+      const result = await response.json();
+      throw new Error(result.error || 'Không thể đồng bộ thao tác với máy chủ.');
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : 'Không thể đồng bộ thao tác với máy chủ.');
       return false;
     }
   };
@@ -2049,47 +1860,14 @@ export default function Games() {
   const handleRespondDraw = (accepted) => performRoomAction(activeRoomId, 'draw-response', { accepted });
   const handleRenameRoom = (name) => performRoomAction(activeRoomId, 'rename', { name });
 
-  const handleRequestSwap = (targetUser) => {
-    const updated = roomsRef.current.map(r => {
-      if (r.id !== activeRoomId || r.swapRequest) return r;
-      return {
-        ...r,
-        swapRequest: {
-          requesterId: userProfile.id,
-          requesterName: userProfile.name,
-          targetId: targetUser.id
-        }
-      };
-    });
-    roomsRef.current = updated;
-    setRooms(updated);
-  };
-
-  const handleAcceptSwap = () => {
-    const updated = roomsRef.current.map(r => {
-      if (r.id !== activeRoomId || !r.swapRequest) return r;
-      return {
-        ...r,
-        redPlayer: r.blackPlayer,
-        blackPlayer: r.redPlayer,
-        swapRequest: null
-      };
-    });
-    roomsRef.current = updated;
-    setRooms(updated);
-  };
-
-  const handleRejectSwap = () => {
-    const updated = roomsRef.current.map(r => r.id === activeRoomId ? ({ ...r, swapRequest: null }) : r);
-    roomsRef.current = updated;
-    setRooms(updated);
-  };
-
-  const handleCancelSwap = () => {
-    const updated = roomsRef.current.map(r => r.id === activeRoomId ? ({ ...r, swapRequest: null }) : r);
-    roomsRef.current = updated;
-    setRooms(updated);
-  };
+  const handleRequestSwap = (targetUser) =>
+    performRoomAction(activeRoomId, 'swap-request', { targetUserId: targetUser.id });
+  const handleAcceptSwap = () =>
+    performRoomAction(activeRoomId, 'swap-response', { accepted: true });
+  const handleRejectSwap = () =>
+    performRoomAction(activeRoomId, 'swap-response', { accepted: false });
+  const handleCancelSwap = () =>
+    performRoomAction(activeRoomId, 'swap-cancel');
 
   const activeRoomData = rooms.find(r => r.id === activeRoomId);
 
@@ -2176,6 +1954,7 @@ export default function Games() {
               <XiangqiRoom 
                 room={activeRoomData} 
                 currentUser={userProfile}
+                roomError={roomError}
                 onLeave={handleLeaveRoom}
                 onJoinSide={handleJoinSide}
                 onReady={handleReady}

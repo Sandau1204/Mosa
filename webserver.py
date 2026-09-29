@@ -817,9 +817,10 @@ def api_game_rooms():
     if not isinstance(room.get('name'), str) or not room['name'].strip():
         return jsonify({'error': 'Tên phòng không hợp lệ.'}), 400
 
-    if not games_cog.create_room(room):
+    created_room = games_cog.create_room(room)
+    if created_room is None:
         return jsonify({'error': 'Phòng này đã tồn tại.'}), 409
-    return jsonify(room), 201
+    return jsonify(created_room), 201
 
 @app.route('/api/games/rooms/<int:room_id>', methods=['PUT'])
 def api_update_game_room(room_id):
@@ -851,7 +852,48 @@ def api_game_room_action(room_id, action):
     user_id = data['userId']
     if action == 'presence':
         return jsonify({'active': games_cog.heartbeat(room_id, user_id)})
-    if action == 'ready':
+    if action == 'join':
+        user = data.get('user')
+        if not isinstance(user, dict) or user.get('id') != user_id:
+            return jsonify({'error': 'Thông tin người tham gia không hợp lệ.'}), 400
+        side = data.get('side')
+        if side is not None and side not in ('red', 'black', 'observer'):
+            return jsonify({'error': 'Vị trí tham gia không hợp lệ.'}), 400
+        room = games_cog.join_room(room_id, user, side)
+    elif action == 'leave':
+        room = games_cog.leave_room(room_id, user_id)
+        if room is None:
+            return jsonify({'deleted': True})
+        return jsonify(room)
+    elif action == 'add-bot':
+        elo = data.get('elo')
+        if type(elo) is not int:
+            return jsonify({'error': 'Cấp độ bot không hợp lệ.'}), 400
+        room = games_cog.add_bot(room_id, user_id, elo)
+    elif action == 'add-two-bots':
+        elo_red = data.get('elo1')
+        elo_black = data.get('elo2')
+        if type(elo_red) is not int or type(elo_black) is not int:
+            return jsonify({'error': 'Cấp độ bot không hợp lệ.'}), 400
+        room = games_cog.add_two_bots(room_id, user_id, elo_red, elo_black)
+    elif action == 'remove-bot':
+        side = data.get('side')
+        if side not in ('red', 'black'):
+            return jsonify({'error': 'Vị trí bot không hợp lệ.'}), 400
+        room = games_cog.remove_bot(room_id, user_id, side)
+    elif action == 'swap-request':
+        target_user_id = data.get('targetUserId')
+        if not isinstance(target_user_id, str):
+            return jsonify({'error': 'Thiếu thông tin người cần đổi phe.'}), 400
+        room = games_cog.request_swap(room_id, user_id, target_user_id)
+    elif action == 'swap-response':
+        accepted = data.get('accepted')
+        if type(accepted) is not bool:
+            return jsonify({'error': 'Phản hồi đổi phe không hợp lệ.'}), 400
+        room = games_cog.respond_swap(room_id, user_id, accepted)
+    elif action == 'swap-cancel':
+        room = games_cog.cancel_swap(room_id, user_id)
+    elif action == 'ready':
         room = games_cog.set_ready(room_id, user_id, data.get('ready') is True)
     elif action == 'piece-moves':
         coordinates = (data.get('x'), data.get('y'))
