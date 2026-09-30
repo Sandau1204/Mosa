@@ -721,6 +721,15 @@ const ProfileModal = ({ user, onClose }) => {
 const DiscordAuthStepsModal = ({ steps, connectionState, error, onClose, onRetry }) => {
   const isConnected = connectionState === 'connected';
   const isConnecting = connectionState === 'connecting';
+  const currentStepIndex = steps.findIndex((step) => step.status === 'active' || step.status === 'error');
+  const currentStep = currentStepIndex >= 0
+    ? steps[currentStepIndex]
+    : isConnected ? steps[steps.length - 1] : null;
+  const completedSteps = steps.filter((step) => step.status === 'complete').length;
+  const hasStepError = currentStep?.status === 'error';
+  const progress = isConnected
+    ? 100
+    : ((completedSteps + (currentStep?.status === 'active' || hasStepError ? 0.5 : 0)) / steps.length) * 100;
 
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
@@ -742,44 +751,43 @@ const DiscordAuthStepsModal = ({ steps, connectionState, error, onClose, onRetry
           </p>
         </div>
 
-        <ol className="space-y-2">
-          {steps.map((step, index) => {
-            const isComplete = step.status === 'complete';
-            const isActive = step.status === 'active';
-            const isError = step.status === 'error';
-            return (
-              <li
-                key={step.label}
-                aria-current={isActive || isError ? 'step' : undefined}
-                className={`flex items-center gap-3 rounded-xl border p-3 ${
-                  isComplete ? 'border-emerald-500/20 bg-emerald-500/5'
-                    : isError ? 'border-rose-500/30 bg-rose-500/5'
-                      : isActive ? 'border-indigo-400/40 bg-indigo-500/10'
-                        : 'border-slate-800 bg-slate-900/50'
-                }`}
-              >
-                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-black ${
-                  isComplete ? 'border-emerald-400 bg-emerald-500/15 text-emerald-300'
-                    : isError ? 'border-rose-400 bg-rose-500/15 text-rose-300'
-                      : isActive ? 'border-indigo-300 bg-indigo-500/20 text-indigo-200 animate-pulse'
-                        : 'border-slate-700 bg-slate-900 text-slate-500'
-                }`}>
-                  {isComplete ? '✓' : isError ? '!' : index + 1}
-                </span>
-                <span className={`min-w-0 flex-1 text-left text-sm font-bold leading-snug ${
-                  isComplete ? 'text-emerald-200' : isError ? 'text-rose-200' : isActive ? 'text-white' : 'text-slate-400'
-                }`}>
-                  {step.label}
-                </span>
-                <span className={`shrink-0 text-[9px] font-semibold uppercase tracking-wider ${
-                  isComplete ? 'text-emerald-300' : isError ? 'text-rose-300' : isActive ? 'text-indigo-200' : 'text-slate-500'
-                }`}>
-                  {isComplete ? 'Hoàn tất' : isError ? 'Lỗi' : isActive ? 'Đang xử lý' : 'Đang chờ'}
-                  </span>
-              </li>
-            );
-          })}
-        </ol>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+          <div
+            role="progressbar"
+            aria-label="Tiến trình xác thực Discord"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress)}
+            className="relative h-3 overflow-hidden rounded-full bg-slate-800"
+          >
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                hasStepError ? 'bg-rose-500' : isConnected ? 'bg-emerald-500' : 'bg-indigo-500'
+              }`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="min-w-0 text-left">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                {isConnected ? 'Hoàn tất' : currentStepIndex >= 0 ? `Bước ${currentStepIndex + 1} / ${steps.length}` : 'Đang chuẩn bị'}
+              </p>
+              <p className={`mt-1 text-sm font-bold ${
+                hasStepError ? 'text-rose-200' : isConnected ? 'text-emerald-200' : 'text-white'
+              }`}>
+                {isConnected ? 'Đã xác thực Discord thành công' : currentStep?.label || 'Đang chờ bắt đầu xác thực'}
+              </p>
+            </div>
+            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+              hasStepError ? 'bg-rose-500/10 text-rose-300'
+                : isConnected ? 'bg-emerald-500/10 text-emerald-300'
+                  : isConnecting ? 'bg-indigo-500/10 text-indigo-200'
+                    : 'bg-slate-800 text-slate-400'
+            }`}>
+              {hasStepError ? 'Lỗi' : isConnected ? 'Hoàn tất' : isConnecting ? 'Đang xử lý' : 'Đang chờ'}
+            </span>
+          </div>
+        </div>
 
         {error && <p role="alert" className="mt-4 rounded-xl border border-rose-500/30 bg-rose-950/50 p-3 text-center text-xs text-rose-200">{error}</p>}
 
