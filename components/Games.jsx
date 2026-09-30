@@ -718,7 +718,7 @@ const ProfileModal = ({ user, onClose }) => {
   );
 };
 
-const DiscordAuthTimelineModal = ({ steps, connectionState, error, onClose, onRetry }) => {
+const DiscordAuthStepsModal = ({ steps, connectionState, error, onClose, onRetry }) => {
   const isConnected = connectionState === 'connected';
   const isConnecting = connectionState === 'connecting';
 
@@ -728,7 +728,7 @@ const DiscordAuthTimelineModal = ({ steps, connectionState, error, onClose, onRe
         role="dialog"
         aria-modal="true"
         aria-labelledby="discord-auth-title"
-        className="w-full max-w-3xl rounded-3xl border border-indigo-400/40 bg-slate-950 p-5 text-white shadow-[0_0_50px_rgba(79,70,229,0.35)] sm:p-7"
+        className="w-full max-w-xl rounded-3xl border border-indigo-400/40 bg-slate-950 p-5 text-white shadow-[0_0_50px_rgba(79,70,229,0.35)] sm:p-7"
       >
         <div className="mb-6 text-center">
           <span className="mb-2 inline-flex rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200">
@@ -738,38 +738,44 @@ const DiscordAuthTimelineModal = ({ steps, connectionState, error, onClose, onRe
             {isConnected ? 'Đã xác thực tài khoản' : isConnecting ? 'Đang xác thực tài khoản' : 'Xác thực Discord thất bại'}
           </h2>
           <p className="mt-1 text-xs text-slate-400">
-            Theo dõi tiến trình kết nối và xác thực hồ sơ Discord của bạn.
+            Các bước kết nối và xác thực hồ sơ Discord của bạn.
           </p>
         </div>
 
-        <ol className="flex overflow-x-auto pb-2">
+        <ol className="space-y-2">
           {steps.map((step, index) => {
             const isComplete = step.status === 'complete';
             const isActive = step.status === 'active';
             const isError = step.status === 'error';
             return (
-              <li key={step.label} className="flex min-w-[160px] flex-1 items-start">
-                <div className="flex min-w-0 flex-1 flex-col items-center text-center">
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-black ${
-                    isComplete ? 'border-emerald-400 bg-emerald-500/15 text-emerald-300'
-                      : isError ? 'border-rose-400 bg-rose-500/15 text-rose-300'
-                        : isActive ? 'border-indigo-300 bg-indigo-500/20 text-indigo-200 animate-pulse'
-                          : 'border-slate-700 bg-slate-900 text-slate-500'
-                  }`}>
-                    {isComplete ? '✓' : isError ? '!' : index + 1}
+              <li
+                key={step.label}
+                aria-current={isActive || isError ? 'step' : undefined}
+                className={`flex items-center gap-3 rounded-xl border p-3 ${
+                  isComplete ? 'border-emerald-500/20 bg-emerald-500/5'
+                    : isError ? 'border-rose-500/30 bg-rose-500/5'
+                      : isActive ? 'border-indigo-400/40 bg-indigo-500/10'
+                        : 'border-slate-800 bg-slate-900/50'
+                }`}
+              >
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-black ${
+                  isComplete ? 'border-emerald-400 bg-emerald-500/15 text-emerald-300'
+                    : isError ? 'border-rose-400 bg-rose-500/15 text-rose-300'
+                      : isActive ? 'border-indigo-300 bg-indigo-500/20 text-indigo-200 animate-pulse'
+                        : 'border-slate-700 bg-slate-900 text-slate-500'
+                }`}>
+                  {isComplete ? '✓' : isError ? '!' : index + 1}
+                </span>
+                <span className={`min-w-0 flex-1 text-left text-sm font-bold leading-snug ${
+                  isComplete ? 'text-emerald-200' : isError ? 'text-rose-200' : isActive ? 'text-white' : 'text-slate-400'
+                }`}>
+                  {step.label}
+                </span>
+                <span className={`shrink-0 text-[9px] font-semibold uppercase tracking-wider ${
+                  isComplete ? 'text-emerald-300' : isError ? 'text-rose-300' : isActive ? 'text-indigo-200' : 'text-slate-500'
+                }`}>
+                  {isComplete ? 'Hoàn tất' : isError ? 'Lỗi' : isActive ? 'Đang xử lý' : 'Đang chờ'}
                   </span>
-                  <span className={`mt-2 max-w-[130px] text-[11px] font-bold leading-snug ${
-                    isComplete ? 'text-emerald-200' : isError ? 'text-rose-200' : isActive ? 'text-white' : 'text-slate-500'
-                  }`}>
-                    {step.label}
-                  </span>
-                  <span className="mt-1 text-[9px] font-semibold uppercase tracking-wider text-slate-500">
-                    {isComplete ? 'Hoàn tất' : isError ? 'Lỗi' : isActive ? 'Đang xử lý' : 'Đang chờ'}
-                  </span>
-                </div>
-                {index < steps.length - 1 && (
-                  <span className={`mt-[17px] h-0.5 min-w-5 flex-1 ${isComplete ? 'bg-emerald-500/70' : 'bg-slate-800'}`} />
-                )}
               </li>
             );
           })}
@@ -1562,7 +1568,7 @@ export default function Games() {
   const [isMuted, setIsMuted] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [showAuthTimeline, setShowAuthTimeline] = useState(true);
+  const [showAuthSteps, setShowAuthSteps] = useState(true);
   const [connectionState, setConnectionState] = useState('connecting');
   const [connectionError, setConnectionError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
@@ -1689,7 +1695,7 @@ export default function Games() {
           setUserProfile(profile);
           setConnectionState('connected');
           setConnectionError('');
-          setShowAuthTimeline(false);
+          setShowAuthSteps(false);
         }
       })
       .catch((error) => {
@@ -1705,7 +1711,7 @@ export default function Games() {
     setAuthSteps(DISCORD_AUTH_STEPS.map((label) => ({ label, status: 'pending' })));
     setConnectionState('connecting');
     setConnectionError('');
-    setShowAuthTimeline(true);
+    setShowAuthSteps(true);
     setRetryCount((count) => count + 1);
   };
 
@@ -1898,12 +1904,12 @@ export default function Games() {
           <h1 className="text-2xl font-black">{connectionState === 'connecting' ? 'Đang kết nối Discord...' : 'Không thể kết nối Discord'}</h1>
           {connectionError && <p className="max-w-lg text-sm text-rose-300">{connectionError}</p>}
         </main>
-        {showAuthTimeline && (
-          <DiscordAuthTimelineModal
+        {showAuthSteps && (
+          <DiscordAuthStepsModal
             steps={authSteps}
             connectionState={connectionState}
             error={connectionError}
-            onClose={() => setShowAuthTimeline(false)}
+            onClose={() => setShowAuthSteps(false)}
             onRetry={retryDiscordAuth}
           />
         )}
@@ -1926,7 +1932,7 @@ export default function Games() {
               GAMES <span className="text-yellow-300">MOSA</span>
             </h1>
             <button
-              onClick={() => setShowAuthTimeline(true)}
+              onClick={() => setShowAuthSteps(true)}
               className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest flex items-center gap-1"
               title="Xem các bước xác thực Discord"
             >
@@ -2053,12 +2059,12 @@ export default function Games() {
 
       {/* Modals */}
       {showProfile && <ProfileModal user={userProfile} onClose={() => setShowProfile(false)} />}
-      {showAuthTimeline && (
-        <DiscordAuthTimelineModal
+      {showAuthSteps && (
+        <DiscordAuthStepsModal
           steps={authSteps}
           connectionState={connectionState}
           error={connectionError}
-          onClose={() => setShowAuthTimeline(false)}
+          onClose={() => setShowAuthSteps(false)}
           onRetry={retryDiscordAuth}
         />
       )}
