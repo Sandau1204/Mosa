@@ -1353,13 +1353,13 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
 
       {/* Main Arena Content */}
       <div className="flex flex-1 min-h-0 min-w-0 flex-col lg:flex-row">
-      <div className="grid flex-1 min-h-0 min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-1.5 p-1.5 sm:gap-2 sm:p-2 z-10 overflow-hidden w-full max-w-4xl mx-auto">
-        <div className="flex min-w-0 flex-col justify-center gap-2">
+      <div className="grid flex-1 min-h-0 min-w-0 grid-cols-1 grid-rows-[minmax(0,1fr)_auto_auto] gap-1.5 p-1.5 sm:gap-2 sm:p-2 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:grid-rows-1 xl:overflow-hidden z-10 w-full max-w-4xl mx-auto">
+        <div className="order-2 flex min-w-0 flex-row justify-center gap-2 xl:order-1 xl:flex-col">
           {renderPlayerSlot(otherSide, room[`${otherSide}Player`])}
           {renderPlayerSlot(userSide, room[`${userSide}Player`])}
         </div>
 
-        <div className="flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden py-1">
+        <div className="order-1 flex h-full min-h-0 min-w-0 items-center justify-center overflow-hidden py-1 xl:order-2">
           <div className="relative flex h-full min-h-0 min-w-0 items-center justify-center">
             <XiangqiBoard
               board={room.board || []}
@@ -1390,7 +1390,7 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-col items-center justify-center gap-2 text-center">
+        <div className="order-3 flex min-w-0 flex-col items-center justify-center gap-2 text-center">
           {isPlaying && room.checkSide && (
             <p role="alert" className="animate-check-pulse rounded-lg border border-rose-500 bg-rose-950/90 px-2 py-1 text-[10px] font-black text-rose-200 sm:px-3 sm:text-xs">
               CHIẾU TƯỚNG — Phe {room.checkSide === 'red' ? 'Đỏ' : 'Đen'} phải cứu tướng!
