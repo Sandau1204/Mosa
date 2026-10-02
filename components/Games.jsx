@@ -3,6 +3,7 @@
 import GameHub from './GameHub';
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import React, { useState, useEffect, useRef } from 'react';
+import GameHub from './GameHub';
 
 const DISCORD_CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
 let discordActivityConnection;
@@ -43,6 +44,12 @@ function connectDiscordActivity(onProgress) {
       };
 
       try {
+        if (!new URLSearchParams(window.location.search).has('frame_id')) {
+          const response = await fetch('/api/games/session', { cache: 'no-store' });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Vui lòng đăng nhập Discord.');
+          return result.user;
+        }
         if (!DISCORD_CLIENT_ID) {
           throw new Error('Thiếu cấu hình Discord Client ID.');
         }
@@ -1727,7 +1734,12 @@ export default function Games() {
     if (userProfile) {
       const newRoom = {
         id: Date.now(),
+<<<<<<< HEAD
         name,
+=======
+        name: gameData.name || `Phòng Cờ Tướng của ${userProfile.name}`,
+        botElo: gameData.botElo,
+>>>>>>> 4e24638133be7187ed1a0b7a422917d35c21af28
         ownerId: userProfile.id,
         game: 'Cờ Tướng',
         slots: "1/2",
@@ -1763,7 +1775,11 @@ export default function Games() {
         return true;
       } catch (error) {
         setRoomError(error instanceof Error ? error.message : 'Không thể tạo phòng.');
+<<<<<<< HEAD
         return false;
+=======
+        throw error;
+>>>>>>> 4e24638133be7187ed1a0b7a422917d35c21af28
       }
     }
   };
@@ -1894,6 +1910,7 @@ export default function Games() {
         <main className="h-dvh flex flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center text-white">
           <h1 className="text-2xl font-black">{connectionState === 'connecting' ? 'Đang kết nối Discord...' : 'Không thể kết nối Discord'}</h1>
           {connectionError && <p className="max-w-lg text-sm text-rose-300">{connectionError}</p>}
+          {connectionState === 'error' && <a href="/login?next=/games" className="rounded-xl bg-indigo-600 px-4 py-2">Đăng nhập Discord trên trình duyệt</a>}
         </main>
         {showAuthSteps && (
           <DiscordAuthStepsModal
@@ -1906,6 +1923,15 @@ export default function Games() {
         )}
       </>
     );
+  }
+
+  if (currentView === 'games') {
+    return <div onClick={handleGlobalInteraction}><GameHub
+      rooms={rooms} user={userProfile} error={roomError || roomLoadError}
+      onCreate={handleCreateRoom} onJoin={handleJoinRoom}
+      activeRoom={activeRoomData} onResume={() => setCurrentView('room')}
+      isMuted={isMuted} onToggleMute={toggleMute}
+    /></div>;
   }
 
   return (
