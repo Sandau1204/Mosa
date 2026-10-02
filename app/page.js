@@ -1,11 +1,8 @@
-
-import Games from './games/page';
-
-export const metadata = {
-  title: 'Games - Discord Activity',
-  description: 'Chơi board game cùng bạn bè ngay trong Discord.'
-};
-
 export default function HomePage() {
-  return <Games />;
+  return (
+    <main>
+      <meta httpEquiv="refresh" content="0;url=/panel" />
+      <a href="/panel">Mosa Panel</a>
+    </main>
+  );
 }

@@ -191,16 +191,8 @@ joins the selected server. Uploaded welcome banners are stored in
 `DATA_FOLDER/welcome_banners` and served from the Flask app's public URL.
 
 Run `npm run build` to create the static site in `out/`. In production, the Flask
-server redirects `/` to `/games` for Discord Activities and serves the static
-export for `/games`, `/panel`, and `/music`. The deployment workflow passes
-`DISCORD_CLIENT_ID` as `NEXT_PUBLIC_DISCORD_CLIENT_ID` when building so the
-Activity and backend use the same Discord application.
-
-The Games Activity shares its room state through the `cogs.games` bot extension
-and persists it in `data/games.json`. Keep the configured `DATA_FOLDER`
-available to the bot so game rooms survive restarts. Xiangqi uses a 20-minute
-clock per side with a 5-second increment after each legal move; both players
-must be ready before the clock starts. Legal Xiangqi moves, check/checkmate,
-and clock updates are validated by the game cog. Each player's countdown is
-shown beside their avatar. Room membership heartbeats expire after 20 seconds,
-so rooms are removed after their final participant disconnects.
+server redirects `/` to `/panel` and serves the static export for `/panel`
+and `/music`, plus the game hub at `/games`. The game hub preserves the supplied
+interface with local demo rooms, players, and tournaments; Discord multiplayer
+and persistent game data are not connected yet. The deployment workflow passes `DISCORD_CLIENT_ID` as
+`NEXT_PUBLIC_DISCORD_CLIENT_ID` to build the bot invite link in the panel.
