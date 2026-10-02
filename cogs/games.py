@@ -13,7 +13,7 @@ import discord
 from discord.ext import commands
 from flask import jsonify, request, session
 
-from webserver import app, run_coro
+from webserver import app, load_games_auth_ticket, run_coro
 
 
 logger = logging.getLogger(__name__)
@@ -132,10 +132,18 @@ class Games(commands.Cog):
             raise
 
     def _user(self):
+        authorization = request.headers.get("Authorization", "")
+        scheme, _, ticket = authorization.partition(" ")
+        if scheme.lower() == "bearer":
+            user = load_games_auth_ticket(ticket) if ticket else None
+            if user:
+                return user, None
+            return None, (jsonify({"error": "Phiên xác thực Game Hub không hợp lệ hoặc đã hết hạn."}), 401)
+
         user = session.get("user")
-        if not isinstance(user, dict) or not user.get("id"):
-            return None, (jsonify({"error": "Vui lòng đăng nhập Discord để sử dụng Game Hub."}), 401)
-        return user, None
+        if isinstance(user, dict) and user.get("id"):
+            return user, None
+        return None, (jsonify({"error": "Vui lòng đăng nhập Discord để sử dụng Game Hub."}), 401)
 
     async def _member_in_guild(self, guild, user_id):
         member = guild.get_member(int(user_id))
@@ -146,10 +154,17 @@ class Games(commands.Cog):
         except discord.NotFound:
             return None
 
-    def _accessible_guilds(self, user_id):
+    def _accessible_guilds(self, user):
+        user_id = user["id"]
+        oauth_guild_ids = user.get("guild_ids")
+
         async def find_guilds():
             accessible = []
             for guild in self.bot.guilds:
+                if isinstance(oauth_guild_ids, list):
+                    if str(guild.id) in oauth_guild_ids:
+                        accessible.append((guild, guild.get_member(int(user_id))))
+                    continue
                 try:
                     member = await self._member_in_guild(guild, user_id)
                 except discord.Forbidden:
@@ -234,7 +249,7 @@ class Games(commands.Cog):
             return jsonify({"error": "Discord bot hiện không khả dụng."}), 503
 
         try:
-            accessible_guilds = self._accessible_guilds(user["id"])
+            accessible_guilds = self._accessible_guilds(user)
         except Exception:
             logger.exception("Could not load Game Hub servers for Discord user %s.", user["id"])
             return jsonify({"error": "Không thể tải danh sách server từ Discord."}), 503

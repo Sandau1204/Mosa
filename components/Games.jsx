@@ -521,12 +521,16 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
 };
 
 async function gamesApiRequest(path, options = {}) {
+  const authTicket = typeof window !== 'undefined'
+    ? window.sessionStorage.getItem('gamesAuthTicket')
+    : null;
   const response = await fetch(path, {
     credentials: 'same-origin',
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...options.headers
+      ...options.headers,
+      ...(authTicket ? { Authorization: `Bearer ${authTicket}` } : {})
     }
   });
   const data = await response.json().catch(() => null);
@@ -629,6 +633,7 @@ export default function Games() {
           if (cancelled) return;
 
           if (sessionResponse.ok && sessionData.authenticated && sessionData.user) {
+            window.sessionStorage.removeItem('gamesAuthTicket');
             setDiscordUser(sessionData.user);
             setAuthStatus('authenticated');
             return;
@@ -655,17 +660,18 @@ export default function Games() {
           response_type: 'code',
           state: '',
           prompt: 'none',
-          scope: ['identify']
+          scope: ['identify', 'guilds']
         });
         if (cancelled) return;
 
         const tokenResponse = await fetch('/.proxy/api/games/auth/token', {
           method: 'POST',
+          credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code })
         });
         const tokenData = await tokenResponse.json().catch(() => ({}));
-        if (!tokenResponse.ok || !tokenData.access_token || !tokenData.user) {
+        if (!tokenResponse.ok || !tokenData.access_token || !tokenData.auth_ticket || !tokenData.user) {
           throw new Error(tokenData.error || 'Could not exchange the Discord authorization code.');
         }
 
@@ -677,6 +683,7 @@ export default function Games() {
           throw new Error('Discord returned a different user during authentication.');
         }
 
+        window.sessionStorage.setItem('gamesAuthTicket', tokenData.auth_ticket);
         setDiscordUser(tokenData.user);
         setAuthStatus('authenticated');
       } catch (error) {

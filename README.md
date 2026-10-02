@@ -195,13 +195,15 @@ joins the selected server. Uploaded welcome banners are stored in
 `DATA_FOLDER/welcome_banners` and served from the Flask app's public URL.
 
 Discord Activity launches at `/` with `frame_id` and `instance_id` are redirected
-to `/games`, preserving the launch query parameters. This works in both Next.js
-and Flask. Keep the Activity root URL mapping pointed at this web application's
-root; ordinary visits to `/` still open `/panel`.
+to `/games`, preserving the launch query parameters. Embedded Game Hub
+authentication requests the Discord `identify` and `guilds` scopes and uses a
+signed API ticket so authentication does not depend on third-party session
+cookies. Keep the Activity root URL mapping pointed at this web
+application's root; ordinary visits to `/` still open `/panel`.
 
 Run `npm run build` to create the static site in `out/`. In production, the Flask
 server redirects `/` to `/panel` and serves the static export for `/panel`
-and `/music`, plus the game hub at `/games`. The game hub preserves the supplied
-interface with local demo rooms, players, and tournaments; Discord multiplayer
-and persistent game data are not connected yet. The deployment workflow passes `DISCORD_CLIENT_ID` as
-`NEXT_PUBLIC_DISCORD_CLIENT_ID` to build the bot invite link in the panel.
+and `/music`, plus the game hub at `/games`. Game rooms and tournaments use the
+Flask Game Hub API and persistent data under `DATA_FOLDER`. The deployment
+workflow passes `DISCORD_CLIENT_ID` as `NEXT_PUBLIC_DISCORD_CLIENT_ID` to build
+the bot invite link in the panel.

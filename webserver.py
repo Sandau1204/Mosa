@@ -7,6 +7,7 @@ import uuid
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from dotenv import load_dotenv
+from itsdangerous import BadSignature, URLSafeTimedSerializer
 import discord
 from typing import Optional
 import datetime
@@ -22,6 +23,7 @@ if not app.secret_key:
         'FLASK_SECRET_KEY is not configured; sessions will be invalidated on restart.'
     )
 app.permanent_session_lifetime = datetime.timedelta(days=30)
+games_auth_serializer = URLSafeTimedSerializer(app.secret_key, salt='games-hub-api')
 
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
@@ -48,6 +50,28 @@ def discord_avatar_url(user_data):
     except (TypeError, ValueError):
         default_avatar = 0
     return f"https://cdn.discordapp.com/embed/avatars/{default_avatar}.png"
+
+
+def create_games_auth_ticket(user, guild_ids):
+    return games_auth_serializer.dumps({
+        'user': user,
+        'guild_ids': [str(guild_id) for guild_id in guild_ids]
+    })
+
+
+def load_games_auth_ticket(ticket):
+    try:
+        payload = games_auth_serializer.loads(ticket, max_age=30 * 24 * 60 * 60)
+    except BadSignature:
+        return None
+    if not isinstance(payload, dict) or not isinstance(payload.get('user'), dict):
+        return None
+    user = payload['user']
+    if not user.get('id'):
+        return None
+    guild_ids = payload.get('guild_ids')
+    user['guild_ids'] = [str(guild_id) for guild_id in guild_ids] if isinstance(guild_ids, list) else []
+    return user
 
 
 def get_music_state(guild_id):
@@ -156,11 +180,29 @@ def callback():
     else:
         # Nếu không có avatar, dùng avatar mặc định
         avatar_url = "https://cdn.discordapp.com/embed/avatars/0.png"
+    guild_ids = None
+    try:
+        guilds_resp = requests.get(
+            'https://discord.com/api/users/@me/guilds',
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=10
+        )
+        if guilds_resp.ok:
+            guilds_data = guilds_resp.json()
+            if isinstance(guilds_data, list):
+                guild_ids = [guild['id'] for guild in guilds_data if isinstance(guild, dict) and guild.get('id')]
+        else:
+            app.logger.warning('Discord guild lookup failed during OAuth login with status %s.', guilds_resp.status_code)
+    except requests.RequestException:
+        app.logger.exception('Discord guild lookup failed during OAuth login.')
+    except ValueError:
+        app.logger.exception('Discord returned an invalid guild list during OAuth login.')
     session['user'] = {
         'id': user_data.get('id'),
         'username': user_data.get('username'),
         'discriminator': user_data.get('discriminator', '0'),
-        'avatar': avatar_url
+        'avatar': avatar_url,
+        'guild_ids': [str(guild_id) for guild_id in guild_ids] if guild_ids is not None else None
     }
     session.permanent = True
     # Chuyển hướng về trang mà người dùng vừa truy cập (mặc định là music nếu không có)
@@ -220,6 +262,22 @@ def games_auth_token():
             return jsonify({'error': 'Could not verify the Discord account.'}), 502
 
         user_data = user_response.json()
+
+        guilds_response = requests.get(
+            'https://discord.com/api/users/@me/guilds',
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=10
+        )
+        if not guilds_response.ok:
+            app.logger.error(
+                'Discord guild lookup failed after Embedded App token exchange with status %s.',
+                guilds_response.status_code
+            )
+            return jsonify({'error': 'Could not load the Discord servers for this account.'}), 502
+        guilds_data = guilds_response.json()
+        if not isinstance(guilds_data, list):
+            app.logger.error('Discord returned an invalid guild list during Embedded App authentication.')
+            return jsonify({'error': 'Discord returned an invalid server list.'}), 502
     except requests.RequestException:
         app.logger.exception('Discord Embedded App authentication request failed.')
         return jsonify({'error': 'Discord authentication is temporarily unavailable.'}), 502
@@ -236,12 +294,18 @@ def games_auth_token():
         'username': user_data.get('global_name') or user_data['username'],
         'avatar': discord_avatar_url(user_data)
     }
+    guild_ids = [guild['id'] for guild in guilds_data if isinstance(guild, dict) and guild.get('id')]
     session['user'] = {
         **user,
-        'discriminator': user_data.get('discriminator', '0')
+        'discriminator': user_data.get('discriminator', '0'),
+        'guild_ids': [str(guild_id) for guild_id in guild_ids]
     }
     session.permanent = True
-    return jsonify({'access_token': access_token, 'user': user})
+    return jsonify({
+        'access_token': access_token,
+        'auth_ticket': create_games_auth_ticket(user, guild_ids),
+        'user': user
+    })
 
 
 @app.route('/.proxy/api/games/auth/session')
