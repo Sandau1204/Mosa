@@ -1,10 +1,12 @@
 'use client';
 
+import GameHub from './GameHub';
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import React, { useState, useEffect, useRef } from 'react';
 
-const DISCORD_CLIENT_ID = typeof process !== 'undefined' ? process.env?.NEXT_PUBLIC_DISCORD_CLIENT_ID : undefined;
+const DISCORD_CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
 let discordActivityConnection;
+let discordSdk;
 const discordAuthProgressListeners = new Set();
 const DISCORD_AUTH_STEPS = [
   'Khởi tạo Discord SDK',
@@ -46,7 +48,10 @@ function connectDiscordActivity(onProgress) {
         }
 
         updateStep(0, 'active');
-        const discordSdk = new DiscordSDK(DISCORD_CLIENT_ID);
+        if (!new URLSearchParams(window.location.search).has('frame_id')) {
+          throw new Error('Hãy mở Games từ Discord Activity trong kênh thoại.');
+        }
+        discordSdk ??= new DiscordSDK(DISCORD_CLIENT_ID);
         await withTimeout(discordSdk.ready(), 'khởi tạo Activity');
         updateStep(0, 'complete');
 
@@ -110,8 +115,10 @@ const createAudioEngine = () => {
   const init = () => {
     if (!ctx) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
-      ctx = new AudioContext();
+      if (!AudioContext) return;
+      try { ctx = new AudioContext(); } catch { return; }
     }
+    if (ctx?.state === 'suspended') ctx.resume().catch(() => {});
   };
   const playHover = () => {
     if (isMuted || !ctx) return;
@@ -246,7 +253,7 @@ const createAudioEngine = () => {
   const setMuted = (mutedStatus) => {
     isMuted = mutedStatus;
     if (!mutedStatus && ctx && ctx.state === 'suspended') {
-      ctx.resume();
+      ctx.resume().catch(() => {});
     }
     if (mutedStatus) {
       clearTimeout(bgmInterval);
@@ -560,7 +567,7 @@ const DiscordUserWidget = ({ user, onClickProfile, isConnected }) => {
             src={user.avatarUrl}
             alt={user.name}
             className="w-full h-full object-cover rounded-full"
-            onError={(e) => { e.target.src = 'https://cdn.discordapp.com/embed/avatars/0.png'; }}
+            onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }}
           />
         </div>
         <span className={`absolute bottom-0 right-0 w-3 h-3 ${isConnected ? 'bg-emerald-500' : 'bg-slate-500'} border-2 border-slate-900 rounded-full shadow-sm`}></span>
@@ -737,7 +744,7 @@ const DiscordAuthStepsModal = ({ steps, connectionState, error, onClose, onRetry
         role="dialog"
         aria-modal="true"
         aria-labelledby="discord-auth-title"
-        className="w-full max-w-xl rounded-3xl border border-indigo-400/40 bg-slate-950 p-5 text-white shadow-[0_0_50px_rgba(79,70,229,0.35)] sm:p-7"
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-xl rounded-3xl border border-indigo-400/40 bg-slate-950 p-5 text-white shadow-[0_0_50px_rgba(79,70,229,0.35)] sm:p-7"
       >
         <div className="mb-6 text-center">
           <span className="mb-2 inline-flex rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200">
@@ -1544,34 +1551,6 @@ const XiangqiRoom = ({ room, currentUser, roomError, onLeave, onJoinSide, onRead
   );
 };
 
-const GameCard = ({ game, onClick }) => {
-  return (
-    <div
-      onMouseEnter={() => audio.playHover()}
-      onClick={() => { audio.playClick(); onClick(game); }}
-      className={`group relative shrink-0 w-60 sm:w-64 h-72 sm:h-80 rounded-[2.5rem] border-[6px] border-white/90 cursor-pointer snap-center
-                  flex flex-col items-center justify-center p-6 text-white text-center
-                  transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
-                  hover:-translate-y-2 hover:scale-[1.03] hover:shadow-[0_20px_40px_rgba(0,0,0,0.5),0_0_25px_rgba(255,255,255,0.6)]
-                  shadow-[0_10px_20px_rgba(0,0,0,0.3)] overflow-hidden ${game.colorBg}`}
-    >
-      <div className="absolute top-0 left-[-100%] w-[50%] h-full bg-white/20 skew-x-[-30deg] transition-all duration-500 group-hover:left-[200%]"></div>
-      <div className="h-20 flex items-center justify-center text-[4.5rem] drop-shadow-xl mb-3 transform transition-transform group-hover:scale-110 group-hover:rotate-6">
-        {game.icon}
-      </div>
-      <h3 className="text-2xl sm:text-3xl font-black tracking-wide drop-shadow-md mb-1">{game.title}</h3>
-      <p className="font-medium text-xs sm:text-sm text-white/90 drop-shadow-sm">{game.desc}</p>
-      <div className="mt-auto bg-white/30 px-5 py-1.5 rounded-full font-bold uppercase tracking-widest text-xs shadow-inner backdrop-blur-sm">
-        Tạo Phòng
-      </div>
-    </div>
-  );
-};
-
-const gamesData = [
-  { id: 1, title: 'Cờ Tướng', desc: 'Đấu trí đỉnh cao & Elo AI', colorBg: 'bg-gradient-to-b from-red-500 to-red-800', icon: <XiangqiPieceIcon />, type: 'xiangqi' },
-];
-
 export default function Games() {
   const [isMuted, setIsMuted] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
@@ -1723,6 +1702,8 @@ export default function Games() {
     setRetryCount((count) => count + 1);
   };
 
+  useEffect(() => () => audio.setMuted(true), []);
+
   const toggleMute = () => {
     audio.playClick();
     const newMuted = !isMuted;
@@ -1737,18 +1718,18 @@ export default function Games() {
   const handleGlobalInteraction = () => {
     if (!hasStarted) {
       audio.init();
-      if (!isMuted) audio.startBGM();
+      audio.setMuted(isMuted);
       setHasStarted(true);
     }
   };
 
-  const handleCreateRoom = async (gameData) => {
-    if (gameData.type === 'xiangqi') {
+  const handleCreateRoom = async ({ name }) => {
+    if (userProfile) {
       const newRoom = {
         id: Date.now(),
-        name: `Phòng Cờ Tướng của ${userProfile.name}`,
+        name,
         ownerId: userProfile.id,
-        game: gameData.title,
+        game: 'Cờ Tướng',
         slots: "1/2",
         color: "bg-rose-950 text-rose-300 border-rose-700/50",
         type: 'xiangqi',
@@ -1779,8 +1760,10 @@ export default function Games() {
         setRoomError('');
         setActiveRoomId(result.id);
         setCurrentView('room');
+        return true;
       } catch (error) {
         setRoomError(error instanceof Error ? error.message : 'Không thể tạo phòng.');
+        return false;
       }
     }
   };
@@ -1926,18 +1909,18 @@ export default function Games() {
   }
 
   return (
-    <div className="isolate h-dvh min-h-0 w-full font-sans text-gray-100 overflow-hidden flex flex-col selection:bg-indigo-500 selection:text-white" onClick={handleGlobalInteraction}>
-      <CanvasBackground />
+    <div className="game-activity isolate h-dvh min-h-0 w-full bg-slate-950 font-sans text-gray-100 overflow-hidden flex flex-col selection:bg-indigo-500 selection:text-white" onClick={handleGlobalInteraction}>
+
       
       {/* Header */}
-      <header className="flex justify-between items-center p-2 sm:p-3 z-20 shrink-0">
+      <header className="flex flex-wrap gap-2 justify-between items-center p-2 sm:p-3 z-20 shrink-0 border-b-4 border-slate-950 bg-slate-900">
         <div className="flex items-center gap-3">
           <div>
             <h1 
               className="text-xl sm:text-2xl font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] tracking-tight cursor-pointer hover:text-yellow-200 transition-colors"
-              onClick={() => { if(currentView !== 'games') setCurrentView('games'); }}
+              onClick={() => { if (activeRoomId) handleLeaveRoom(); }}
             >
-              GAMES <span className="text-yellow-300">MOSA</span>
+              GAME HUB <span className="text-yellow-300">MOSA</span>
             </h1>
             <button
               onClick={() => setShowAuthSteps(true)}
@@ -1972,19 +1955,7 @@ export default function Games() {
       <main className="flex-1 flex flex-col xl:flex-row w-full max-w-[1500px] mx-auto px-2 sm:px-4 py-1 gap-2 sm:gap-3 overflow-hidden min-h-0">
         
         {currentView === 'games' ? (
-          <section className="flex-1 flex flex-col justify-center min-w-0 animate-fade-in">
-            <h2 className="text-sm sm:text-lg font-extrabold text-indigo-100 mb-3 bg-slate-900/60 border border-indigo-500/30 py-1.5 px-4 rounded-full shadow-md backdrop-blur-md self-start flex items-center gap-2">
-              <span>🔥</span> Chọn Game Để Tạo Phòng
-            </h2>
-            <div
-              className="flex gap-5 overflow-x-auto overscroll-x-contain px-16 py-16 snap-x snap-proximity hide-scrollbar"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', touchAction: 'pan-x' }}
-            >
-              {gamesData.map((game) => (
-                <GameCard key={game.id} game={game} onClick={handleCreateRoom} />
-              ))}
-            </div>
-          </section>
+          <GameHub rooms={rooms} error={roomError || roomLoadError} user={userProfile} onCreate={handleCreateRoom} onJoin={handleJoinRoom} />
         ) : (
           <section className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden">
             {activeRoomData && (
@@ -2012,57 +1983,6 @@ export default function Games() {
           </section>
         )}
 
-        {/* Sidebar: Danh Sách Phòng */}
-        <aside className={`xl:w-[380px] w-full flex flex-col mb-2 xl:mb-0 transition-all ${currentView === 'room' ? 'hidden' : 'flex'}`}>
-          <div className="bg-slate-900/80 backdrop-blur-xl rounded-[2rem] shadow-2xl p-4 sm:p-5 border-2 border-indigo-500/40 flex-1 flex flex-col h-full xl:max-h-[72vh]">
-            <div className="flex justify-between items-center mb-3 shrink-0">
-              <h3 className="text-lg font-black text-amber-400 flex items-center gap-2">
-                <span>💬</span> Sảnh Chờ
-              </h3>
-            </div>
-            <div className="overflow-y-auto pr-1 flex flex-col gap-2.5 flex-1 custom-scrollbar">
-              {(roomLoadError || roomError) && (
-                <>
-                  {roomLoadError && <p role="alert" className="text-center text-rose-300 text-xs">{roomLoadError}</p>}
-                  {roomError && <p role="alert" className="text-center text-rose-300 text-xs">{roomError}</p>}
-                </>
-              )}
-              {rooms.length === 0 ? (
-                <p className="text-center text-slate-500 mt-8 text-xs italic">Chưa có phòng nào được tạo.</p>
-              ) : (
-                rooms.map((room) => (
-                  <div
-                    key={room.id}
-                    onMouseEnter={() => audio.playHover()}
-                    onClick={() => { audio.playClick(); handleJoinRoom(room.id); }}
-                    className={`group flex justify-between items-center p-3 rounded-2xl cursor-pointer transition-all border 
-                      ${activeRoomId === room.id ? 'bg-indigo-900/90 border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]' : 'bg-slate-800/80 hover:bg-indigo-950/80 border-slate-700 hover:border-indigo-500'}`}
-                  >
-                    <div className="flex-1 min-w-0 pr-3">
-                      <h4 className={`font-bold text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis transition-colors ${activeRoomId === room.id ? 'text-white' : 'text-gray-100 group-hover:text-amber-300'}`}>
-                        {room.name}
-                      </h4>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[11px] text-indigo-300/70 whitespace-nowrap overflow-hidden text-ellipsis">
-                          {room.game}
-                        </span>
-                        {room.status === 'playing' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>}
-                      </div>
-                    </div>
-                    <div className="w-14 shrink-0 text-right flex flex-col items-end gap-1">
-                      <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black border ${room.color}`}>
-                        {room.slots}
-                      </span>
-                      {room.type === 'xiangqi' && room.observers?.length > 0 && (
-                        <span className="text-[10px] text-gray-500">👁️ {room.observers.length}</span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </aside>
       </main>
 
       {/* Modals */}
