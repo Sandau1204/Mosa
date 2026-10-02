@@ -75,16 +75,3 @@ input[type='range']:focus {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
-/* Activity stays inside Discord's viewport, including mobile safe areas. */
-.game-activity {
-  height: 100vh;
-  height: 100dvh;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
-}
-
-.game-activity button:focus-visible {
-  outline: 2px solid #facc15;
-  outline-offset: 3px;
-}

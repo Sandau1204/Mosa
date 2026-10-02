@@ -191,53 +191,16 @@ joins the selected server. Uploaded welcome banners are stored in
 `DATA_FOLDER/welcome_banners` and served from the Flask app's public URL.
 
 Run `npm run build` to create the static site in `out/`. In production, the Flask
-server serves Games at `/` without redirecting (preserving Discord's Activity
-query parameters) and serves the static
+server redirects `/` to `/games` for Discord Activities and serves the static
 export for `/games`, `/panel`, and `/music`. The deployment workflow passes
 `DISCORD_CLIENT_ID` as `NEXT_PUBLIC_DISCORD_CLIENT_ID` when building so the
 Activity and backend use the same Discord application.
 
 The Games Activity shares its room state through the `cogs.games` bot extension
-and uses the card layout adapted from the supplied Games UI in
-`components/GameHub.jsx`. The hub loads real rooms and the authenticated Discord
-profile; creating a Xiangqi room opens the existing synchronized match interface.
-PvE creation supports 800, 1200, and 2000 ELO. Other game cards are marked as
-coming soon; tournaments, rankings, password rooms, and custom clock settings
-are not available yet. Browser users can sign in through `/login?next=/games`;
-Discord Activities continue to use the Embedded App SDK. All Games API requests
-require a Discord session, and player identity comes from that session.
-
-Run backend integration checks with `python -m unittest discover -s tests -v`.
-These cover room creation, joining, PvE moves, chat, and session authorization.
-
-The Games Activity persists its room state through the `cogs.games` bot extension
 and persists it in `data/games.json`. Keep the configured `DATA_FOLDER`
 available to the bot so game rooms survive restarts. Xiangqi uses a 20-minute
 clock per side with a 5-second increment after each legal move; both players
 must be ready before the clock starts. Legal Xiangqi moves, check/checkmate,
 and clock updates are validated by the game cog. Each player's countdown is
-shown beside their avatar. Room membership heartbeats expire after 60 seconds,
+shown beside their avatar. Room membership heartbeats expire after 20 seconds,
 so rooms are removed after their final participant disconnects.
-
-### Discord Activity game hub
-
-The hub adapts the supplied game catalog and artwork in `components/GameCatalog.jsx`.
-`components/GameHub.jsx` connects room creation and joining to the existing
-`components/Games.jsx` Activity controller and `/api/games/rooms` bot API.
-Only Xiangqi is playable; the other catalog entries are marked as coming soon.
-Demo rooms, leaderboards, currency, tournaments, and client-side passwords are
-not presented as live features. AI selection is available inside a Xiangqi room.
-
-In the Discord Developer Portal, enable Activities and map the root URL `/` to
-the public HTTPS Flask host. This mapping must serve `/api/*` and `/_next/*` as
-well as the HTML. Keep the launch query parameters (especially `frame_id`) intact
-at any reverse proxy. Do not apply `X-Frame-Options: DENY` or `SAMEORIGIN` to the
-Activity; any `frame-ancestors` policy must permit the Discord clients you support.
-Build with `NEXT_PUBLIC_DISCORD_CLIENT_ID` matching the bot's `DISCORD_CLIENT_ID`.
-
-To verify a deployment, launch the Activity from a Discord voice channel, finish
-authorization, create a named room, and join from a second Discord account.
-Check ready/start, a legal move, AI, chat, leaving, and reconnecting. Repeat with
-a narrow mobile viewport and a short desktop iframe; authentication and room
-dialogs must remain scrollable. Direct browser access shows instructions to
-open through Discord rather than pretending to authenticate a demo user.
