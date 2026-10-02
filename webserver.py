@@ -93,8 +93,8 @@ def add_log(message, level="info"):
 
 @app.route('/')
 def index():
-    # Discord Activity mở URL gốc, nên chuyển thẳng tới trang Games.
-    return redirect(url_for('games'))
+    # Serve in place: redirects discard Discord's frame_id / instance_id query.
+    return send_from_directory(FRONTEND_DIR, 'games.html')
 
 @app.route('/panel')
 def panel():
@@ -818,7 +818,7 @@ def api_game_rooms():
         return jsonify({'error': 'Tên phòng không hợp lệ.'}), 400
 
     created_room = games_cog.create_room(room)
-    if created_room is None:
+    if not created_room:
         return jsonify({'error': 'Phòng này đã tồn tại.'}), 409
     return jsonify(created_room), 201
 
