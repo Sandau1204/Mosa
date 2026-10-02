@@ -4,10 +4,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Gamepad2, Trophy, Users, Bot, Sparkles, Volume2, VolumeX, Globe, HelpCircle,
   Search, Swords, Play, PlusCircle, X, Check, ChevronRight, Crown, MessageSquare,
-  ShieldAlert, Flame, Zap, Radio, Signal, UserCheck, Clock, Eye, RotateCcw,
-  Sliders, Share2, Menu, ChevronDown, Lock, Unlock, KeyRound, DoorOpen, LogOut,
-  Flag, Handshake, ArrowLeftRight, UserMinus, UserPlus, Send, Settings
+  ShieldAlert, Flame, Zap, Radio, Signal, UserCheck, RotateCcw,
+  Sliders, Share2, Menu, ChevronDown, Lock, Unlock, KeyRound, DoorOpen,
+  ArrowLeftRight, UserMinus, UserPlus, Send, Settings
 } from 'lucide-react';
+import GameRoomShell from './GameRoomShell';
+import ChessRoom from './games/ChessRoom';
+import XiangqiRoom from './games/XiangqiRoom';
 
 const TRANSLATIONS = {
   VI: {
@@ -287,14 +290,7 @@ const INITIAL_CHESS_BOARD = [
 ];
 
 const CHESS_PIECES = { k: { white: '♔', black: '♚' }, q: { white: '♕', black: '♛' }, r: { white: '♖', black: '♜' }, b: { white: '♗', black: '♝' }, n: { white: '♘', black: '♞' }, p: { white: '♙', black: '♟' } };
-const CHESS_ASSETS = {
-  p: { white: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg', black: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg' },
-  n: { white: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg', black: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg' },
-  b: { white: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg', black: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg' },
-  r: { white: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg', black: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg' },
-  q: { white: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg', black: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg' },
-  k: { white: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg', black: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg' },
-};
+
 
 function getPieceAt(board, x, y) { return board.find(p => p.x === x && p.y === y) || null; }
 function isInPalace(x, y, side) {
@@ -548,120 +544,6 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
   }
 };
 
-const XiangqiBoard = ({ board, isFlipped = false, isPlaying = false, activeSide, playerSide, selectablePieces, selectedPiece, legalMoves, checkSide, onSelectPiece, onMove }) => {
-  const findPiece = (x, y) => board.find(piece => piece.x === x && piece.y === y);
-  const canMove = isPlaying && (!playerSide || playerSide === activeSide);
-  const isLegalDestination = (x, y) => legalMoves.some(move => move.x === x && move.y === y);
-
-  return (
-    <div className={`@container relative w-full max-w-[600px] aspect-[8/9] bg-amber-100/95 border-2 sm:border-4 border-amber-900 rounded-xl sm:rounded-2xl p-2 sm:p-3 md:p-4 lg:p-5 shadow-[inset_0_0_20px_rgba(120,53,15,0.4),0_10px_30px_rgba(0,0,0,0.5)] transition-transform duration-500 flex flex-col justify-center items-center ${isFlipped ? 'rotate-180' : ''}`}>
-      <div className="relative w-full h-full border-2 border-amber-950 shrink-0">
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div key={`h-${i}`} className="absolute w-full h-[1px] bg-amber-950/80" style={{ top: `${(i / 9) * 100}%` }} />
-        ))}
-        {Array.from({ length: 9 }).map((_, i) => (
-          <React.Fragment key={`v-${i}`}>
-            <div className="absolute w-[1px] bg-amber-950/80" style={{ left: `${(i / 8) * 100}%`, top: '0%', height: `${(4 / 9) * 100}%` }} />
-            <div className="absolute w-[1px] bg-amber-950/80" style={{ left: `${(i / 8) * 100}%`, top: `${(5 / 9) * 100}%`, height: `${(4 / 9) * 100}%` }} />
-            {(i === 0 || i === 8) && (
-              <div className="absolute w-[1px] bg-amber-950/80" style={{ left: `${(i / 8) * 100}%`, top: `${(4 / 9) * 100}%`, height: `${(1 / 9) * 100}%` }} />
-            )}
-          </React.Fragment>
-        ))}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-          <line x1="37.5" y1="0" x2="62.5" y2="22.22" stroke="#451a03" strokeWidth="0.6" />
-          <line x1="62.5" y1="0" x2="37.5" y2="22.22" stroke="#451a03" strokeWidth="0.6" />
-          <line x1="37.5" y1="77.78" x2="62.5" y2="100" stroke="#451a03" strokeWidth="0.6" />
-          <line x1="62.5" y1="77.78" x2="37.5" y2="100" stroke="#451a03" strokeWidth="0.6" />
-        </svg>
-        <div className="absolute top-[44.44%] left-0 right-0 h-[11.11%] flex justify-around items-center px-4 pointer-events-none text-amber-950/70 font-serif font-black text-xs sm:text-sm md:text-base tracking-widest">
-          <span className={isFlipped ? 'rotate-180' : ''}>楚 河</span>
-          <span className={isFlipped ? 'rotate-180' : ''}>漢 界</span>
-        </div>
-        {Array.from({ length: 10 }, (_, y) =>
-          Array.from({ length: 9 }, (_, x) => {
-            const piece = findPiece(x, y);
-            const isDestination = isLegalDestination(x, y);
-            if (!isDestination && !piece) return null;
-            if (isDestination && !piece) {
-              return (
-                <button
-                  key={`move-${x}-${y}`}
-                  aria-label={`Move to ${x}, ${y}`}
-                  onClick={() => onMove(selectedPiece.x, selectedPiece.y, x, y)}
-                  className={`absolute z-20 h-[clamp(8px,3.8cqw,16px)] w-[clamp(8px,3.8cqw,16px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-800/80 bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.8)] hover:scale-125 transition-transform`}
-                  style={{ left: `${(x / 8) * 100}%`, top: `${(y / 9) * 100}%` }}
-                />
-              );
-            }
-            const isCurrentSide = !playerSide || piece.side === playerSide;
-            const isSelectable = canMove && isCurrentSide && piece.side === activeSide && (selectablePieces?.some(position => position.x === x && position.y === y) ?? true);
-            const isSelected = selectedPiece?.x === x && selectedPiece?.y === y;
-            const isCheckedKing = piece.type === 'K' && piece.side === checkSide;
-            return (
-              <button
-                key={`piece-${x}-${y}`}
-                onClick={() => { if (isDestination) onMove(selectedPiece.x, selectedPiece.y, x, y); else if (isSelectable) onSelectPiece(x, y); }}
-                disabled={!isSelectable && !isDestination}
-                className={`absolute z-20 flex aspect-square w-[clamp(24px,8cqw,48px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 font-serif text-[clamp(14px,4cqw,24px)] font-black shadow-[3px_3px_0px_rgba(0,0,0,0.6)] transition-all
-                  ${piece.side === 'red' ? 'border-red-700 bg-amber-50 text-red-600' : 'border-slate-300 bg-slate-900 text-amber-200'}
-                  ${isSelectable ? 'cursor-pointer hover:scale-110' : 'cursor-default'}
-                  ${isSelected ? 'ring-2 sm:ring-4 ring-emerald-400 scale-105' : ''}
-                  ${isDestination ? 'ring-2 sm:ring-4 ring-emerald-500' : ''}
-                  ${isCheckedKing ? 'animate-check-pulse ring-2 sm:ring-4 ring-rose-500' : ''}`}
-                style={{ left: `${(x / 8) * 100}%`, top: `${(y / 9) * 100}%` }}
-              >
-                <span className={isFlipped ? 'rotate-180' : ''}>{PIECE_LABELS[piece.type][piece.side]}</span>
-              </button>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-};
-
-const ChessBoard = ({ board, isFlipped = false, isPlaying = false, activeSide, playerSide, selectedPiece, legalMoves, onSelectPiece, onMove }) => {
-  const findPiece = (x, y) => board.find(piece => piece.x === x && piece.y === y);
-  const canMove = isPlaying && (!playerSide || playerSide === activeSide);
-  const isLegalDestination = (x, y) => legalMoves.some(move => move.x === x && move.y === y);
-
-  return (
-    <div className={`@container relative w-full max-w-[600px] aspect-square bg-[#F3D7B6] border-[8px] sm:border-[12px] md:border-[16px] border-[#C36F5A] rounded-sm shadow-2xl p-0 flex flex-col justify-center items-center ${isFlipped ? 'rotate-180' : ''}`}>
-      <div className="relative w-full h-full border-2 border-[#8A3A2B] shrink-0 grid grid-cols-8 grid-rows-8 shadow-[inset_0_0_15px_rgba(0,0,0,0.3)]">
-        {Array.from({ length: 64 }).map((_, i) => {
-          const x = i % 8;
-          const y = Math.floor(i / 8);
-          const isDark = (x + y) % 2 === 1;
-          const piece = findPiece(x, y);
-          const isDestination = isLegalDestination(x, y);
-          const isSelectable = canMove && (!playerSide || piece?.side === playerSide) && piece?.side === activeSide;
-          const isSelected = selectedPiece?.x === x && selectedPiece?.y === y;
-
-          return (
-             <div
-               key={`cell-${x}-${y}`}
-               onClick={() => { if (isDestination) onMove(selectedPiece.x, selectedPiece.y, x, y); else if (isSelectable && piece) onSelectPiece(x, y); }}
-               className={`relative flex items-center justify-center ${isDark ? 'bg-[#C36F5A]' : 'bg-[#F3D7B6]'} ${isSelectable ? 'cursor-pointer' : ''}`}
-             >
-               {isSelected && <div className="absolute inset-0 bg-yellow-400/50 z-10" />}
-               {isDestination && ( <div className={`absolute z-20 rounded-full ${piece ? 'w-[80%] h-[80%] border-[6px] border-emerald-500/80 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : 'w-[30%] h-[30%] bg-emerald-500/80 shadow-[0_0_10px_rgba(16,185,129,0.8)]'}`} /> )}
-               {piece && (
-                 <div className={`absolute inset-0 flex items-center justify-center filter drop-shadow-[0_5px_4px_rgba(0,0,0,0.6)] select-none transition-transform ${isSelectable ? 'hover:scale-110 z-40' : 'z-30'} ${isFlipped ? 'rotate-180' : ''}`}>
-                   <img
-                     src={CHESS_ASSETS[piece.type][piece.side]}
-                     alt={`${piece.side} ${piece.type}`}
-                     className="w-[90%] h-[90%] object-contain pointer-events-none"
-                   />
-                 </div>
-               )}
-             </div>
-          )
-        })}
-      </div>
-    </div>
-  );
-};
 
 export default function Games() {
   const [lang, setLang] = useState('VI');
@@ -1109,93 +991,46 @@ export default function Games() {
 
       <div className="flex-1 flex overflow-hidden relative">
         {inGameRoom ? (
-          <main className="flex-1 overflow-y-auto lg:overflow-hidden p-2 sm:p-4 flex flex-col gap-3 bg-slate-950 relative custom-scrollbar">
-            <div className="bg-slate-900 border-4 border-slate-950 rounded-2xl p-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-wrap items-center justify-between gap-2 shrink-0 z-10">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <button onClick={() => setInGameRoom(null)} className="px-3 py-1.5 sm:py-2 bg-rose-500 hover:bg-rose-400 text-white font-black text-[10px] sm:text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center gap-1.5 uppercase">
-                  <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" /><span className="hidden sm:inline">{t.exitRoom}</span>
-                </button>
-                <button onClick={() => setIsSettingsModalOpen(true)} className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all" title={t.settingsTitle}><Sliders className="w-4 h-4" /></button>
-                <div className="text-slate-300">
-                  <h2 className="font-black text-[11px] sm:text-sm text-yellow-400 flex items-center gap-1.5 sm:gap-2"><span className="truncate max-w-[120px] sm:max-w-[200px]">{inGameRoom.name}</span><span className="text-[9px] sm:text-[10px] bg-slate-950 text-cyan-400 border border-slate-800 px-1.5 sm:px-2 py-0.5 rounded-md shrink-0">PvP 1v1</span></h2>
-                </div>
-              </div>
-            </div>
-
-            {/* Grid Layout inside Room */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[auto_1fr_auto] gap-3 lg:gap-4 min-h-0 relative z-10 pb-6 lg:pb-0">
-
-              <div className="order-1 lg:order-none lg:col-start-4 lg:col-span-6 lg:row-start-1 lg:row-span-3 flex flex-col items-center justify-center bg-slate-900 border-4 border-slate-950 rounded-2xl p-2 sm:p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative w-full lg:min-h-0">
-                <div className="w-full h-full max-h-[75vh] flex items-center justify-center">
-                  {inGameRoom.gameType === 'chess' ? (
-                    <ChessBoard board={boardState} isFlipped={isBoardFlipped} isPlaying={true} activeSide={currentTurn === 'r' ? 'white' : 'black'} playerSide={redPlayer?.id === 'u1' ? 'white' : blackPlayer?.id === 'u1' ? 'black' : null} selectedPiece={selectedPiece} legalMoves={legalMoves} onSelectPiece={handleSelectPiece} onMove={handleMove} />
-                  ) : (
-                    <XiangqiBoard board={boardState} isFlipped={isBoardFlipped} isPlaying={true} activeSide={currentTurn === 'r' ? 'red' : 'black'} playerSide={redPlayer?.id === 'u1' ? 'red' : blackPlayer?.id === 'u1' ? 'black' : null} selectedPiece={selectedPiece} legalMoves={legalMoves} checkSide={checkSide} onSelectPiece={handleSelectPiece} onMove={handleMove} />
-                  )}
-                </div>
-              </div>
-
-              <div className="lg:hidden order-2 grid grid-cols-2 gap-2 shrink-0">
-                {renderPlayerProfile(true)}
-                {renderPlayerProfile(false)}
-              </div>
-
-              <div className="order-3 lg:order-none lg:col-start-1 lg:col-span-3 lg:row-start-1 lg:row-span-1 bg-slate-900 border-4 border-slate-950 rounded-2xl p-3.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] space-y-2.5 shrink-0">
-                <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Swords className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400" /> Thao Tác Trận Đấu</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button disabled={!matchStarted} onClick={() => triggerToast(t.drawOfferMsg)} className={`py-2 px-1.5 sm:px-3 font-black text-[10px] sm:text-xs rounded-xl border-2 transition-all flex items-center justify-center gap-1 sm:gap-2 uppercase ${matchStarted ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5' : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60'}`}>
-                    <Handshake className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="truncate">{t.offerDraw}</span>
-                  </button>
-                  <button disabled={!matchStarted} onClick={() => triggerToast(t.resignMsg)} className={`py-2 px-1.5 sm:px-3 font-black text-[10px] sm:text-xs rounded-xl border-2 transition-all flex items-center justify-center gap-1 sm:gap-2 uppercase ${matchStarted ? 'bg-rose-600 hover:bg-rose-500 text-white border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5' : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60'}`}>
-                    <Flag className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="truncate">{t.resign}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="order-4 lg:order-none lg:col-start-10 lg:col-span-3 lg:row-start-2 lg:row-span-1 bg-slate-900 border-4 border-slate-950 rounded-2xl p-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col min-h-[200px] lg:min-h-0 lg:overflow-hidden">
-                <div className="flex items-center justify-between pb-2 border-b-2 border-slate-950 mb-2 shrink-0">
-                  <span className="text-[10px] sm:text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400" /> {t.movesHistory}</span>
-                  <span className="text-[9px] sm:text-[10px] bg-slate-950 text-slate-400 px-2 py-0.5 rounded font-mono font-bold">{movesLog.length} Nước</span>
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar text-[10px] sm:text-xs pr-1">
-                  {movesLog.map((m) => (
-                    <div key={m.id} className="grid grid-cols-12 gap-1 p-1.5 bg-slate-950 border border-slate-800 rounded-xl font-mono text-[10px] sm:text-[11px]">
-                      <span className="col-span-2 text-slate-500 font-bold">#{m.id}</span>
-                      <span className="col-span-5 text-red-400 font-bold truncate">{m.red}</span>
-                      <span className="col-span-5 text-yellow-300 font-bold truncate">{m.black}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="order-5 lg:order-none lg:col-start-1 lg:col-span-3 lg:row-start-2 lg:row-span-2 bg-slate-900 border-4 border-slate-950 rounded-2xl p-3.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex flex-col min-h-[200px] lg:min-h-0 lg:overflow-hidden">
-                <div className="flex items-center justify-between pb-2 border-b-2 border-slate-950 mb-2 shrink-0">
-                  <span className="text-[10px] sm:text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5"><Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" /> {t.spectatorsList}</span>
-                  <span className="bg-slate-950 text-cyan-400 text-[9px] sm:text-[10px] font-mono font-black px-2 py-0.5 rounded-full border border-slate-800">{spectatorsList.length}</span>
-                </div>
-                <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-1">
-                  {spectatorsList.map((spec) => (
-                    <div key={spec.id} className="p-2 bg-slate-950 border-2 border-slate-800 rounded-xl flex items-center justify-between">
-                      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-                        <img src={spec.avatar} alt={spec.name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-slate-950 object-cover shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] shrink-0" />
-                        <div className="min-w-0"><div className="text-[10px] sm:text-xs font-extrabold text-slate-200 leading-tight truncate">{spec.name}</div><div className="text-[8px] sm:text-[9px] font-mono text-slate-400">{spec.elo} ELO</div></div>
-                      </div>
-                      <span className="text-[8px] sm:text-[9px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded border border-slate-800 font-bold shrink-0">Khán Giả</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="hidden lg:flex lg:col-start-10 lg:col-span-3 lg:row-start-1 lg:row-span-1 shrink-0">
-                {renderPlayerProfile(true)}
-              </div>
-
-              <div className="hidden lg:flex lg:col-start-10 lg:col-span-3 lg:row-start-3 lg:row-span-1 shrink-0">
-                {renderPlayerProfile(false)}
-              </div>
-
-            </div>
-          </main>
+          <GameRoomShell
+            room={inGameRoom}
+            t={t}
+            matchStarted={matchStarted}
+            movesLog={movesLog}
+            spectatorsList={spectatorsList}
+            renderPlayerProfile={renderPlayerProfile}
+            onExit={() => setInGameRoom(null)}
+            onSettings={() => setIsSettingsModalOpen(true)}
+            onOfferDraw={() => triggerToast(t.drawOfferMsg)}
+            onResign={() => triggerToast(t.resignMsg)}
+          >
+            {inGameRoom.gameType === 'chess' ? (
+              <ChessRoom
+                board={boardState}
+                isFlipped={isBoardFlipped}
+                isPlaying={true}
+                activeSide={currentTurn === 'r' ? 'white' : 'black'}
+                playerSide={redPlayer?.id === 'u1' ? 'white' : blackPlayer?.id === 'u1' ? 'black' : null}
+                selectedPiece={selectedPiece}
+                legalMoves={legalMoves}
+                onSelectPiece={handleSelectPiece}
+                onMove={handleMove}
+              />
+            ) : (
+              <XiangqiRoom
+                pieceLabels={PIECE_LABELS}
+                board={boardState}
+                isFlipped={isBoardFlipped}
+                isPlaying={true}
+                activeSide={currentTurn === 'r' ? 'red' : 'black'}
+                playerSide={redPlayer?.id === 'u1' ? 'red' : blackPlayer?.id === 'u1' ? 'black' : null}
+                selectedPiece={selectedPiece}
+                legalMoves={legalMoves}
+                checkSide={checkSide}
+                onSelectPiece={handleSelectPiece}
+                onMove={handleMove}
+              />
+            )}
+          </GameRoomShell>
         ) : (
 
           <main className="flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-4 custom-scrollbar">
