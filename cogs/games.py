@@ -931,7 +931,7 @@ class Game(commands.Cog):
             room.setdefault("revision", 0)
             room["status"] = "waiting"
             room["redReady"] = False
-            room["blackReady"] = False
+            room["blackReady"] = bool((room.get("blackPlayer") or {}).get("isBot"))
             room["board"] = initial_board()
             room["checkSide"] = None
             room["clock"] = None

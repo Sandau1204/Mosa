@@ -197,10 +197,23 @@ export for `/games`, `/panel`, and `/music`. The deployment workflow passes
 Activity and backend use the same Discord application.
 
 The Games Activity shares its room state through the `cogs.games` bot extension
+and uses the card layout adapted from the supplied Games UI in
+`components/GameHub.jsx`. The hub loads real rooms and the authenticated Discord
+profile; creating a Xiangqi room opens the existing synchronized match interface.
+PvE creation supports 800, 1200, and 2000 ELO. Other game cards are marked as
+coming soon; tournaments, rankings, password rooms, and custom clock settings
+are not available yet. Browser users can sign in through `/login?next=/games`;
+Discord Activities continue to use the Embedded App SDK. All Games API requests
+require a Discord session, and player identity comes from that session.
+
+Run backend integration checks with `python -m unittest discover -s tests -v`.
+These cover room creation, joining, PvE moves, chat, and session authorization.
+
+The Games Activity persists its room state through the `cogs.games` bot extension
 and persists it in `data/games.json`. Keep the configured `DATA_FOLDER`
 available to the bot so game rooms survive restarts. Xiangqi uses a 20-minute
 clock per side with a 5-second increment after each legal move; both players
 must be ready before the clock starts. Legal Xiangqi moves, check/checkmate,
 and clock updates are validated by the game cog. Each player's countdown is
-shown beside their avatar. Room membership heartbeats expire after 20 seconds,
+shown beside their avatar. Room membership heartbeats expire after 60 seconds,
 so rooms are removed after their final participant disconnects.
