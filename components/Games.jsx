@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Gamepad2, Trophy, Users, Bot, Sparkles, Volume2, VolumeX, Globe, HelpCircle,
   Search, Swords, Play, PlusCircle, X, Check, ChevronRight, Crown, MessageSquare,
   ShieldAlert, Flame, Zap, Radio, Signal, UserCheck, RotateCcw,
-  Sliders, Share2, Menu, ChevronDown, Lock, Unlock, KeyRound, DoorOpen,
+  Sliders, Share2, Menu, ChevronDown, Lock, Unlock, KeyRound, DoorOpen, LogOut,
   ArrowLeftRight, UserMinus, UserPlus, Send, Settings
 } from 'lucide-react';
 import GameRoomShell from './GameRoomShell';
@@ -15,12 +15,22 @@ import XiangqiRoom from './games/XiangqiRoom';
 const TRANSLATIONS = {
   VI: {
     hubTitle: "DISCORD GAME HUB",
-    serverName: "VN Boardgame Guild",
-    voiceChannel: "🔊 Phòng Game #1",
-    onlinePlayers: "5 Đang Online",
+    noGuilds: "Bot chưa tham gia server Discord nào mà bạn đang ở trong đó.",
+    loadingLobby: "Đang tải dữ liệu Game Hub...",
+    lobbyLoadError: "Không thể tải dữ liệu Game Hub.",
+    noVoiceMembers: "Hiện không có thành viên nào trong kênh thoại.",
+    noSpectators: "Chưa có khán giả trong phòng.",
+    noLeaderboard: "Chưa có kết quả trận đấu được ghi nhận.",
+    inviteError: "Không thể tạo lời mời Discord.",
+    unsupportedGameRoom: "Đã tham gia phòng. Giao diện chơi trò này chưa được hỗ trợ.",
+    unsupportedGameCreated: "Đã tạo phòng. Trò chơi này chưa có giao diện chơi.",
+    tournamentCreated: "Đã tạo giải đấu.",
+    leaveRoom: "Rời phòng",
+    serverLabel: "Server",
+    serverName: "Server",
+    voiceChannel: "Kênh thoại",
+    onlinePlayers: "Đang online",
     ping: "Ping",
-    featuredTitle: "GIẢI ĐẤU CỜ TƯỚNG TẾT 2026",
-    featuredDesc: "Tham gia thi đấu 1v1 Server - Thưởng 10.000 Vàng & Danh hiệu Kiện Tướng!",
     searchPlaceholder: "Tìm kiếm game (Cờ Tướng, UNO, Cờ Vua...)...",
     filterAll: "Tất Cả",
     filter1v1: "Đối Kháng 1v1",
@@ -111,12 +121,22 @@ const TRANSLATIONS = {
   },
   EN: {
     hubTitle: "DISCORD GAME HUB",
-    serverName: "VN Boardgame Guild",
-    voiceChannel: "🔊 Game Lounge #1",
-    onlinePlayers: "5 Online",
+    noGuilds: "The bot is not in any Discord server that you belong to.",
+    loadingLobby: "Loading Game Hub data...",
+    lobbyLoadError: "Could not load Game Hub data.",
+    noVoiceMembers: "There are no members in voice channels right now.",
+    noSpectators: "There are no spectators in this room.",
+    noLeaderboard: "No completed game results have been recorded.",
+    inviteError: "Could not create a Discord invite.",
+    unsupportedGameRoom: "Joined the room. Gameplay for this game is not available yet.",
+    unsupportedGameCreated: "Room created. Gameplay for this game is not available yet.",
+    tournamentCreated: "Tournament created.",
+    leaveRoom: "Leave room",
+    serverLabel: "Server",
+    serverName: "Server",
+    voiceChannel: "Voice channel",
+    onlinePlayers: "Online",
     ping: "Ping",
-    featuredTitle: "XIANGQI CHAMPIONSHIP 2026",
-    featuredDesc: "Join 1v1 Server Tournament - Win 10,000 Coins & Grandmaster Badge!",
     searchPlaceholder: "Search boardgames (Xiangqi, Chess, UNO...)...",
     filterAll: "All Games",
     filter1v1: "1v1 Battle",
@@ -207,58 +227,14 @@ const TRANSLATIONS = {
   }
 };
 
-const MOCK_ROOMS = {
-  xiangqi: [
-    { id: 'r1', name: '🔥 Cao Thủ Cờ Tướng #1', host: 'Grandmaster_Nam', players: 1, maxPlayers: 2, isLocked: false, status: 'waiting' },
-    { id: 'r2', name: '🔒 Đấu Kèo 10.000 Vàng', host: 'DragonSlayer99', players: 1, maxPlayers: 2, isLocked: true, pass: '1234', status: 'waiting' },
-    { id: 'r3', name: 'Giao Lưu Vui Vẻ Kênh Voice', host: 'CuteCat_Vn', players: 2, maxPlayers: 2, isLocked: false, status: 'in-game' }
-  ],
-  chess: [
-    { id: 'r4', name: '👑 Blitz 3+0 Match', host: 'Queen_Alice', players: 1, maxPlayers: 2, isLocked: false, status: 'waiting' },
-    { id: 'r5', name: '🔒 Phòng Đấu Giải Nội Bộ', host: 'MechMaster', players: 1, maxPlayers: 2, isLocked: true, pass: '8888', status: 'waiting' }
-  ],
-  monopoly: [
-    { id: 'r6', name: '🎩 Bàn Tỷ Phú 4 Người Sài Gòn', host: 'RichKid_Pro', players: 3, maxPlayers: 4, isLocked: false, status: 'waiting' },
-    { id: 'r7', name: '🔒 Phòng Riêng Bang Hội', host: 'Sakura_VN', players: 2, maxPlayers: 4, isLocked: true, pass: '6666', status: 'waiting' }
-  ],
-  uno: [
-    { id: 'r8', name: '🎴 UNO Tốc Độ 8 Slot Ultra', host: 'LuckyUno_King', players: 5, maxPlayers: 8, isLocked: false, status: 'waiting' },
-    { id: 'r9', name: 'Phòng Vui Vẻ Khô Máu +4', host: 'CuteCat_Vn', players: 2, maxPlayers: 4, isLocked: false, status: 'waiting' }
-  ],
-  ludo: [
-    { id: 'r10', name: '🐴 Đua Ngựa 4 Người Vui Vẻ', host: 'MechMaster', players: 2, maxPlayers: 4, isLocked: false, status: 'waiting' }
-  ],
-  caro: [
-    { id: 'r11', name: '❌ Caro Nhanh 15s Mới Vô', host: 'DragonSlayer99', players: 1, maxPlayers: 2, isLocked: false, status: 'waiting' }
-  ],
-  werewolf: [
-    { id: 'r12', name: '🐺 Ma Sói Voice Lounge Night', host: 'Grandmaster_Nam', players: 8, maxPlayers: 12, isLocked: false, status: 'waiting' }
-  ]
-};
-
 const GAMES_DATA = [
-  { id: 'xiangqi', title: 'Cờ Tướng (Xiangqi)', desc: 'Cờ Tướng truyền thống đỉnh cao, đấu 1v1 hoặc tập luyện với AI Kiện Tướng.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '300 - 2400 ELO', badge: 'HOT 🔥', badgeColor: 'bg-rose-500 text-white', bgGradient: 'from-amber-500 to-red-600', icon: '♟️', minPlayers: 1, maxPlayers: 2 },
-  { id: 'chess', title: 'Cờ Vua (Chess)', desc: 'Thách đấu Cờ Vua chuẩn quốc tế với bảng phân tích nước đi và Replay.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '400 - 2800 ELO', badge: 'POPULAR 🏆', badgeColor: 'bg-indigo-600 text-white', bgGradient: 'from-blue-600 to-indigo-800', icon: '👑', minPlayers: 1, maxPlayers: 2 },
-  { id: 'monopoly', title: 'Cờ Tỷ Phú (Business Land)', desc: 'Đổ xí ngầu, mua đất, xây khách sạn và đẩy bạn bè vào cảnh phá sản!', category: 'Party', isStrategy: false, players: '2 - 6 Người', aiElo: 'Smart Bot', badge: 'PARTY 🎉', badgeColor: 'bg-emerald-500 text-slate-900', bgGradient: 'from-emerald-400 to-teal-700', icon: '🎩', minPlayers: 2, maxPlayers: 6 },
-  { id: 'uno', title: 'Bài UNO Crazy', desc: 'Trận chiến bài UNO siêu tốc với các lá +4, Đổi Hướng vô cùng cay đắng!', category: 'Party', isStrategy: false, players: '2 - 8 Người', aiElo: 'Fast Bot', badge: 'NEW ⚡', badgeColor: 'bg-yellow-400 text-slate-900', bgGradient: 'from-yellow-400 to-orange-600', icon: '🎴', minPlayers: 2, maxPlayers: 8 },
-  { id: 'ludo', title: 'Cờ Cá Ngựa (Ludo Pop)', desc: 'Đua ngựa về chuồng cực hài hước, đá ngựa đối thủ về vạch xuất phát.', category: 'Party', isStrategy: false, players: '2 - 4 Người', aiElo: 'Easy / Hard', badge: 'FUN 🎲', badgeColor: 'bg-cyan-400 text-slate-900', bgGradient: 'from-cyan-400 to-blue-600', icon: '🐴', minPlayers: 2, maxPlayers: 4 },
-  { id: 'caro', title: 'Cờ Caro (Gomoku 5-in-a-row)', desc: 'Nối 5 nước cờ Caro cổ điển, nhịp độ nhanh giải trí cực tốt.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '3 Chế độ AI', badge: 'QUICK ⏱️', badgeColor: 'bg-purple-500 text-white', bgGradient: 'from-purple-500 to-pink-600', icon: '❌', minPlayers: 1, maxPlayers: 2 },
-  { id: 'werewolf', title: 'Ma Sói Mini (Werewolf)', desc: 'Trò chơi tranh luận bằng Voice Discord! Tìm ra Ma Sói đang ẩn nấp.', category: 'Party', isStrategy: true, players: '6 - 16 Người', aiElo: 'Chỉ đấu người', badge: 'VOICE 🎙️', badgeColor: 'bg-slate-700 text-yellow-300', bgGradient: 'from-slate-800 to-purple-900', icon: '🐺', minPlayers: 6, maxPlayers: 16 }
-];
-
-const MOCK_VOICE_MEMBERS = [
-  { id: 'u1', name: 'You (Me)', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80', status: 'ready', level: 42, role: 'Host' },
-  { id: 'u2', name: 'DragonSlayer99', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80', status: 'in-game', level: 38, role: 'Member' },
-  { id: 'u3', name: 'CuteCat_Vn', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80', status: 'lobby', level: 25, role: 'Member' },
-  { id: 'u4', name: 'MechMaster', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80', status: 'ready', level: 50, role: 'VIP' },
-  { id: 'u5', name: 'Sakura_VN', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&auto=format&fit=crop&q=80', status: 'lobby', level: 19, role: 'Member' }
-];
-
-const MOCK_LEADERBOARD = [
-  { rank: 1, name: 'Grandmaster_Nam', elo: 2850, game: 'Cờ Tướng', badge: '👑' },
-  { rank: 2, name: 'Queen_Alice', elo: 2720, game: 'Cờ Vua', badge: '🥈' },
-  { rank: 3, name: 'RichKid_Pro', elo: 2410, game: 'Cờ Tỷ Phú', badge: '🥉' },
-  { rank: 4, name: 'LuckyUno_King', elo: 2190, game: 'Bài UNO', badge: '⭐' }
+  { id: 'xiangqi', title: 'Cờ Tướng (Xiangqi)', desc: 'Cờ Tướng truyền thống đỉnh cao, đấu 1v1 hoặc tập luyện với AI Kiện Tướng.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '300 - 2400 ELO', badge: 'HOT 🔥', badgeColor: 'bg-rose-500 text-white', bgGradient: 'from-amber-500 to-red-600', icon: '♟️' },
+  { id: 'chess', title: 'Cờ Vua (Chess)', desc: 'Thách đấu Cờ Vua chuẩn quốc tế với bảng phân tích nước đi và Replay.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '400 - 2800 ELO', badge: 'POPULAR 🏆', badgeColor: 'bg-indigo-600 text-white', bgGradient: 'from-blue-600 to-indigo-800', icon: '👑' },
+  { id: 'monopoly', title: 'Cờ Tỷ Phú (Business Land)', desc: 'Đổ xí ngầu, mua đất, xây khách sạn và đẩy bạn bè vào cảnh phá sản!', category: 'Party', isStrategy: false, players: '2 - 6 Người', aiElo: 'Smart Bot', badge: 'PARTY 🎉', badgeColor: 'bg-emerald-500 text-slate-900', bgGradient: 'from-emerald-400 to-teal-700', icon: '🎩' },
+  { id: 'uno', title: 'Bài UNO Crazy', desc: 'Trận chiến bài UNO siêu tốc với các lá +4, Đổi Hướng vô cùng cay đắng!', category: 'Party', isStrategy: false, players: '2 - 8 Người', aiElo: 'Fast Bot', badge: 'NEW ⚡', badgeColor: 'bg-yellow-400 text-slate-900', bgGradient: 'from-yellow-400 to-orange-600', icon: '🎴' },
+  { id: 'ludo', title: 'Cờ Cá Ngựa (Ludo Pop)', desc: 'Đua ngựa về chuồng cực hài hước, đá ngựa đối thủ về vạch xuất phát.', category: 'Party', isStrategy: false, players: '2 - 4 Người', aiElo: 'Easy / Hard', badge: 'FUN 🎲', badgeColor: 'bg-cyan-400 text-slate-900', bgGradient: 'from-cyan-400 to-blue-600', icon: '🐴' },
+  { id: 'caro', title: 'Cờ Caro (Gomoku 5-in-a-row)', desc: 'Nối 5 nước cờ Caro cổ điển, nhịp độ nhanh giải trí cực tốt.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '3 Chế độ AI', badge: 'QUICK ⏱️', badgeColor: 'bg-purple-500 text-white', bgGradient: 'from-purple-500 to-pink-600', icon: '❌' },
+  { id: 'werewolf', title: 'Ma Sói Mini (Werewolf)', desc: 'Trò chơi tranh luận bằng Voice Discord! Tìm ra Ma Sói đang ẩn nấp.', category: 'Party', isStrategy: true, players: '6 - 16 Người', aiElo: 'Chỉ đấu người', badge: 'VOICE 🎙️', badgeColor: 'bg-slate-700 text-yellow-300', bgGradient: 'from-slate-800 to-purple-900', icon: '🐺' }
 ];
 
 const INITIAL_XIANGQI_BOARD = [
@@ -544,6 +520,24 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
   }
 };
 
+async function gamesApiRequest(path, options = {}) {
+  const response = await fetch(path, {
+    credentials: 'same-origin',
+    ...options,
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...options.headers
+    }
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.error || `Game Hub API request failed (${response.status}).`);
+  }
+  if (!data || typeof data !== 'object') {
+    throw new Error('Game Hub API returned an invalid response.');
+  }
+  return data;
+}
 
 export default function Games() {
   const [lang, setLang] = useState('VI');
@@ -556,7 +550,26 @@ export default function Games() {
   const discordClientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
 
   const [bgmMuted, setBgmMuted] = useState(false);
-  const [ping, setPing] = useState(18);
+  const [ping, setPing] = useState(null);
+  const [lobbyData, setLobbyData] = useState({
+    guilds: [],
+    guild: null,
+    voiceMembers: [],
+    voiceChannels: [],
+    rooms: [],
+    tournament: null,
+    leaderboard: [],
+    ping: null
+  });
+  const [selectedGuildId, setSelectedGuildId] = useState('');
+  const [lobbyLoading, setLobbyLoading] = useState(true);
+  const [lobbyError, setLobbyError] = useState('');
+  const [roomActionLoading, setRoomActionLoading] = useState(false);
+  const [tournamentActionLoading, setTournamentActionLoading] = useState(false);
+  const [tournamentTitle, setTournamentTitle] = useState('');
+  const [tournamentGameId, setTournamentGameId] = useState('xiangqi');
+  const [tournamentPrize, setTournamentPrize] = useState('');
+  const [tournamentDescription, setTournamentDescription] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('ALL');
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -568,8 +581,8 @@ export default function Games() {
   const [roomName, setRoomName] = useState('');
   const [isRoomLocked, setIsRoomLocked] = useState(false);
   const [roomPassword, setRoomPassword] = useState('');
-  const isServerOwner = false;
-  const [activeTournament, setActiveTournament] = useState(null);
+  const isServerOwner = lobbyData.guild?.isOwner === true;
+  const activeTournament = lobbyData.tournament;
   const [isCreateTournamentModalOpen, setIsCreateTournamentModalOpen] = useState(false);
 
   // Lobby Config State
@@ -594,11 +607,11 @@ export default function Games() {
   const [legalMoves, setLegalMoves] = useState([]);
   const [checkSide, setCheckSide] = useState(null);
   const [movesLog, setMovesLog] = useState([]);
-  const [spectatorsList, setSpectatorsList] = useState(MOCK_VOICE_MEMBERS.slice(2, 4));
+  const spectatorsList = [];
 
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
-  const [userCoins, setUserCoins] = useState(2450);
+  const apiBase = isDiscordEmbedded ? '/.proxy/api/games' : '/api/games';
 
   useEffect(() => {
     let cancelled = false;
@@ -679,10 +692,46 @@ export default function Games() {
     };
   }, [authAttempt, discordClientId]);
 
+  const refreshLobby = useCallback(async () => {
+    const query = selectedGuildId ? `?guild_id=${encodeURIComponent(selectedGuildId)}` : '';
+    const data = await gamesApiRequest(`${apiBase}/lobby${query}`);
+    setLobbyData(data);
+    setPing(data.ping);
+    setLobbyError('');
+    if (!selectedGuildId && data.guild?.id) setSelectedGuildId(data.guild.id);
+    return data;
+  }, [apiBase, selectedGuildId]);
+
+  const refreshLobbyAfterAction = async () => {
+    try {
+      await refreshLobby();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t.lobbyLoadError;
+      setLobbyError(message);
+      triggerToast(message);
+    }
+  };
+
   useEffect(() => {
-    const interval = setInterval(() => setPing(Math.floor(15 + Math.random() * 8)), 3000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!discordUser) return undefined;
+    let cancelled = false;
+    const loadLobby = async () => {
+      try {
+        await refreshLobby();
+      } catch (error) {
+        if (!cancelled) setLobbyError(error instanceof Error ? error.message : t.lobbyLoadError);
+      } finally {
+        if (!cancelled) setLobbyLoading(false);
+      }
+    };
+    setLobbyLoading(true);
+    loadLobby();
+    const interval = setInterval(loadLobby, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [discordUser, refreshLobby, t.lobbyLoadError]);
 
   useEffect(() => {
     if (!inGameRoom || !inGameRoom.isTimerEnabled || !matchStarted) return;
@@ -713,34 +762,176 @@ export default function Games() {
   }, [redPlayer?.isReady, blackPlayer?.isReady, inGameRoom, matchStarted]);
 
   const triggerToast = (msg) => { setToastMessage(msg); setShowInviteToast(true); setTimeout(() => setShowInviteToast(false), 3500); };
-  const handleOpenRoomList = (game) => { setSelectedGame(game); setActiveModal('roomList'); setJoiningRoom(null); setPasswordError(''); setPasswordInput(''); };
-  const handleOpenCreateRoom = (game) => { setSelectedGame(game); setRoomName(`Phòng của You (${game.title})`); setIsRoomLocked(false); setRoomPassword(''); setActiveModal('createRoom'); };
+  const handleOpenRoomList = (game) => {
+    setSelectedGame(game);
+    setActiveModal('roomList');
+    setJoiningRoom(null);
+    setPasswordError('');
+    setPasswordInput('');
+    setLobbyLoading(true);
+    refreshLobby()
+      .catch(error => setLobbyError(error instanceof Error ? error.message : t.lobbyLoadError))
+      .finally(() => setLobbyLoading(false));
+  };
+  const handleOpenCreateRoom = (game) => { setSelectedGame(game); setRoomName(''); setIsRoomLocked(false); setRoomPassword(''); setActiveModal('createRoom'); };
 
   const handleEnterGameRoom = (roomObj, gameType) => {
     setActiveModal(null);
-    setInGameRoom({ id: roomObj?.id || 'r1', name: roomObj?.name || '🔥 Trận Đấu Mới', host: roomObj?.host || 'You', isTimerEnabled: roomObj?.isTimerEnabled ?? true, gameType: gameType });
+    setInGameRoom({ ...roomObj, gameType, guildId: selectedGuildId });
     setRedPlayer(null); setBlackPlayer(null); setMatchStarted(false); setIsBoardFlipped(false);
     setRedTurnTime(900); setBlackTurnTime(900); setCurrentTurn('r');
     setBoardState(gameType === 'chess' ? INITIAL_CHESS_BOARD : INITIAL_XIANGQI_BOARD);
     setMovesLog([]);
   };
 
-  const handleJoinRoom = (room) => {
-    if (room.isLocked) { setJoiningRoom(room); setPasswordInput(''); setPasswordError(''); }
-    else {
-      if (selectedGame?.id === 'xiangqi' || room.name.includes('Cờ Tướng')) { handleEnterGameRoom(room, 'xiangqi'); }
-      else if (selectedGame?.id === 'chess' || room.name.includes('Cờ Vua')) { handleEnterGameRoom(room, 'chess'); }
-      else { alert(`Đã tham gia phòng "${room.name}"!`); setActiveModal(null); }
+  const handleJoinRoom = async (room, password = '') => {
+    setRoomActionLoading(true);
+    try {
+      const result = await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(room.id)}/join`, {
+        method: 'POST',
+        body: JSON.stringify({ guild_id: selectedGuildId, password })
+      });
+      await refreshLobbyAfterAction();
+      setJoiningRoom(null);
+      if (room.gameId === 'xiangqi' || room.gameId === 'chess') {
+        handleEnterGameRoom(result.room, room.gameId);
+      } else {
+        setActiveModal(null);
+        triggerToast(t.unsupportedGameRoom);
+      }
+    } catch (error) {
+      if (room.isLocked) setPasswordError(error instanceof Error ? error.message : t.invalidPasswordMsg);
+      else triggerToast(error instanceof Error ? error.message : t.lobbyLoadError);
+    } finally {
+      setRoomActionLoading(false);
     }
   };
 
   const handleConfirmPassword = () => {
-    if (joiningRoom && joiningRoom.pass === passwordInput) {
-      if (selectedGame?.id === 'xiangqi' || joiningRoom.name.includes('Cờ Tướng')) { handleEnterGameRoom(joiningRoom, 'xiangqi'); }
-      else if (selectedGame?.id === 'chess' || joiningRoom.name.includes('Cờ Vua')) { handleEnterGameRoom(joiningRoom, 'chess'); }
-      else { alert(`Mật khẩu chính xác! Đã vào "${joiningRoom.name}".`); setActiveModal(null); }
-      setJoiningRoom(null);
-    } else { setPasswordError(t.invalidPasswordMsg); }
+    if (joiningRoom) handleJoinRoom(joiningRoom, passwordInput);
+  };
+
+  const handleCreateRoom = async () => {
+    if (!selectedGame || !selectedGuildId) {
+      triggerToast(lobbyError || t.noGuilds);
+      return;
+    }
+    setRoomActionLoading(true);
+    try {
+      const result = await gamesApiRequest(`${apiBase}/rooms`, {
+        method: 'POST',
+        body: JSON.stringify({
+          guild_id: selectedGuildId,
+          game_id: selectedGame.id,
+          name: roomName,
+          password: roomPassword,
+          is_locked: isRoomLocked,
+          is_timer_enabled: isTimerEnabled,
+          allow_spectators: allowSpectators,
+          mode: lobbyMode,
+          bot_elo: botEloLevel
+        })
+      });
+      await refreshLobbyAfterAction();
+      setActiveModal(null);
+      if (selectedGame.id === 'xiangqi' || selectedGame.id === 'chess') {
+        handleEnterGameRoom(result.room, selectedGame.id);
+      } else {
+        triggerToast(t.unsupportedGameCreated);
+      }
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : t.lobbyLoadError);
+    } finally {
+      setRoomActionLoading(false);
+    }
+  };
+
+  const handleExitGameRoom = async () => {
+    const room = inGameRoom;
+    if (!room) return;
+    try {
+      await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(room.id)}/leave`, {
+        method: 'POST',
+        body: JSON.stringify({ guild_id: room.guildId })
+      });
+      await refreshLobbyAfterAction();
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : t.lobbyLoadError);
+    } finally {
+      setInGameRoom(null);
+    }
+  };
+
+  const handleCreateTournament = async () => {
+    setTournamentActionLoading(true);
+    try {
+      const result = await gamesApiRequest(`${apiBase}/tournaments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          guild_id: selectedGuildId,
+          title: tournamentTitle,
+          game_id: tournamentGameId,
+          prize: tournamentPrize,
+          description: tournamentDescription
+        })
+      });
+      setLobbyData(previous => ({ ...previous, tournament: result.tournament }));
+      setIsCreateTournamentModalOpen(false);
+      setTournamentTitle('');
+      setTournamentPrize('');
+      setTournamentDescription('');
+      triggerToast(t.tournamentCreated);
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : t.lobbyLoadError);
+    } finally {
+      setTournamentActionLoading(false);
+    }
+  };
+
+  const handleDeleteTournament = async () => {
+    setTournamentActionLoading(true);
+    try {
+      await gamesApiRequest(`${apiBase}/tournaments/${encodeURIComponent(selectedGuildId)}`, {
+        method: 'DELETE'
+      });
+      setLobbyData(previous => ({ ...previous, tournament: null }));
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : t.lobbyLoadError);
+    } finally {
+      setTournamentActionLoading(false);
+    }
+  };
+
+  const handleCreateInvite = async () => {
+    try {
+      const result = await gamesApiRequest(`${apiBase}/invite`, {
+        method: 'POST',
+        body: JSON.stringify({ guild_id: selectedGuildId })
+      });
+      try {
+        await navigator.clipboard.writeText(result.url);
+        triggerToast(result.url);
+      } catch {
+        triggerToast(`${t.inviteError}: ${result.url}`);
+      }
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : t.inviteError);
+    }
+  };
+
+  const handleLeaveLobbyRoom = async (room) => {
+    setRoomActionLoading(true);
+    try {
+      await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(room.id)}/leave`, {
+        method: 'POST',
+        body: JSON.stringify({ guild_id: selectedGuildId })
+      });
+      await refreshLobbyAfterAction();
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : t.lobbyLoadError);
+    } finally {
+      setRoomActionLoading(false);
+    }
   };
 
   const handleLeaveSeat = (side) => {
@@ -898,6 +1089,11 @@ export default function Games() {
       return true;
     });
   }, [searchQuery, selectedFilter]);
+  const selectedGameRooms = lobbyData.rooms.filter(room => room.gameId === selectedGame?.id);
+  const voiceChannelLabel = lobbyData.voiceChannels
+    .filter(channel => channel.memberCount > 0)
+    .map(channel => `🔊 ${channel.name} (${channel.memberCount})`)
+    .join(', ') || t.noVoiceMembers;
 
   if (!discordUser) {
     const isLoading = authStatus === 'loading';
@@ -956,21 +1152,24 @@ export default function Games() {
               <Gamepad2 className="w-5 h-5 animate-bounce" />
               <span className="tracking-wide uppercase font-black">{t.hubTitle}</span>
             </div>
-            <div className="hidden sm:flex items-center gap-2 bg-slate-800/80 border-2 border-slate-700 px-3 py-1 rounded-lg text-xs">
-              <span className="text-slate-400 font-semibold">{t.serverName}</span><span className="text-slate-600">•</span>
-              <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 border border-emerald-500/30">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> {t.voiceChannel}
+            <div className="hidden sm:flex items-center gap-2 bg-slate-800/80 border-2 border-slate-700 px-3 py-1 rounded-lg text-xs min-w-0">
+              <label className="text-slate-400 font-semibold shrink-0" htmlFor="games-server-select">{t.serverLabel}</label>
+              <select id="games-server-select" value={selectedGuildId} onChange={event => setSelectedGuildId(event.target.value)} disabled={lobbyData.guilds.length === 0} className="max-w-40 bg-slate-900 text-white font-bold border border-slate-700 rounded-md px-1.5 py-1">
+                {lobbyData.guilds.length === 0 ? <option value="">{t.serverName}</option> : lobbyData.guilds.map(guild => <option key={guild.id} value={guild.id}>{guild.name}</option>)}
+              </select>
+              <span className="text-slate-600">•</span>
+              <span className="text-emerald-400 font-bold truncate max-w-64" title={voiceChannelLabel}>
+                {voiceChannelLabel}
               </span>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden md:flex items-center gap-2 bg-slate-950 border-2 border-slate-800 px-2.5 py-1 rounded-lg text-xs">
-              <Signal className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400 font-mono font-bold">{ping} ms</span><span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <Signal className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400 font-mono font-bold">{Number.isFinite(ping) ? `${ping} ms` : '—'}</span>
             </div>
             <div className="flex items-center gap-2 bg-slate-800 border-2 border-slate-950 px-2.5 py-1 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
               <div className="relative group cursor-pointer">
                 <img src={discordUser.avatar} alt={discordUser.username} className="w-9 h-9 rounded-full border-2 border-yellow-400 object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-105 transition-transform" />
-                <span className="absolute -bottom-1 -right-1 bg-purple-600 text-[8px] font-black px-1 rounded-full text-white border-2 border-slate-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">Lv42</span>
               </div>
               <div className="hidden lg:block text-left">
                 <div className="flex items-center gap-1.5">
@@ -979,7 +1178,6 @@ export default function Games() {
                     {isServerOwner ? t.ownerLabel : t.memberLabel}
                   </span>
                 </div>
-                <div className="text-[11px] font-bold text-yellow-400 flex items-center gap-1 mt-0.5"><Trophy className="w-3 h-3" /> {userCoins.toLocaleString()} Coins</div>
               </div>
             </div>
             <button onClick={() => setIsSettingsModalOpen(true)} className="p-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all active:translate-y-0.5" title={t.settingsTitle}><Sliders className="w-4 h-4" /></button>
@@ -1002,6 +1200,7 @@ export default function Games() {
             onSettings={() => setIsSettingsModalOpen(true)}
             onOfferDraw={() => triggerToast(t.drawOfferMsg)}
             onResign={() => triggerToast(t.resignMsg)}
+            noSpectatorsLabel={t.noSpectators}
           >
             {inGameRoom.gameType === 'chess' ? (
               <ChessRoom
@@ -1034,6 +1233,24 @@ export default function Games() {
         ) : (
 
           <main className="flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-4 custom-scrollbar">
+            {lobbyData.guilds.length > 1 && (
+              <label className="sm:hidden flex items-center gap-2 text-xs font-bold text-slate-300">
+                {t.serverLabel}
+                <select value={selectedGuildId} onChange={event => setSelectedGuildId(event.target.value)} className="min-w-0 flex-1 bg-slate-900 text-white border-2 border-slate-800 rounded-lg px-2 py-2">
+                  {lobbyData.guilds.map(guild => <option key={guild.id} value={guild.id}>{guild.name}</option>)}
+                </select>
+              </label>
+            )}
+            {lobbyError && (
+              <div role="alert" className="shrink-0 rounded-xl border-2 border-rose-500/50 bg-rose-500/10 p-3 text-xs font-bold text-rose-300">
+                {lobbyError}
+              </div>
+            )}
+            {!lobbyLoading && lobbyData.guilds.length === 0 && (
+              <div className="shrink-0 rounded-xl border-2 border-amber-500/50 bg-amber-500/10 p-3 text-xs font-bold text-amber-200">
+                {t.noGuilds}
+              </div>
+            )}
             {activeTournament ? (
               <div className="relative rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 border-4 border-slate-950 p-4 sm:p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-hidden shrink-0">
                 <div className="absolute -right-6 -bottom-6 opacity-20 text-slate-950 text-9xl font-black italic pointer-events-none">VS</div>
@@ -1048,7 +1265,7 @@ export default function Games() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     <button onClick={() => { const game = GAMES_DATA.find(g => g.id === activeTournament.gameId) || GAMES_DATA[0]; handleOpenRoomList(game); }} className="px-5 py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-sm rounded-xl border-3 border-slate-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all flex items-center gap-2 shrink-0"><Zap className="w-5 h-5 fill-slate-950" /> THAM GIA NGAY</button>
-                    {isServerOwner && (<button onClick={() => setActiveTournament(null)} className="px-3 py-3 bg-slate-950 hover:bg-rose-950 text-rose-400 hover:text-rose-300 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center gap-1 shrink-0"><X className="w-4 h-4" /> {t.deleteTournamentBtn}</button>)}
+                    {isServerOwner && (<button disabled={tournamentActionLoading} onClick={handleDeleteTournament} className="px-3 py-3 bg-slate-950 hover:bg-rose-950 text-rose-400 hover:text-rose-300 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center gap-1 shrink-0 disabled:opacity-50"><X className="w-4 h-4" /> {t.deleteTournamentBtn}</button>)}
                   </div>
                 </div>
               </div>
@@ -1124,32 +1341,34 @@ export default function Games() {
           <aside className={`w-80 bg-slate-900 border-l-4 border-slate-950 flex flex-col shrink-0 z-20 transition-all duration-300 ${isSidebarOpenMobile ? 'fixed inset-y-0 right-0 shadow-2xl flex' : 'hidden lg:flex'}`}>
             <div className="p-4 border-b-4 border-slate-950 bg-slate-950/50 flex items-center justify-between">
               <div className="flex items-center gap-2"><Radio className="w-4 h-4 text-emerald-400 animate-pulse" /><span className="font-black text-xs uppercase tracking-wider text-white">{t.voiceMembers}</span></div>
-              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/30">{MOCK_VOICE_MEMBERS.length} Online</span>
+              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/30">{lobbyData.voiceMembers.length} {t.onlinePlayers}</span>
             </div>
             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-              {MOCK_VOICE_MEMBERS.map((member) => (
+              {lobbyData.voiceMembers.map((member) => (
                 <div key={member.id} className="p-2.5 bg-slate-950 border-2 border-slate-800 rounded-xl flex items-center justify-between hover:border-slate-700 transition-colors">
                   <div className="flex items-center gap-2.5">
                     <div className="relative"><img src={member.avatar} alt={member.name} className="w-9 h-9 rounded-full object-cover border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" /><span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-slate-950"></span></div>
                     <div>
-                      <div className="flex items-center gap-1.5"><span className="font-extrabold text-xs text-white leading-tight">{member.name}</span>{member.role === 'Host' && (<Crown className="w-3 h-3 text-yellow-400 fill-yellow-400" />)}</div>
-                      <span className="text-[10px] font-bold text-slate-400">Lv.{member.level} • {member.role}</span>
+                      <div className="flex items-center gap-1.5"><span className="font-extrabold text-xs text-white leading-tight">{member.name}</span>{member.isOwner && (<Crown className="w-3 h-3 text-yellow-400 fill-yellow-400" />)}</div>
+                      <span className="text-[10px] font-bold text-slate-400">{member.channel} • {member.role}</span>
                     </div>
                   </div>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${member.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : member.status === 'in-game' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{member.status === 'ready' ? t.statusReady : member.status === 'in-game' ? t.statusInGame : t.statusInLobby}</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${member.status === 'in-game' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{member.status === 'in-game' ? t.statusInGame : t.statusInLobby}</span>
                 </div>
               ))}
-              <button onClick={() => triggerToast("Đã gửi lời mời Activity tới Discord Chat!")} className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-2"><Share2 className="w-3.5 h-3.5" />{t.inviteDiscord}</button>
+              {lobbyData.voiceMembers.length === 0 && <p className="px-2 py-3 text-center text-xs font-semibold text-slate-500">{t.noVoiceMembers}</p>}
+              <button disabled={!lobbyData.guild || lobbyData.voiceChannels.length === 0} onClick={handleCreateInvite} className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Share2 className="w-3.5 h-3.5" />{t.inviteDiscord}</button>
             </div>
             <div className="p-3 border-t-4 border-slate-950 bg-slate-950/80 space-y-2">
               <div className="flex items-center justify-between mb-1"><span className="font-black text-xs uppercase tracking-wider text-yellow-400 flex items-center gap-1.5"><Trophy className="w-4 h-4 text-yellow-400" />{t.leaderboard}</span></div>
               <div className="space-y-1.5">
-                {MOCK_LEADERBOARD.map((item) => (
+                {lobbyData.leaderboard.map((item, index) => (
                   <div key={item.rank} className="p-2 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2"><span className="font-black w-5 text-center text-slate-400">{item.badge}</span><div><div className="font-bold text-white text-[11px]">{item.name}</div><div className="text-[9px] text-slate-400 font-semibold">{item.game}</div></div></div>
+                    <div className="flex items-center gap-2"><span className="font-black w-5 text-center text-slate-400">{index + 1}</span><div><div className="font-bold text-white text-[11px]">{item.name}</div><div className="text-[9px] text-slate-400 font-semibold">{item.game}</div></div></div>
                     <span className="font-mono font-black text-yellow-400 text-xs">{item.elo} ELO</span>
                   </div>
                 ))}
+                {lobbyData.leaderboard.length === 0 && <p className="text-xs text-slate-500">{t.noLeaderboard}</p>}
               </div>
             </div>
           </aside>
@@ -1200,12 +1419,15 @@ export default function Games() {
             </div>
 
             <div className="p-4 sm:p-5 overflow-y-auto custom-scrollbar space-y-3 flex-1">
+              {lobbyError && <p role="alert" className="rounded-lg bg-rose-500/10 p-2 text-xs font-bold text-rose-300">{lobbyError}</p>}
               <div className="flex items-center justify-between bg-slate-950 p-3 rounded-2xl border-2 border-slate-800 mb-2">
                 <div className="text-xs font-bold text-slate-300">Đang tìm kiếm phòng chơi phù hợp?</div>
                 <button onClick={() => handleOpenCreateRoom(selectedGame)} className="px-3.5 py-2 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center gap-1.5"><PlusCircle className="w-4 h-4" /> {t.createRoomBtn}</button>
               </div>
-              {(MOCK_ROOMS[selectedGame.id] || []).length > 0 ? (
-                (MOCK_ROOMS[selectedGame.id] || []).map((room) => (
+              {lobbyLoading ? (
+                <div className="py-10 text-center text-xs font-bold text-slate-400">{t.loadingLobby}</div>
+              ) : selectedGameRooms.length > 0 ? (
+                selectedGameRooms.map((room) => (
                   <div key={room.id} className="p-3.5 bg-slate-950 border-2 border-slate-800 hover:border-yellow-400/60 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-colors">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -1214,8 +1436,8 @@ export default function Games() {
                       </div>
                       <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold"><span>Chủ phòng: <strong className="text-slate-200">{room.host}</strong></span><span>•</span><span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 text-cyan-400" /> {room.players}/{room.maxPlayers}</span><span>•</span><span className={room.status === 'in-game' ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>{room.status === 'in-game' ? t.statusInGame : t.statusReady}</span></div>
                     </div>
-                    <button disabled={room.players >= room.maxPlayers || room.status === 'in-game'} onClick={() => handleJoinRoom(room)} className={`w-full sm:w-auto px-5 py-2.5 rounded-xl border-2 border-slate-950 font-black text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-1.5 ${room.players >= room.maxPlayers || room.status === 'in-game' ? 'bg-slate-800 text-slate-500 border-slate-800 cursor-not-allowed shadow-none' : 'bg-yellow-400 hover:bg-yellow-300 text-slate-950'}`}>
-                      <DoorOpen className="w-4 h-4" /> {t.joinRoomBtn}
+                    <button disabled={roomActionLoading || (!room.isJoined && (room.players >= room.maxPlayers || room.status === 'in-game'))} onClick={() => room.isJoined ? handleLeaveLobbyRoom(room) : room.isLocked ? (setJoiningRoom(room), setPasswordInput(''), setPasswordError('')) : handleJoinRoom(room)} className={`w-full sm:w-auto px-5 py-2.5 rounded-xl border-2 border-slate-950 font-black text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-1.5 ${roomActionLoading || (!room.isJoined && (room.players >= room.maxPlayers || room.status === 'in-game')) ? 'bg-slate-800 text-slate-500 border-slate-800 cursor-not-allowed shadow-none' : room.isJoined ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'bg-yellow-400 hover:bg-yellow-300 text-slate-950'}`}>
+                      {room.isJoined ? <LogOut className="w-4 h-4" /> : <DoorOpen className="w-4 h-4" />} {room.isJoined ? t.leaveRoom : t.joinRoomBtn}
                     </button>
                   </div>
                 ))
@@ -1239,7 +1461,7 @@ export default function Games() {
             </div>
             <div className="flex items-center gap-2 pt-2">
               <button onClick={() => setJoiningRoom(null)} className="flex-1 py-2 bg-slate-800 text-slate-300 font-bold text-xs rounded-xl border-2 border-slate-950">{t.close}</button>
-              <button onClick={handleConfirmPassword} className="flex-1 py-2 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">{t.submitPasswordBtn}</button>
+              <button disabled={roomActionLoading} onClick={handleConfirmPassword} className="flex-1 py-2 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] disabled:opacity-50">{t.submitPasswordBtn}</button>
             </div>
           </div>
         </div>
@@ -1326,7 +1548,7 @@ export default function Games() {
 
             <div className="p-4 bg-slate-950 border-t-4 border-slate-950 flex gap-3">
               <button onClick={() => setActiveModal(null)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs rounded-xl border-2 border-slate-950 transition-all">HỦY</button>
-              <button onClick={() => { if (selectedGame?.id === 'xiangqi' || selectedGame?.id === 'chess') { handleEnterGameRoom({ id: 'r_new', name: roomName, host: 'You', isLocked: isRoomLocked, isTimerEnabled: isTimerEnabled }, selectedGame.id); } else { alert(`Đã tạo phòng ${roomName}! Chuyển bạn vào Kênh Thoại...`); setActiveModal(null); } }} className="flex-[2] py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-2"><Check className="w-4 h-4" /> {t.startBtn}</button>
+              <button disabled={roomActionLoading || lobbyData.guilds.length === 0} onClick={handleCreateRoom} className="flex-[2] py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Check className="w-4 h-4" /> {t.startBtn}</button>
             </div>
           </div>
         </div>
@@ -1341,13 +1563,14 @@ export default function Games() {
           <div className="bg-slate-900 border-4 border-slate-950 rounded-3xl w-full max-w-md overflow-hidden shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] flex flex-col">
             <div className="p-4 bg-amber-500 border-b-4 border-slate-950 flex items-center justify-between text-slate-950"><h3 className="text-sm font-black flex items-center gap-2"><Trophy className="w-5 h-5" /> {t.createTournamentTitle}</h3><button onClick={() => setIsCreateTournamentModalOpen(false)} className="p-1 bg-slate-950 text-white rounded-lg border-2 border-slate-950"><X className="w-4 h-4" /></button></div>
             <div className="p-5 space-y-4">
-              <div><label className="text-xs font-bold text-slate-300 mb-1 block">{t.tournamentNameInput}</label><input type="text" placeholder="VD: Giải Đấu Mùa Xuân 2026" className="w-full bg-slate-950 border-2 border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-amber-400 outline-none" /></div>
-              <div><label className="text-xs font-bold text-slate-300 mb-1 block">{t.selectGameInput}</label><select className="w-full bg-slate-950 border-2 border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-amber-400 outline-none">{GAMES_DATA.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}</select></div>
-              <div><label className="text-xs font-bold text-slate-300 mb-1 block">{t.prizeInput}</label><input type="text" placeholder="VD: 10.000 Vàng + Role VIP" className="w-full bg-slate-950 border-2 border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-amber-400 outline-none" /></div>
+              <div><label className="text-xs font-bold text-slate-300 mb-1 block">{t.tournamentNameInput}</label><input type="text" value={tournamentTitle} onChange={event => setTournamentTitle(event.target.value)} maxLength={100} className="w-full bg-slate-950 border-2 border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-amber-400 outline-none" /></div>
+              <div><label className="text-xs font-bold text-slate-300 mb-1 block">{t.selectGameInput}</label><select value={tournamentGameId} onChange={event => setTournamentGameId(event.target.value)} className="w-full bg-slate-950 border-2 border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-amber-400 outline-none">{GAMES_DATA.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}</select></div>
+              <div><label className="text-xs font-bold text-slate-300 mb-1 block">{t.prizeInput}</label><input type="text" value={tournamentPrize} onChange={event => setTournamentPrize(event.target.value)} maxLength={120} className="w-full bg-slate-950 border-2 border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-amber-400 outline-none" /></div>
+              <div><label className="text-xs font-bold text-slate-300 mb-1 block">{t.descInput}</label><textarea value={tournamentDescription} onChange={event => setTournamentDescription(event.target.value)} maxLength={500} rows={3} className="w-full bg-slate-950 border-2 border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-amber-400 outline-none resize-y" /></div>
             </div>
             <div className="p-4 bg-slate-950 border-t-4 border-slate-950 flex justify-end gap-3">
               <button onClick={() => setIsCreateTournamentModalOpen(false)} className="px-4 py-2 bg-slate-800 text-white font-bold text-xs rounded-xl border-2 border-slate-950">{t.close}</button>
-              <button onClick={() => { setActiveTournament({ title: 'GIẢI ĐẤU MÙA XUÂN 2026', desc: 'Giải đấu giao hữu Server do Owner tổ chức.', prize: '10.000 Vàng + Role VIP', gameId: 'xiangqi' }); setIsCreateTournamentModalOpen(false); triggerToast("Tạo giải đấu thành công!"); }} className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all">{t.confirmCreateTournament}</button>
+              <button disabled={tournamentActionLoading} onClick={handleCreateTournament} className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all disabled:opacity-50">{t.confirmCreateTournament}</button>
             </div>
           </div>
         </div>

@@ -14,6 +14,7 @@ export default function GameRoomShell({
   onSettings,
   onOfferDraw,
   onResign,
+  noSpectatorsLabel,
   children
 }) {
   return (
@@ -83,6 +84,7 @@ export default function GameRoomShell({
                 <span className="text-[8px] sm:text-[9px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded border border-slate-800 font-bold shrink-0">Khán Giả</span>
               </div>
             ))}
+            {spectatorsList.length === 0 && <p className="py-2 text-xs font-semibold text-slate-500">{noSpectatorsLabel}</p>}
           </div>
         </div>
 

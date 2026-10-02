@@ -11,8 +11,10 @@ from dotenv import load_dotenv
 from flask import ctx
 from webserver import run_web
 from webserver import run_web, add_log
+from cogs.games import register_games_routes
 
 load_dotenv()
+register_games_routes()
 TOKEN = os.getenv('DISCORD_TOKEN')
 if not TOKEN:
     raise ValueError("DISCORD_TOKEN environment variable is not set")

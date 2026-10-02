@@ -1,0 +1,583 @@
+import hashlib
+import hmac
+import json
+import logging
+import os
+import secrets
+import tempfile
+import threading
+import time
+import uuid
+
+import discord
+from discord.ext import commands
+from flask import jsonify, request, session
+
+from webserver import app, run_coro
+
+
+logger = logging.getLogger(__name__)
+DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
+GAMES_FILE = os.path.join(DATA_FOLDER, "games.json")
+ROOM_TTL_SECONDS = 24 * 60 * 60
+_routes_registered = False
+GAME_PLAYER_LIMITS = {
+    "xiangqi": 2,
+    "chess": 2,
+    "monopoly": 6,
+    "uno": 8,
+    "ludo": 4,
+    "caro": 2,
+    "werewolf": 16,
+}
+
+
+def _dispatch_games_api(method, *args):
+    cog = app.extensions.get("games_cog")
+    if not cog:
+        return jsonify({"error": "Game Hub backend chưa sẵn sàng."}), 503
+    return getattr(cog, method)(*args)
+
+
+def _lobby_route():
+    return _dispatch_games_api("lobby")
+
+
+def _create_room_route():
+    return _dispatch_games_api("create_room")
+
+
+def _join_room_route(room_id):
+    return _dispatch_games_api("join_room", room_id)
+
+
+def _leave_room_route(room_id):
+    return _dispatch_games_api("leave_room", room_id)
+
+
+def _create_tournament_route():
+    return _dispatch_games_api("create_tournament")
+
+
+def _delete_tournament_route(guild_id):
+    return _dispatch_games_api("delete_tournament", guild_id)
+
+
+def _create_invite_route():
+    return _dispatch_games_api("create_invite")
+
+
+def register_games_routes():
+    global _routes_registered
+    if _routes_registered:
+        return
+    routes = (
+        ("/api/games/lobby", "games_lobby", _lobby_route, ["GET"]),
+        ("/api/games/rooms", "games_create_room", _create_room_route, ["POST"]),
+        ("/api/games/rooms/<room_id>/join", "games_join_room", _join_room_route, ["POST"]),
+        ("/api/games/rooms/<room_id>/leave", "games_leave_room", _leave_room_route, ["POST"]),
+        ("/api/games/tournaments", "games_create_tournament", _create_tournament_route, ["POST"]),
+        ("/api/games/tournaments/<guild_id>", "games_delete_tournament", _delete_tournament_route, ["DELETE"]),
+        ("/api/games/invite", "games_create_invite", _create_invite_route, ["POST"]),
+    )
+    for rule, endpoint, view, methods in routes:
+        app.add_url_rule(rule, endpoint, view, methods=methods)
+        app.add_url_rule(f"/.proxy{rule}", f"{endpoint}_proxy", view, methods=methods)
+    _routes_registered = True
+
+
+class Games(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self._lock = threading.RLock()
+        self._data = self._load_data()
+        app.extensions["games_cog"] = self
+
+    def _load_data(self):
+        try:
+            with open(GAMES_FILE, "r", encoding="utf-8") as data_file:
+                data = json.load(data_file)
+        except FileNotFoundError:
+            return {"rooms": {}, "tournaments": {}, "leaderboards": {}}
+        except (OSError, json.JSONDecodeError):
+            logger.exception("Could not read game lobby data from %s.", GAMES_FILE)
+            raise
+
+        if not isinstance(data, dict):
+            raise ValueError(f"Invalid game lobby data in {GAMES_FILE}.")
+        data.setdefault("rooms", {})
+        data.setdefault("tournaments", {})
+        data.setdefault("leaderboards", {})
+        return data
+
+    def _save_data(self):
+        os.makedirs(DATA_FOLDER, exist_ok=True)
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=DATA_FOLDER,
+                delete=False,
+            ) as data_file:
+                temp_path = data_file.name
+                json.dump(self._data, data_file, ensure_ascii=False, indent=2)
+                data_file.flush()
+                os.fsync(data_file.fileno())
+            os.replace(temp_path, GAMES_FILE)
+        except OSError:
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
+            logger.exception("Could not persist game lobby data to %s.", GAMES_FILE)
+            raise
+
+    def _user(self):
+        user = session.get("user")
+        if not isinstance(user, dict) or not user.get("id"):
+            return None, (jsonify({"error": "Vui lòng đăng nhập Discord để sử dụng Game Hub."}), 401)
+        return user, None
+
+    async def _member_in_guild(self, guild, user_id):
+        member = guild.get_member(int(user_id))
+        if member:
+            return member
+        try:
+            return await guild.fetch_member(int(user_id))
+        except discord.NotFound:
+            return None
+
+    def _accessible_guilds(self, user_id):
+        async def find_guilds():
+            accessible = []
+            for guild in self.bot.guilds:
+                try:
+                    member = await self._member_in_guild(guild, user_id)
+                except discord.Forbidden:
+                    logger.warning(
+                        "Cannot verify Discord user %s in guild %s.",
+                        user_id,
+                        guild.id,
+                    )
+                    continue
+                if member:
+                    accessible.append((guild, member))
+            return accessible
+
+        return run_coro(find_guilds())
+
+    def _get_guild_member(self, guild_id, user_id):
+        try:
+            guild_id_int = int(guild_id)
+        except (TypeError, ValueError):
+            return None, None, (jsonify({"error": "Guild ID không hợp lệ."}), 400)
+
+        if not self.bot.is_ready():
+            return None, None, (jsonify({"error": "Discord bot hiện không khả dụng."}), 503)
+        guild = self.bot.get_guild(guild_id_int)
+        if not guild:
+            return None, None, (jsonify({"error": "Không tìm thấy server."}), 404)
+        try:
+            member = run_coro(self._member_in_guild(guild, user_id))
+        except discord.Forbidden:
+            logger.warning("Cannot verify Discord user %s in guild %s.", user_id, guild_id)
+            return None, None, (jsonify({"error": "Bot không thể xác minh thành viên server này."}), 503)
+        except discord.HTTPException:
+            logger.exception("Discord member lookup failed for user %s in guild %s.", user_id, guild_id)
+            return None, None, (jsonify({"error": "Không thể kiểm tra quyền truy cập server lúc này."}), 503)
+        if not member:
+            return None, None, (jsonify({"error": "Bạn không phải thành viên của server này."}), 403)
+        return guild, member, None
+
+    @staticmethod
+    def _avatar(member):
+        return member.display_avatar.url
+
+    @staticmethod
+    def _room_is_locked(room):
+        return bool(room.get("password_hash"))
+
+    def _public_room(self, room, user_id=None):
+        return {
+            "id": room["id"],
+            "guildId": room["guild_id"],
+            "gameId": room["game_id"],
+            "name": room["name"],
+            "host": room["host"]["name"],
+            "players": len(room["players"]),
+            "maxPlayers": room["max_players"],
+            "isLocked": self._room_is_locked(room),
+            "status": room["status"],
+            "isTimerEnabled": room["is_timer_enabled"],
+            "allowSpectators": room["allow_spectators"],
+            "mode": room["mode"],
+            "botElo": room.get("bot_elo"),
+            "createdAt": room["created_at"],
+            "isJoined": any(player["id"] == str(user_id) for player in room["players"]),
+        }
+
+    def _clean_expired_rooms(self):
+        now = time.time()
+        expired = [
+            room_id
+            for room_id, room in self._data["rooms"].items()
+            if now - room.get("updated_at", room.get("created_at", 0)) > ROOM_TTL_SECONDS
+        ]
+        for room_id in expired:
+            del self._data["rooms"][room_id]
+        return bool(expired)
+
+    def lobby(self):
+        user, error = self._user()
+        if user is None:
+            return error
+        if not self.bot.is_ready():
+            return jsonify({"error": "Discord bot hiện không khả dụng."}), 503
+
+        try:
+            accessible_guilds = self._accessible_guilds(user["id"])
+        except Exception:
+            logger.exception("Could not load Game Hub servers for Discord user %s.", user["id"])
+            return jsonify({"error": "Không thể tải danh sách server từ Discord."}), 503
+
+        guilds = [
+            {
+                "id": str(guild.id),
+                "name": guild.name,
+                "icon": guild.icon.url if guild.icon else None,
+                "isOwner": guild.owner_id == int(user["id"]),
+            }
+            for guild, _ in accessible_guilds
+        ]
+        requested_guild_id = request.args.get("guild_id")
+        selected = next(
+            (
+                item
+                for item in accessible_guilds
+                if str(item[0].id) == str(requested_guild_id)
+            ),
+            None,
+        )
+        if requested_guild_id and not selected:
+            return jsonify({"error": "Bạn không có quyền truy cập server này."}), 403
+        if not selected and accessible_guilds:
+            selected = accessible_guilds[0]
+
+        if not selected:
+            return jsonify({
+                "guilds": guilds,
+                "guild": None,
+                "voiceMembers": [],
+                "voiceChannels": [],
+                "rooms": [],
+                "tournament": None,
+                "leaderboard": [],
+                "ping": round(self.bot.latency * 1000),
+            })
+
+        guild, _ = selected
+        guild_id = str(guild.id)
+        with self._lock:
+            changed = self._clean_expired_rooms()
+            rooms = [
+                self._public_room(room, user["id"])
+                for room in self._data["rooms"].values()
+                if room["guild_id"] == guild_id
+            ]
+            tournament = self._data["tournaments"].get(guild_id)
+            leaderboard = self._data["leaderboards"].get(guild_id, [])
+            active_player_ids = {
+                player["id"]
+                for room in self._data["rooms"].values()
+                if room["guild_id"] == guild_id and room["status"] == "in-game"
+                for player in room["players"]
+            }
+            if changed:
+                self._save_data()
+
+        voice_channels = [
+            {
+                "id": str(channel.id),
+                "name": channel.name,
+                "memberCount": len(channel.members),
+            }
+            for channel in guild.voice_channels
+        ]
+        voice_members = [
+            {
+                "id": str(member.id),
+                "name": member.display_name,
+                "avatar": self._avatar(member),
+                "role": member.top_role.name if member.top_role else "Member",
+                "channel": member.voice.channel.name,
+                "status": "in-game" if str(member.id) in active_player_ids else "lobby",
+                "isOwner": member.id == guild.owner_id,
+            }
+            for channel in guild.voice_channels
+            for member in channel.members
+        ]
+        return jsonify({
+            "guilds": guilds,
+            "guild": {
+                "id": guild_id,
+                "name": guild.name,
+                "isOwner": guild.owner_id == int(user["id"]),
+            },
+            "voiceMembers": voice_members,
+            "voiceChannels": voice_channels,
+            "rooms": rooms,
+            "tournament": tournament,
+            "leaderboard": leaderboard,
+            "ping": round(self.bot.latency * 1000),
+        })
+
+    def create_room(self):
+        user, error = self._user()
+        if user is None:
+            return error
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Dữ liệu tạo phòng không hợp lệ."}), 400
+
+        guild, member, error = self._get_guild_member(data.get("guild_id"), user["id"])
+        if error:
+            return error
+        if guild is None or member is None:
+            return jsonify({"error": "Không thể xác minh thành viên server."}), 503
+        game_id = data.get("game_id")
+        if not isinstance(game_id, str) or game_id not in GAME_PLAYER_LIMITS:
+            return jsonify({"error": "Trò chơi không hợp lệ."}), 400
+        name = data.get("name")
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 80:
+            return jsonify({"error": "Tên phòng phải có từ 1 đến 80 ký tự."}), 400
+        submitted_password = data.get("password", "")
+        if not isinstance(submitted_password, str) or len(submitted_password) > 128:
+            return jsonify({"error": "Mật khẩu phòng không hợp lệ."}), 400
+        if not isinstance(data.get("is_locked", False), bool):
+            return jsonify({"error": "Cấu hình khóa phòng không hợp lệ."}), 400
+        password = submitted_password if data.get("is_locked") else ""
+        if data.get("is_locked") and not password:
+            return jsonify({"error": "Hãy nhập mật khẩu cho phòng được khóa."}), 400
+        mode = data.get("mode", "pvp")
+        if mode not in ("pvp", "pve"):
+            return jsonify({"error": "Chế độ chơi không hợp lệ."}), 400
+        if data.get("bot_elo", 1200) not in (500, 1200, 2000):
+            return jsonify({"error": "Độ khó bot không hợp lệ."}), 400
+        if not isinstance(data.get("is_timer_enabled", True), bool):
+            return jsonify({"error": "Cấu hình giờ đấu không hợp lệ."}), 400
+        if not isinstance(data.get("allow_spectators", True), bool):
+            return jsonify({"error": "Cấu hình khán giả không hợp lệ."}), 400
+
+        salt = secrets.token_bytes(16) if password else None
+        room = {
+            "id": uuid.uuid4().hex,
+            "guild_id": str(guild.id),
+            "game_id": game_id,
+            "name": name.strip(),
+            "host": {
+                "id": str(member.id),
+                "name": member.display_name,
+                "avatar": self._avatar(member),
+            },
+            "players": [{
+                "id": str(member.id),
+                "name": member.display_name,
+                "avatar": self._avatar(member),
+            }],
+            "max_players": GAME_PLAYER_LIMITS[game_id],
+            "password_salt": salt.hex() if salt else None,
+            "password_hash": hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1).hex() if salt else None,
+            "status": "waiting",
+            "is_timer_enabled": bool(data.get("is_timer_enabled", True)),
+            "allow_spectators": bool(data.get("allow_spectators", True)),
+            "mode": mode,
+            "bot_elo": data.get("bot_elo", 1200) if mode == "pve" else None,
+            "created_at": time.time(),
+            "updated_at": time.time(),
+        }
+        with self._lock:
+            self._clean_expired_rooms()
+            self._data["rooms"][room["id"]] = room
+            self._save_data()
+        return jsonify({"room": self._public_room(room, member.id)}), 201
+
+    def join_room(self, room_id):
+        user, error = self._user()
+        if user is None:
+            return error
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Dữ liệu tham gia phòng không hợp lệ."}), 400
+        guild, member, error = self._get_guild_member(data.get("guild_id"), user["id"])
+        if error:
+            return error
+        if guild is None or member is None:
+            return jsonify({"error": "Không thể xác minh thành viên server."}), 503
+
+        with self._lock:
+            room = self._data["rooms"].get(room_id)
+            if not room or room["guild_id"] != str(guild.id):
+                return jsonify({"error": "Không tìm thấy phòng chơi."}), 404
+            if room["status"] == "in-game":
+                return jsonify({"error": "Trận đấu trong phòng này đã bắt đầu."}), 409
+            if self._room_is_locked(room):
+                password = data.get("password")
+                if not isinstance(password, str):
+                    return jsonify({"error": "Mật khẩu phòng không chính xác."}), 403
+                submitted = hashlib.scrypt(
+                    password.encode("utf-8"),
+                    salt=bytes.fromhex(room["password_salt"]),
+                    n=2**14,
+                    r=8,
+                    p=1,
+                ).hex()
+                if not hmac.compare_digest(submitted, room["password_hash"]):
+                    return jsonify({"error": "Mật khẩu phòng không chính xác."}), 403
+            if not any(player["id"] == str(member.id) for player in room["players"]):
+                if len(room["players"]) >= room["max_players"]:
+                    return jsonify({"error": "Phòng đã đủ người chơi."}), 409
+                room["players"].append({
+                    "id": str(member.id),
+                    "name": member.display_name,
+                    "avatar": self._avatar(member),
+                })
+            if len(room["players"]) >= room["max_players"]:
+                room["status"] = "in-game"
+            room["updated_at"] = time.time()
+            self._save_data()
+            public_room = self._public_room(room, member.id)
+        return jsonify({"room": public_room})
+
+    def leave_room(self, room_id):
+        user, error = self._user()
+        if user is None:
+            return error
+        data = request.get_json(silent=True)
+        guild, _, error = self._get_guild_member(
+            data.get("guild_id") if isinstance(data, dict) else None,
+            user["id"],
+        )
+        if error:
+            return error
+        if guild is None:
+            return jsonify({"error": "Không thể xác minh server."}), 503
+        with self._lock:
+            room = self._data["rooms"].get(room_id)
+            if not room or room["guild_id"] != str(guild.id):
+                return jsonify({"error": "Không tìm thấy phòng chơi."}), 404
+            if not any(player["id"] == str(user["id"]) for player in room["players"]):
+                return jsonify({"error": "Bạn chưa tham gia phòng này."}), 403
+            room["players"] = [
+                player for player in room["players"] if player["id"] != str(user["id"])
+            ]
+            if not room["players"] or room["host"]["id"] == str(user["id"]):
+                del self._data["rooms"][room_id]
+            else:
+                room["status"] = "waiting"
+                room["updated_at"] = time.time()
+            self._save_data()
+        return jsonify({"success": True})
+
+    def create_tournament(self):
+        user, error = self._user()
+        if user is None:
+            return error
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Dữ liệu giải đấu không hợp lệ."}), 400
+        guild, member, error = self._get_guild_member(data.get("guild_id"), user["id"])
+        if error:
+            return error
+        if guild is None or member is None:
+            return jsonify({"error": "Không thể xác minh thành viên server."}), 503
+        if member.id != guild.owner_id:
+            return jsonify({"error": "Chỉ chủ server mới có thể tạo giải đấu."}), 403
+        title = data.get("title")
+        game_id = data.get("game_id")
+        if not isinstance(title, str) or not title.strip() or len(title.strip()) > 100:
+            return jsonify({"error": "Tên giải đấu phải có từ 1 đến 100 ký tự."}), 400
+        if not isinstance(game_id, str) or game_id not in GAME_PLAYER_LIMITS:
+            return jsonify({"error": "Trò chơi giải đấu không hợp lệ."}), 400
+        description = data.get("description", "")
+        prize = data.get("prize", "")
+        if not isinstance(description, str) or not isinstance(prize, str):
+            return jsonify({"error": "Mô tả và phần thưởng phải là văn bản."}), 400
+        tournament = {
+            "id": uuid.uuid4().hex,
+            "title": title.strip(),
+            "desc": description.strip()[:500],
+            "prize": prize.strip()[:120],
+            "gameId": game_id,
+            "createdBy": str(member.id),
+            "createdAt": time.time(),
+        }
+        with self._lock:
+            self._data["tournaments"][str(guild.id)] = tournament
+            self._save_data()
+        return jsonify({"tournament": tournament}), 201
+
+    def delete_tournament(self, guild_id):
+        user, error = self._user()
+        if user is None:
+            return error
+        guild, member, error = self._get_guild_member(guild_id, user["id"])
+        if error:
+            return error
+        if guild is None or member is None:
+            return jsonify({"error": "Không thể xác minh thành viên server."}), 503
+        if member.id != guild.owner_id:
+            return jsonify({"error": "Chỉ chủ server mới có thể hủy giải đấu."}), 403
+        with self._lock:
+            self._data["tournaments"].pop(str(guild.id), None)
+            self._save_data()
+        return jsonify({"success": True})
+
+    def create_invite(self):
+        user, error = self._user()
+        if user is None:
+            return error
+        data = request.get_json(silent=True)
+        guild, member, error = self._get_guild_member(
+            data.get("guild_id") if isinstance(data, dict) else None,
+            user["id"],
+        )
+        if error:
+            return error
+        if guild is None or member is None:
+            return jsonify({"error": "Không thể xác minh thành viên server."}), 503
+        channels = guild.voice_channels
+        if member.voice and member.voice.channel:
+            channels = [member.voice.channel]
+        bot_member = guild.me
+        if bot_member is None:
+            return jsonify({"error": "Bot chưa sẵn sàng tạo lời mời Discord."}), 503
+        if not channels:
+            return jsonify({"error": "Server chưa có kênh thoại để tạo lời mời."}), 404
+        channel = next(
+            (
+                candidate
+                for candidate in channels
+                if candidate.permissions_for(member).create_instant_invite
+                and candidate.permissions_for(bot_member).create_instant_invite
+            ),
+            None,
+        )
+        if not channel:
+            return jsonify({"error": "Bot không có quyền tạo lời mời trong kênh thoại của server."}), 403
+        try:
+            invite = run_coro(channel.create_invite(
+                max_age=3600,
+                max_uses=0,
+                unique=True,
+                reason=f"Game Hub invite requested by {member} ({member.id})",
+            ))
+        except discord.Forbidden:
+            logger.warning("Bot cannot create a Game Hub invite in guild %s.", guild.id)
+            return jsonify({"error": "Bot không có quyền tạo lời mời trong kênh thoại này."}), 403
+        except discord.HTTPException:
+            logger.exception("Discord invite creation failed for guild %s.", guild.id)
+            return jsonify({"error": "Không thể tạo lời mời Discord lúc này."}), 503
+        return jsonify({"url": invite.url})
+
+
+async def setup(bot):
+    await bot.add_cog(Games(bot))
