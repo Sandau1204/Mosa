@@ -53,6 +53,14 @@ const TRANSLATIONS = {
     rulesTitle: "CẨM NANG GAME HUB",
     rulesContent: "Chào mừng bạn đến với Discord Boardgame Hub! Chọn trò chơi yêu thích, rủ bạn bè trong Voice Channel cùng tham gia hoặc luyện tập với Bot AI để tích lũy ELO.",
     close: "Đóng",
+    discordConnecting: "Đang kết nối tài khoản Discord...",
+    discordLoginTitle: "Đăng nhập để chơi",
+    discordLoginDescription: "Kết nối tài khoản Discord để tiếp tục vào Game Hub.",
+    discordLoginBtn: "Đăng nhập Discord",
+    discordOpenInDiscord: "Hãy mở Game Hub trong ứng dụng Discord để xác thực bằng Embedded App SDK.",
+    discordAuthError: "Không thể xác thực Discord. Vui lòng thử lại.",
+    discordRetryBtn: "Thử lại",
+    discordConfigError: "Game Hub chưa được cấu hình Discord Client ID.",
     createTournamentBtn: "Tạo Giải Đấu",
     deleteTournamentBtn: "Hủy Giải Đấu",
     ownerLabel: "Server Owner",
@@ -141,6 +149,14 @@ const TRANSLATIONS = {
     rulesTitle: "GAME HUB GUIDE",
     rulesContent: "Welcome to Discord Boardgame Hub! Pick your favorite game, invite friends in your voice channel, or practice against AI bots to rank up on the server leaderboard.",
     close: "Close",
+    discordConnecting: "Connecting your Discord account...",
+    discordLoginTitle: "Sign in to play",
+    discordLoginDescription: "Connect your Discord account to continue to the Game Hub.",
+    discordLoginBtn: "Sign in with Discord",
+    discordOpenInDiscord: "Open the Game Hub in the Discord app to authenticate with the Embedded App SDK.",
+    discordAuthError: "Discord authentication failed. Please try again.",
+    discordRetryBtn: "Try again",
+    discordConfigError: "The Game Hub is missing its Discord Client ID configuration.",
     createTournamentBtn: "Create Tournament",
     deleteTournamentBtn: "Delete Tournament",
     ownerLabel: "Server Owner",
@@ -650,6 +666,12 @@ const ChessBoard = ({ board, isFlipped = false, isPlaying = false, activeSide, p
 export default function Games() {
   const [lang, setLang] = useState('VI');
   const t = TRANSLATIONS[lang];
+  const [discordUser, setDiscordUser] = useState(null);
+  const [authStatus, setAuthStatus] = useState('loading');
+  const [authError, setAuthError] = useState('');
+  const [isDiscordEmbedded, setIsDiscordEmbedded] = useState(false);
+  const [authAttempt, setAuthAttempt] = useState(0);
+  const discordClientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
 
   const [bgmMuted, setBgmMuted] = useState(false);
   const [ping, setPing] = useState(18);
@@ -664,7 +686,7 @@ export default function Games() {
   const [roomName, setRoomName] = useState('');
   const [isRoomLocked, setIsRoomLocked] = useState(false);
   const [roomPassword, setRoomPassword] = useState('');
-  const [isServerOwner, setIsServerOwner] = useState(true);
+  const isServerOwner = false;
   const [activeTournament, setActiveTournament] = useState(null);
   const [isCreateTournamentModalOpen, setIsCreateTournamentModalOpen] = useState(false);
 
@@ -695,6 +717,85 @@ export default function Games() {
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
   const [userCoins, setUserCoins] = useState(2450);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const authenticate = async () => {
+      const isEmbedded = window.self !== window.top;
+      setIsDiscordEmbedded(isEmbedded);
+
+      try {
+        if (!isEmbedded) {
+          const sessionResponse = await fetch('/api/games/auth/session', {
+            credentials: 'same-origin'
+          });
+          const sessionData = await sessionResponse.json().catch(() => ({}));
+          if (cancelled) return;
+
+          if (sessionResponse.ok && sessionData.authenticated && sessionData.user) {
+            setDiscordUser(sessionData.user);
+            setAuthStatus('authenticated');
+            return;
+          }
+          if (!sessionResponse.ok && sessionResponse.status !== 401) {
+            throw new Error(sessionData.error || 'Could not load the Discord session.');
+          }
+          setAuthStatus('unauthenticated');
+          return;
+        }
+
+        if (!discordClientId) {
+          setAuthStatus('unconfigured');
+          return;
+        }
+
+        const { DiscordSDK } = await import('@discord/embedded-app-sdk');
+        const discordSdk = new DiscordSDK(discordClientId);
+        await discordSdk.ready();
+        if (cancelled) return;
+
+        const { code } = await discordSdk.commands.authorize({
+          client_id: discordClientId,
+          response_type: 'code',
+          state: '',
+          prompt: 'none',
+          scope: ['identify']
+        });
+        if (cancelled) return;
+
+        const tokenResponse = await fetch('/.proxy/api/games/auth/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        const tokenData = await tokenResponse.json().catch(() => ({}));
+        if (!tokenResponse.ok || !tokenData.access_token || !tokenData.user) {
+          throw new Error(tokenData.error || 'Could not exchange the Discord authorization code.');
+        }
+
+        const auth = await discordSdk.commands.authenticate({
+          access_token: tokenData.access_token
+        });
+        if (cancelled) return;
+        if (auth.user.id !== tokenData.user.id) {
+          throw new Error('Discord returned a different user during authentication.');
+        }
+
+        setDiscordUser(tokenData.user);
+        setAuthStatus('authenticated');
+      } catch (error) {
+        if (cancelled) return;
+        setAuthError(error instanceof Error ? error.message : 'Discord authentication failed.');
+        setAuthStatus('error');
+      }
+    };
+
+    authenticate();
+    return () => {
+      cancelled = true;
+    };
+  }, [authAttempt, discordClientId]);
 
   useEffect(() => {
     const interval = setInterval(() => setPing(Math.floor(15 + Math.random() * 8)), 3000);
@@ -766,7 +867,7 @@ export default function Games() {
   };
 
   const handleSit = (side) => {
-    const user = { id: 'u1', name: 'You (Me)', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80', isReady: false };
+    const user = { id: 'u1', name: discordUser.username, avatar: discordUser.avatar, isReady: false };
     if (side === 'red') {
       if (blackPlayer?.id === 'u1') setBlackPlayer(null);
       setRedPlayer(user);
@@ -916,6 +1017,53 @@ export default function Games() {
     });
   }, [searchQuery, selectedFilter]);
 
+  if (!discordUser) {
+    const isLoading = authStatus === 'loading';
+    const message = authStatus === 'unconfigured'
+      ? t.discordConfigError
+      : authStatus === 'error'
+        ? authError || t.discordAuthError
+        : t.discordLoginDescription;
+
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
+        <section className="w-full max-w-md rounded-3xl border-4 border-slate-950 bg-slate-900 p-6 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-slate-950 bg-indigo-500 text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+            <MessageSquare className="h-7 w-7" />
+          </div>
+          <h1 className="text-xl font-black text-white">{t.discordLoginTitle}</h1>
+          <p className="mt-2 text-sm font-medium text-slate-300">{message}</p>
+          {isDiscordEmbedded && authStatus !== 'unconfigured' && authStatus !== 'loading' && (
+            <p className="mt-3 text-xs font-semibold text-slate-400">{t.discordOpenInDiscord}</p>
+          )}
+          {isLoading ? (
+            <div className="mt-5 flex items-center justify-center gap-2 text-sm font-bold text-cyan-300">
+              <Radio className="h-4 w-4 animate-pulse" /> {t.discordConnecting}
+            </div>
+          ) : authStatus === 'unconfigured' ? null : isDiscordEmbedded ? (
+            <button
+              onClick={() => {
+                setAuthError('');
+                setAuthStatus('loading');
+                setAuthAttempt(attempt => attempt + 1);
+              }}
+              className="mt-5 rounded-xl border-2 border-slate-950 bg-indigo-500 px-5 py-3 text-sm font-black text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition hover:bg-indigo-400"
+            >
+              {t.discordRetryBtn}
+            </button>
+          ) : (
+            <a
+              href="/login?next=%2Fgames"
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border-2 border-slate-950 bg-indigo-500 px-5 py-3 text-sm font-black text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition hover:bg-indigo-400"
+            >
+              <MessageSquare className="h-4 w-4" /> {t.discordLoginBtn}
+            </a>
+          )}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <div className="w-full h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
 
@@ -939,15 +1087,15 @@ export default function Games() {
             </div>
             <div className="flex items-center gap-2 bg-slate-800 border-2 border-slate-950 px-2.5 py-1 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
               <div className="relative group cursor-pointer">
-                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" alt="Avatar" className="w-9 h-9 rounded-full border-2 border-yellow-400 object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-105 transition-transform" />
+                <img src={discordUser.avatar} alt={discordUser.username} className="w-9 h-9 rounded-full border-2 border-yellow-400 object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-105 transition-transform" />
                 <span className="absolute -bottom-1 -right-1 bg-purple-600 text-[8px] font-black px-1 rounded-full text-white border-2 border-slate-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]">Lv42</span>
               </div>
               <div className="hidden lg:block text-left">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-black text-white leading-none">{isServerOwner ? t.ownerLabel : t.memberLabel}</span>
-                  <button onClick={() => setIsServerOwner(!isServerOwner)} className={`text-[9px] font-black px-1.5 py-0.5 rounded border transition-all ${isServerOwner ? 'bg-amber-400 text-slate-950 border-slate-950 shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]' : 'bg-slate-700 text-slate-300 border-slate-600 hover:text-white'}`}>
-                    {isServerOwner ? '👑 Owner' : '👤 User'}
-                  </button>
+                  <span className="text-xs font-black text-white leading-none">{discordUser.username}</span>
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded border bg-slate-700 text-slate-300 border-slate-600">
+                    {isServerOwner ? t.ownerLabel : t.memberLabel}
+                  </span>
                 </div>
                 <div className="text-[11px] font-bold text-yellow-400 flex items-center gap-1 mt-0.5"><Trophy className="w-3 h-3" /> {userCoins.toLocaleString()} Coins</div>
               </div>

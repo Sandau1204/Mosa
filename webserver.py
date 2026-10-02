@@ -35,6 +35,21 @@ bot_loop = None
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
 
 
+def discord_avatar_url(user_data):
+    avatar_hash = user_data.get('avatar')
+    user_id = user_data.get('id')
+    if avatar_hash and user_id:
+        extension = 'gif' if avatar_hash.startswith('a_') else 'png'
+        return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{extension}?size=256"
+
+    try:
+        discriminator = user_data.get('discriminator', '0')
+        default_avatar = int(discriminator) % 5 if discriminator != '0' else (int(user_id) >> 22) % 6
+    except (TypeError, ValueError):
+        default_avatar = 0
+    return f"https://cdn.discordapp.com/embed/avatars/{default_avatar}.png"
+
+
 def get_music_state(guild_id):
     # Dùng setattr và getattr để "bịt mắt" Pylance, tránh báo lỗi thuộc tính ảo
     if not hasattr(bot_instance, 'music_state'):
@@ -151,6 +166,99 @@ def callback():
     # Chuyển hướng về trang mà người dùng vừa truy cập (mặc định là music nếu không có)
     next_url = session.pop('next_url', url_for('music'))
     return redirect(next_url)
+
+
+@app.route('/.proxy/api/games/auth/token', methods=['POST'])
+@app.route('/api/games/auth/token', methods=['POST'])
+def games_auth_token():
+    if not CLIENT_ID or not CLIENT_SECRET:
+        app.logger.error('Discord Games authentication is missing CLIENT_ID or CLIENT_SECRET.')
+        return jsonify({'error': 'Discord authentication is not configured on the server.'}), 503
+
+    data = request.get_json(silent=True)
+    code = data.get('code') if isinstance(data, dict) else None
+    if not isinstance(code, str) or not code.strip() or len(code) > 4096:
+        return jsonify({'error': 'A valid Discord authorization code is required.'}), 400
+
+    import requests
+
+    try:
+        token_response = requests.post(
+            'https://discord.com/api/oauth2/token',
+            data={
+                'client_id': CLIENT_ID,
+                'client_secret': CLIENT_SECRET,
+                'grant_type': 'authorization_code',
+                'code': code
+            },
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            timeout=10
+        )
+        if not token_response.ok:
+            app.logger.warning(
+                'Discord rejected an Embedded App authorization code with status %s.',
+                token_response.status_code
+            )
+            return jsonify({'error': 'Discord rejected the authorization code. Please try again.'}), 401
+
+        token_data = token_response.json()
+        access_token = token_data.get('access_token') if isinstance(token_data, dict) else None
+        if not access_token:
+            app.logger.error('Discord token response did not include an access token.')
+            return jsonify({'error': 'Discord did not return an access token.'}), 502
+
+        user_response = requests.get(
+            'https://discord.com/api/users/@me',
+            headers={'Authorization': f'Bearer {access_token}'},
+            timeout=10
+        )
+        if not user_response.ok:
+            app.logger.error(
+                'Discord user lookup failed after Embedded App token exchange with status %s.',
+                user_response.status_code
+            )
+            return jsonify({'error': 'Could not verify the Discord account.'}), 502
+
+        user_data = user_response.json()
+    except requests.RequestException:
+        app.logger.exception('Discord Embedded App authentication request failed.')
+        return jsonify({'error': 'Discord authentication is temporarily unavailable.'}), 502
+    except ValueError:
+        app.logger.exception('Discord returned an invalid response during Embedded App authentication.')
+        return jsonify({'error': 'Discord returned an invalid authentication response.'}), 502
+
+    if not isinstance(user_data, dict) or not user_data.get('id') or not user_data.get('username'):
+        app.logger.error('Discord user response is missing the required user identity fields.')
+        return jsonify({'error': 'Discord did not return a valid user profile.'}), 502
+
+    user = {
+        'id': str(user_data['id']),
+        'username': user_data.get('global_name') or user_data['username'],
+        'avatar': discord_avatar_url(user_data)
+    }
+    session['user'] = {
+        **user,
+        'discriminator': user_data.get('discriminator', '0')
+    }
+    session.permanent = True
+    return jsonify({'access_token': access_token, 'user': user})
+
+
+@app.route('/.proxy/api/games/auth/session')
+@app.route('/api/games/auth/session')
+def games_auth_session():
+    user = session.get('user')
+    if not user:
+        return jsonify({'authenticated': False}), 401
+    return jsonify({
+        'authenticated': True,
+        'user': {
+            'id': str(user.get('id')),
+            'username': user.get('username'),
+            'avatar': user.get('avatar')
+        }
+    })
+
 
 @app.route('/logout')
 def logout():

@@ -178,11 +178,15 @@ Just tell me what you need!
 ## Frontend development
 
 The web interface uses Next.js. Set `NEXT_PUBLIC_DISCORD_CLIENT_ID` to the same
-Discord application ID used as `DISCORD_CLIENT_ID` by Flask, then install its
-dependencies with `npm ci`. Run `npm run dev` while the Flask backend is running
-on `http://127.0.0.1:5000`; the Next.js development server proxies `/api/*`
-and the `/login` and `/logout` routes to Flask. Set `FLASK_API_URL` if the
-backend uses a different address.
+Discord application ID used as `DISCORD_CLIENT_ID` by Flask, and configure
+`DISCORD_CLIENT_SECRET` in the Flask environment. The Games page authenticates
+Discord Activities with the Embedded App SDK and exchanges its authorization
+code through Flask; the client secret remains server-side. Outside Discord, the
+Games page falls back to the existing `/login` OAuth flow. Install dependencies
+with `npm ci`. Run `npm run dev` while the Flask backend is running on
+`http://127.0.0.1:5000`; the Next.js development server proxies `/api/*` and the
+`/login` and `/logout` routes to Flask. Set `FLASK_API_URL` if the backend uses
+a different address.
 Configure `DISCORD_CLIENT_SECRET`, `OWNER_ID`, and a strong, private
 `FLASK_SECRET_KEY` in the Flask environment. Panel administration APIs are
 restricted to the Discord account identified by `OWNER_ID`. Welcome embed
