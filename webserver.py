@@ -93,8 +93,7 @@ def add_log(message, level="info"):
 
 @app.route('/')
 def index():
-    # Discord Activity mở URL gốc, nên chuyển thẳng tới trang Games.
-    return redirect(url_for('games'))
+    return redirect(url_for('panel'))
 
 @app.route('/panel')
 def panel():
@@ -149,92 +148,6 @@ def callback():
     # Chuyển hướng về trang mà người dùng vừa truy cập (mặc định là music nếu không có)
     next_url = session.pop('next_url', url_for('music'))
     return redirect(next_url)
-
-@app.route('/api/discord-auth', methods=['POST'])
-def api_discord_auth():
-    data = request.get_json(silent=True)
-    code = data.get('code') if isinstance(data, dict) else None
-    if not isinstance(code, str) or not code.strip():
-        return jsonify({'error': 'No code provided'}), 400
-    import requests
-    if not CLIENT_ID or not CLIENT_SECRET:
-        app.logger.error('Discord OAuth client credentials are not configured.')
-        return jsonify({'error': 'Discord OAuth chưa được cấu hình trên máy chủ.'}), 503
-
-    # Gửi request lấy token không cần redirect_uri cho Embedded SDK
-    token_data = {
-        'client_id': CLIENT_ID,
-        'client_secret': CLIENT_SECRET,
-        'grant_type': 'authorization_code',
-        'code': code
-    }
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    try:
-        token_response = requests.post(
-            'https://discord.com/api/oauth2/token',
-            data=token_data,
-            headers=headers,
-            timeout=10
-        )
-        token_resp = token_response.json()
-    except requests.exceptions.RequestException:
-        app.logger.exception('Discord OAuth token exchange failed.')
-        return jsonify({'error': 'Không thể kết nối dịch vụ xác thực Discord.'}), 502
-    except ValueError:
-        app.logger.exception('Discord OAuth token endpoint returned invalid JSON.')
-        return jsonify({'error': 'Phản hồi xác thực từ Discord không hợp lệ.'}), 502
-
-    if (
-        not token_response.ok
-        or not isinstance(token_resp, dict)
-        or not isinstance(token_resp.get('access_token'), str)
-    ):
-        return jsonify({'error': 'Mã xác thực Discord không hợp lệ hoặc đã hết hạn.'}), 401
-
-    # Lấy thông tin user bằng access_token
-    access_token = token_resp['access_token']
-    try:
-        user_response = requests.get(
-            'https://discord.com/api/users/@me',
-            headers={'Authorization': f'Bearer {access_token}'},
-            timeout=10
-        )
-        user_response.raise_for_status()
-        user_data = user_response.json()
-    except requests.exceptions.RequestException:
-        app.logger.exception('Failed to fetch the authenticated Discord user.')
-        return jsonify({'error': 'Không thể lấy thông tin người dùng từ Discord.'}), 502
-    except ValueError:
-        app.logger.exception('Discord user endpoint returned invalid JSON.')
-        return jsonify({'error': 'Phản hồi thông tin người dùng từ Discord không hợp lệ.'}), 502
-
-    if (
-        not isinstance(user_data, dict)
-        or not user_data.get('id')
-        or not user_data.get('username')
-    ):
-        app.logger.error('Discord user endpoint returned an incomplete user profile.')
-        return jsonify({'error': 'Discord không trả về hồ sơ người dùng hợp lệ.'}), 502
-
-    avatar_hash = user_data.get('avatar')
-    if avatar_hash:
-        ext = "gif" if avatar_hash.startswith("a_") else "png"
-        avatar_url = f"https://cdn.discordapp.com/avatars/{user_data.get('id')}/{avatar_hash}.{ext}?size=1024"
-    else:
-        avatar_url = "https://cdn.discordapp.com/embed/avatars/0.png"
-    # Cập nhật Flask session
-    session['user'] = {
-        'id': user_data.get('id'),
-        'username': user_data.get('username'),
-        'discriminator': user_data.get('discriminator', '0'),
-        'avatar': avatar_url
-    }
-    session.permanent = True
-    # Trả về cả access_token để client hoàn tất authenticate với SDK
-    return jsonify({
-        'access_token': access_token,
-        'user': session['user']
-    })
 
 @app.route('/logout')
 def logout():
@@ -802,176 +715,16 @@ def welcome_banner(filename):
     banner_folder = os.path.join(os.getenv('DATA_FOLDER', 'data'), 'welcome_banners')
     return send_from_directory(banner_folder, filename, max_age=31536000)
 
-@app.route('/api/games/rooms', methods=['GET', 'POST'])
-def api_game_rooms():
-    games_cog = bot_instance.get_cog('Game') if bot_instance else None
-    if games_cog is None:
-        return jsonify({'error': 'Game service is not available.'}), 503
+@app.route('/games')
+def games():
+    session['next_url'] = url_for('games')
+    return send_from_directory(FRONTEND_DIR, 'games.html')
 
-    if request.method == 'GET':
-        return jsonify(games_cog.get_rooms())
-
-    room = request.get_json(silent=True)
-    if not isinstance(room, dict) or type(room.get('id')) is not int or room['id'] <= 0:
-        return jsonify({'error': 'Dữ liệu phòng không hợp lệ.'}), 400
-    if not isinstance(room.get('name'), str) or not room['name'].strip():
-        return jsonify({'error': 'Tên phòng không hợp lệ.'}), 400
-
-    created_room = games_cog.create_room(room)
-    if created_room is None:
-        return jsonify({'error': 'Phòng này đã tồn tại.'}), 409
-    return jsonify(created_room), 201
-
-@app.route('/api/games/rooms/<int:room_id>', methods=['PUT'])
-def api_update_game_room(room_id):
-    games_cog = bot_instance.get_cog('Game') if bot_instance else None
-    if games_cog is None:
-        return jsonify({'error': 'Game service is not available.'}), 503
-
-    room = request.get_json(silent=True)
-    if not isinstance(room, dict) or type(room.get('id')) is not int or room['id'] != room_id:
-        return jsonify({'error': 'Dữ liệu phòng không hợp lệ.'}), 400
-
-    result = games_cog.update_room(room_id, room)
-    if result is None:
-        return jsonify({'error': 'Không tìm thấy phòng.'}), 404
-    if result == 'deleted':
-        return jsonify({'deleted': True})
-    return jsonify(room)
-
-@app.route('/api/games/rooms/<int:room_id>/chat', methods=['GET', 'POST'])
-def api_game_room_chat(room_id):
-    games_cog = bot_instance.get_cog('Game') if bot_instance else None
-    if games_cog is None:
-        return jsonify({'error': 'Game service is not available.'}), 503
-
-    if request.method == 'GET':
-        user_id = request.args.get('userId')
-        if not user_id:
-            return jsonify({'error': 'Thiếu thông tin người dùng.'}), 400
-        messages = games_cog.get_room_messages(room_id, user_id)
-        if messages is None:
-            return jsonify({'error': 'Bạn không phải thành viên của phòng này.'}), 409
-        return jsonify(messages)
-
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict) or not isinstance(data.get('userId'), str):
-        return jsonify({'error': 'Thiếu thông tin người dùng.'}), 400
-    content = data.get('content')
-    if not isinstance(content, str) or not content.strip() or len(content.strip()) > 500:
-        return jsonify({'error': 'Tin nhắn phải có từ 1 đến 500 ký tự.'}), 400
-    message = games_cog.send_room_message(room_id, data['userId'], content)
-    if message is None:
-        return jsonify({'error': 'Không thể gửi tin nhắn trong phòng này.'}), 409
-    return jsonify(message), 201
-
-@app.route('/api/games/rooms/<int:room_id>/<action>', methods=['POST'])
-def api_game_room_action(room_id, action):
-    games_cog = bot_instance.get_cog('Game') if bot_instance else None
-    if games_cog is None:
-        return jsonify({'error': 'Game service is not available.'}), 503
-
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict) or not isinstance(data.get('userId'), str):
-        return jsonify({'error': 'Thiếu thông tin người dùng.'}), 400
-
-    user_id = data['userId']
-    if action == 'presence':
-        return jsonify({'active': games_cog.heartbeat(room_id, user_id)})
-    if action == 'join':
-        user = data.get('user')
-        if not isinstance(user, dict) or user.get('id') != user_id:
-            return jsonify({'error': 'Thông tin người tham gia không hợp lệ.'}), 400
-        side = data.get('side')
-        if side is not None and side not in ('red', 'black', 'observer'):
-            return jsonify({'error': 'Vị trí tham gia không hợp lệ.'}), 400
-        room = games_cog.join_room(room_id, user, side)
-    elif action == 'leave':
-        room = games_cog.leave_room(room_id, user_id)
-        if room is None:
-            return jsonify({'deleted': True})
-        return jsonify(room)
-    elif action == 'add-bot':
-        elo = data.get('elo')
-        if type(elo) is not int:
-            return jsonify({'error': 'Cấp độ bot không hợp lệ.'}), 400
-        room = games_cog.add_bot(room_id, user_id, elo)
-    elif action == 'add-two-bots':
-        elo_red = data.get('elo1')
-        elo_black = data.get('elo2')
-        if type(elo_red) is not int or type(elo_black) is not int:
-            return jsonify({'error': 'Cấp độ bot không hợp lệ.'}), 400
-        room = games_cog.add_two_bots(room_id, user_id, elo_red, elo_black)
-    elif action == 'remove-bot':
-        side = data.get('side')
-        if side not in ('red', 'black'):
-            return jsonify({'error': 'Vị trí bot không hợp lệ.'}), 400
-        room = games_cog.remove_bot(room_id, user_id, side)
-    elif action == 'swap-request':
-        target_user_id = data.get('targetUserId')
-        if not isinstance(target_user_id, str):
-            return jsonify({'error': 'Thiếu thông tin người cần đổi phe.'}), 400
-        room = games_cog.request_swap(room_id, user_id, target_user_id)
-    elif action == 'swap-response':
-        accepted = data.get('accepted')
-        if type(accepted) is not bool:
-            return jsonify({'error': 'Phản hồi đổi phe không hợp lệ.'}), 400
-        room = games_cog.respond_swap(room_id, user_id, accepted)
-    elif action == 'swap-cancel':
-        room = games_cog.cancel_swap(room_id, user_id)
-    elif action == 'ready':
-        room = games_cog.set_ready(room_id, user_id, data.get('ready') is True)
-    elif action == 'piece-moves':
-        coordinates = (data.get('x'), data.get('y'))
-        if any(type(value) is not int for value in coordinates):
-            return jsonify({'error': 'Tọa độ quân cờ không hợp lệ.'}), 400
-        result = games_cog.get_piece_moves(room_id, user_id, *coordinates)
-        if result is None:
-            return jsonify({'error': 'Không thể chọn quân cờ này.'}), 409
-        return jsonify(result)
-    elif action == 'bot-move':
-        room = games_cog.make_bot_move(room_id, user_id)
-    elif action == 'move':
-        coordinates = tuple(data.get(key) for key in ('fromX', 'fromY', 'toX', 'toY'))
-        if any(type(value) is not int for value in coordinates):
-            return jsonify({'error': 'Nước đi không hợp lệ.'}), 400
-        if any(
-            not (0 <= value < (9 if index % 2 == 0 else 10))
-            for index, value in enumerate(coordinates)
-        ):
-            return jsonify({'error': 'Nước đi nằm ngoài bàn cờ.'}), 400
-        room = games_cog.move_piece(room_id, user_id, *coordinates)
-    elif action == 'surrender':
-        room = games_cog.surrender(room_id, user_id)
-    elif action == 'draw-request':
-        room = games_cog.request_draw(room_id, user_id)
-    elif action == 'draw-response':
-        accepted = data.get('accepted')
-        if type(accepted) is not bool:
-            return jsonify({'error': 'Phản hồi đề nghị hòa không hợp lệ.'}), 400
-        room = games_cog.respond_draw(room_id, user_id, accepted)
-    elif action == 'rename':
-        name = data.get('name')
-        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 60:
-            return jsonify({'error': 'Tên phòng phải có từ 1 đến 60 ký tự.'}), 400
-        room = games_cog.rename_room(room_id, user_id, name.strip())
-    else:
-        return jsonify({'error': 'Thao tác phòng không hợp lệ.'}), 404
-
-    if room is None:
-        return jsonify({'error': 'Không thể thực hiện thao tác với phòng này.'}), 409
-    return jsonify(room)
-
-#--- Trang Music Player ---
 
 @app.route('/music')
 def music():
     session['next_url'] = url_for('music')
     return send_from_directory(FRONTEND_DIR, 'music.html')
-
-@app.route('/games')
-def games():
-    return send_from_directory(FRONTEND_DIR, 'games.html')
 
 # ==========================================
 # 1. LẤY TRẠNG THÁI VÀ HÀNG CHỜ HIỂN THỊ LÊN WEB
