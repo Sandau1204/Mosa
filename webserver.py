@@ -93,6 +93,9 @@ def add_log(message, level="info"):
 
 @app.route('/')
 def index():
+    if 'frame_id' in request.args and 'instance_id' in request.args:
+        query = request.query_string.decode('utf-8', errors='replace')
+        return redirect(url_for('games') + '?' + query)
     return redirect(url_for('panel'))
 
 @app.route('/panel')
@@ -235,16 +238,18 @@ def api_server_voice_channels(guild_id):
 @app.route('/api/servers/<guild_id>/members')
 @owner_required
 def api_server_members(guild_id):
-    if not bot_instance:
+    bot = bot_instance
+    if not bot:
         return jsonify({'error': 'Bot chưa được khởi tạo.'}), 503
-    guild = bot_instance.get_guild(int(guild_id))
+    guild = bot.get_guild(int(guild_id))
     if not guild:
         return jsonify({'error': 'Không tìm thấy server.'}), 404
     async def get_bot_inviter_id():
         bot_member = guild.me
-        bot_user = bot_instance.user
+        bot_user = bot.user
         if not bot_member or not bot_member.joined_at or not bot_user:
             return None
+        bot_joined_at = bot_member.joined_at
         try:
             entries = [
                 entry async for entry in guild.audit_logs(
@@ -266,15 +271,15 @@ def api_server_members(guild_id):
             entry for entry in entries
             if getattr(entry.target, 'id', None) == bot_user.id
             and entry.user
-            and abs((entry.created_at - bot_member.joined_at).total_seconds()) <= 600
+            and abs((entry.created_at - bot_joined_at).total_seconds()) <= 600
         ]
         if not matching_entries:
             return None
         closest_entry = min(
             matching_entries,
-            key=lambda entry: abs((entry.created_at - bot_member.joined_at).total_seconds())
+            key=lambda entry: abs((entry.created_at - bot_joined_at).total_seconds())
         )
-        return str(closest_entry.user.id)
+        return str(closest_entry.user.id) if closest_entry.user else None
 
     inviter_id = run_coro(get_bot_inviter_id())
     members = []
@@ -306,7 +311,7 @@ def api_member_action(guild_id, member_id):
     if not isinstance(reason, str):
         return jsonify({'success': False, 'error': 'Lý do phải là văn bản.'}), 400
     reason = reason.strip()[:512] or 'Không có lý do'
-    duration = None
+    duration = 60
     if action == 'timeout':
         try:
             duration = int(data.get('duration', 60))

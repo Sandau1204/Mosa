@@ -190,6 +190,11 @@ settings are saved under `DATA_FOLDER` (default `data`) and sent when a member
 joins the selected server. Uploaded welcome banners are stored in
 `DATA_FOLDER/welcome_banners` and served from the Flask app's public URL.
 
+Discord Activity launches at `/` with `frame_id` and `instance_id` are redirected
+to `/games`, preserving the launch query parameters. This works in both Next.js
+and Flask. Keep the Activity root URL mapping pointed at this web application's
+root; ordinary visits to `/` still open `/panel`.
+
 Run `npm run build` to create the static site in `out/`. In production, the Flask
 server redirects `/` to `/panel` and serves the static export for `/panel`
 and `/music`, plus the game hub at `/games`. The game hub preserves the supplied
