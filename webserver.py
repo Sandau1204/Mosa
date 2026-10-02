@@ -802,6 +802,26 @@ def welcome_banner(filename):
     banner_folder = os.path.join(os.getenv('DATA_FOLDER', 'data'), 'welcome_banners')
     return send_from_directory(banner_folder, filename, max_age=31536000)
 
+def game_user():
+    user = session['user']
+    return {
+        'id': str(user['id']), 'name': user['username'],
+        'handle': '@' + user['username'],
+        'avatarUrl': user.get('avatar') or 'https://cdn.discordapp.com/embed/avatars/0.png'
+    }
+
+
+@app.before_request
+def authenticate_game_requests():
+    if request.path.startswith('/api/games/') and not session.get('user'):
+        return jsonify({'error': 'Vui lòng đăng nhập Discord.'}), 401
+
+
+@app.route('/api/games/session')
+def api_game_session():
+    return jsonify({'user': game_user()})
+
+
 @app.route('/api/games/rooms', methods=['GET', 'POST'])
 def api_game_rooms():
     games_cog = bot_instance.get_cog('Game') if bot_instance else None
@@ -816,28 +836,35 @@ def api_game_rooms():
         return jsonify({'error': 'Dữ liệu phòng không hợp lệ.'}), 400
     if not isinstance(room.get('name'), str) or not room['name'].strip():
         return jsonify({'error': 'Tên phòng không hợp lệ.'}), 400
-
+    if len(room['name'].strip()) > 60 or room.get('type') != 'xiangqi':
+        return jsonify({'error': 'Chỉ hỗ trợ phòng Cờ Tướng, tên tối đa 60 ký tự.'}), 400
+    elo = room.get('botElo')
+    if elo is not None and (type(elo) is not int or elo not in (800, 1200, 1600, 2000)):
+        return jsonify({'error': 'Độ khó bot không hợp lệ.'}), 400
+    user = game_user()
+    room = {
+        'id': room['id'], 'name': room['name'].strip(), 'type': 'xiangqi',
+        'game': 'Cờ Tướng', 'ownerId': user['id'], 'slots': '1/2',
+        'color': 'bg-rose-950 text-rose-300 border-rose-700/50',
+        'redPlayer': user, 'blackPlayer': None, 'observers': []
+    }
+    if elo is not None:
+        room['blackPlayer'] = {
+            'id': 'bot_' + uuid.uuid4().hex, 'name': 'Mosa Bot Beta',
+            'isBot': True, 'elo': elo,
+            'avatarUrl': 'https://cdn.discordapp.com/embed/avatars/0.png'
+        }
+        room['slots'] = '2/2'
     created_room = games_cog.create_room(room)
-    if created_room is None:
+    if not created_room:
         return jsonify({'error': 'Phòng này đã tồn tại.'}), 409
     return jsonify(created_room), 201
 
 @app.route('/api/games/rooms/<int:room_id>', methods=['PUT'])
 def api_update_game_room(room_id):
-    games_cog = bot_instance.get_cog('Game') if bot_instance else None
-    if games_cog is None:
-        return jsonify({'error': 'Game service is not available.'}), 503
+    # Board, clock and membership must only change through validated actions.
+    return jsonify({'error': 'Hãy sử dụng thao tác phòng để cập nhật.'}), 405
 
-    room = request.get_json(silent=True)
-    if not isinstance(room, dict) or type(room.get('id')) is not int or room['id'] != room_id:
-        return jsonify({'error': 'Dữ liệu phòng không hợp lệ.'}), 400
-
-    result = games_cog.update_room(room_id, room)
-    if result is None:
-        return jsonify({'error': 'Không tìm thấy phòng.'}), 404
-    if result == 'deleted':
-        return jsonify({'deleted': True})
-    return jsonify(room)
 
 @app.route('/api/games/rooms/<int:room_id>/chat', methods=['GET', 'POST'])
 def api_game_room_chat(room_id):
@@ -846,7 +873,7 @@ def api_game_room_chat(room_id):
         return jsonify({'error': 'Game service is not available.'}), 503
 
     if request.method == 'GET':
-        user_id = request.args.get('userId')
+        user_id = game_user()['id']
         if not user_id:
             return jsonify({'error': 'Thiếu thông tin người dùng.'}), 400
         messages = games_cog.get_room_messages(room_id, user_id)
@@ -858,9 +885,11 @@ def api_game_room_chat(room_id):
     if not isinstance(data, dict) or not isinstance(data.get('userId'), str):
         return jsonify({'error': 'Thiếu thông tin người dùng.'}), 400
     content = data.get('content')
+    if data['userId'] != game_user()['id']:
+        return jsonify({'error': 'Tài khoản không khớp phiên Discord.'}), 403
     if not isinstance(content, str) or not content.strip() or len(content.strip()) > 500:
         return jsonify({'error': 'Tin nhắn phải có từ 1 đến 500 ký tự.'}), 400
-    message = games_cog.send_room_message(room_id, data['userId'], content)
+    message = games_cog.send_room_message(room_id, game_user()['id'], content)
     if message is None:
         return jsonify({'error': 'Không thể gửi tin nhắn trong phòng này.'}), 409
     return jsonify(message), 201
@@ -875,11 +904,13 @@ def api_game_room_action(room_id, action):
     if not isinstance(data, dict) or not isinstance(data.get('userId'), str):
         return jsonify({'error': 'Thiếu thông tin người dùng.'}), 400
 
-    user_id = data['userId']
+    user_id = game_user()['id']
+    if data['userId'] != user_id:
+        return jsonify({'error': 'Tài khoản không khớp phiên Discord.'}), 403
     if action == 'presence':
         return jsonify({'active': games_cog.heartbeat(room_id, user_id)})
     if action == 'join':
-        user = data.get('user')
+        user = game_user()
         if not isinstance(user, dict) or user.get('id') != user_id:
             return jsonify({'error': 'Thông tin người tham gia không hợp lệ.'}), 400
         side = data.get('side')
