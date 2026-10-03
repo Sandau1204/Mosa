@@ -9,6 +9,7 @@ import {
   ArrowLeftRight, UserMinus, UserPlus, Send, Settings
 } from 'lucide-react';
 import GameRoomShell from './GameRoomShell';
+import DiscordIcon from './DiscordIcon';
 import ChessRoom from './games/ChessRoom';
 import MonopolyRoom from './games/MonopolyRoom';
 import XiangqiRoom from './games/XiangqiRoom';
@@ -1168,7 +1169,7 @@ export default function Games() {
       <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
         <section className="w-full max-w-md rounded-3xl border-4 border-slate-950 bg-slate-900 p-6 text-center shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-slate-950 bg-indigo-500 text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-            <MessageSquare className="h-7 w-7" />
+            <DiscordIcon className="h-7 w-7" />
           </div>
           <h1 className="text-xl font-black text-white">{t.discordLoginTitle}</h1>
           <p className="mt-2 text-sm font-medium text-slate-300">{message}</p>
@@ -1216,7 +1217,7 @@ export default function Games() {
               href="/login?next=%2Fgames"
               className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border-2 border-slate-950 bg-indigo-500 px-5 py-3 text-sm font-black text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition hover:bg-indigo-400"
             >
-              <MessageSquare className="h-4 w-4" /> {t.discordLoginBtn}
+              <DiscordIcon className="h-4 w-4" /> {t.discordLoginBtn}
             </a>
           )}
         </section>
