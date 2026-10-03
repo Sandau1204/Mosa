@@ -1159,6 +1159,10 @@ export default function Games() {
       ? ['Kết nối với Discord', 'Xác nhận quyền truy cập', 'Thiết lập phiên đăng nhập', 'Hoàn tất xác thực']
       : ['Connect to Discord', 'Authorize access', 'Create sign-in session', 'Complete authentication'];
     const stepFailed = authStatus === 'error' || authStatus === 'unconfigured';
+    const authProgress = Math.min(100, Math.max(0, authStep * 25));
+    const authProgressLabel = stepFailed
+      ? `${lang === 'VI' ? 'Gặp lỗi' : 'Failed'} · ${authSteps[authStep]}`
+      : authSteps[authStep] || (lang === 'VI' ? 'Xác thực thành công' : 'Authentication complete');
     const message = authStatus === 'unconfigured'
       ? t.discordConfigError
       : authStatus === 'error'
@@ -1174,24 +1178,15 @@ export default function Games() {
           <h1 className="text-xl font-black text-white">{t.discordLoginTitle}</h1>
           <p className="mt-2 text-sm font-medium text-slate-300">{message}</p>
           {isDiscordEmbedded && (
-            <ol aria-label={lang === 'VI' ? 'Các bước xác thực Discord' : 'Discord authentication steps'} className="mt-5 space-y-2 text-left" aria-live="polite">
-              {authSteps.map((label, index) => {
-                const completed = index < authStep;
-                const current = index === authStep;
-                const failed = current && stepFailed;
-                const status = completed
-                  ? (lang === 'VI' ? 'Hoàn tất' : 'Completed')
-                  : failed ? (lang === 'VI' ? 'Gặp lỗi' : 'Failed')
-                    : current ? (lang === 'VI' ? 'Đang thực hiện' : 'In progress')
-                      : (lang === 'VI' ? 'Đang chờ' : 'Pending');
-                return <li key={label} aria-current={current ? 'step' : undefined} className={`flex items-center gap-3 rounded-xl border p-3 ${failed ? 'border-rose-500/50 bg-rose-500/10' : current ? 'border-cyan-400/50 bg-cyan-400/10' : 'border-slate-800 bg-slate-950/40'}`}>
-                  <span aria-hidden="true" className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${completed ? 'bg-emerald-500/20 text-emerald-300' : failed ? 'bg-rose-500/20 text-rose-300' : current ? 'bg-cyan-400/20 text-cyan-300' : 'bg-slate-800 text-slate-500'}`}>
-                    {completed ? <Check className="h-4 w-4" /> : failed ? <X className="h-4 w-4" /> : current ? <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin" /> : index + 1}
-                  </span>
-                  <div className="min-w-0"><p className={`text-sm font-bold ${current || completed ? 'text-slate-100' : 'text-slate-500'}`}>{label}</p><p className={`mt-0.5 text-xs ${failed ? 'text-rose-300' : completed ? 'text-emerald-300' : 'text-slate-400'}`}>{status}</p></div>
-                </li>;
-              })}
-            </ol>
+            <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-left">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p role="status" className={`text-sm font-bold ${stepFailed ? 'text-rose-300' : 'text-slate-200'}`}>{authProgressLabel}</p>
+                <span className={`shrink-0 text-sm font-black tabular-nums ${stepFailed ? 'text-rose-300' : 'text-cyan-300'}`}>{authProgress}%</span>
+              </div>
+              <div role="progressbar" aria-label={lang === 'VI' ? 'Tiến trình xác thực Discord' : 'Discord authentication progress'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={authProgress} aria-valuetext={`${authProgress}% · ${authProgressLabel}`} className={`h-3 overflow-hidden rounded-full bg-slate-800 ${stepFailed ? 'ring-1 ring-rose-500/50' : ''}`}>
+                <div className={`h-full rounded-full motion-safe:transition-[width] motion-safe:duration-500 ${stepFailed ? 'bg-rose-500' : 'bg-gradient-to-r from-indigo-500 to-cyan-400'}`} style={{ width: `${authProgress}%` }} />
+              </div>
+            </div>
           )}
           {isDiscordEmbedded && authStatus !== 'unconfigured' && authStatus !== 'loading' && (
             <p className="mt-3 text-xs font-semibold text-slate-400">{t.discordOpenInDiscord}</p>
