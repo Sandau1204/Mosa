@@ -3,7 +3,7 @@ import json
 import secrets
 from pathlib import Path
 
-BOARD = json.loads((Path(__file__).resolve().parent.parent / 'components/games/monopoly-board.json').read_text(encoding='utf-8'))
+BOARD = json.loads((Path(__file__).resolve().parent / 'components/games/monopoly-board.json').read_text(encoding='utf-8'))
 CELLS = {cell['id']: cell for edge in BOARD.values() for cell in edge}
 # Follow adjacent cells clockwise, starting at PHÁT.
 TRACK = [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 7, 6, 5, 4, 3, 2, 1, 8, 9, 10, 11, 12]

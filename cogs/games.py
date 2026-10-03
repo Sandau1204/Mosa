@@ -14,7 +14,7 @@ from discord.ext import commands
 from flask import jsonify, request, session
 
 from webserver import app, load_games_auth_ticket, run_coro
-from cogs import monopoly
+import monopoly
 
 
 logger = logging.getLogger(__name__)
