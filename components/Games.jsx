@@ -228,8 +228,8 @@ const TRANSLATIONS = {
 };
 
 const GAMES_DATA = [
-  { id: 'xiangqi', title: 'Cờ Tướng (Xiangqi)', desc: 'Cờ Tướng truyền thống đỉnh cao, đấu 1v1 hoặc tập luyện với AI Kiện Tướng.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '300 - 2400 ELO', badge: 'HOT 🔥', badgeColor: 'bg-rose-500 text-white', bgGradient: 'from-amber-500 to-red-600', icon: '♟️' },
-  { id: 'chess', title: 'Cờ Vua (Chess)', desc: 'Thách đấu Cờ Vua chuẩn quốc tế với bảng phân tích nước đi và Replay.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '400 - 2800 ELO', badge: 'POPULAR 🏆', badgeColor: 'bg-indigo-600 text-white', bgGradient: 'from-blue-600 to-indigo-800', icon: '♚' },
+  { id: 'xiangqi', isAvailable: true, title: 'Cờ Tướng (Xiangqi)', desc: 'Cờ Tướng truyền thống đỉnh cao, đấu 1v1 hoặc tập luyện với AI Kiện Tướng.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '300 - 2400 ELO', badge: 'HOT 🔥', badgeColor: 'bg-rose-500 text-white', bgGradient: 'from-amber-500 to-red-600', icon: '♟️' },
+  { id: 'chess', isAvailable: true, title: 'Cờ Vua (Chess)', desc: 'Thách đấu Cờ Vua chuẩn quốc tế với bảng phân tích nước đi và Replay.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '400 - 2800 ELO', badge: 'POPULAR 🏆', badgeColor: 'bg-indigo-600 text-white', bgGradient: 'from-blue-600 to-indigo-800', icon: '♚' },
   { id: 'monopoly', title: 'Cờ Tỷ Phú (Business Land)', desc: 'Đổ xí ngầu, mua đất, xây khách sạn và đẩy bạn bè vào cảnh phá sản!', category: 'Party', isStrategy: false, players: '2 - 6 Người', aiElo: 'Smart Bot', badge: 'PARTY 🎉', badgeColor: 'bg-emerald-500 text-slate-900', bgGradient: 'from-emerald-400 to-teal-700', icon: '🪙' },
   { id: 'uno', title: 'Bài UNO Crazy', desc: 'Trận chiến bài UNO siêu tốc với các lá +4, Đổi Hướng vô cùng cay đắng!', category: 'Party', isStrategy: false, players: '2 - 8 Người', aiElo: 'Fast Bot', badge: 'NEW ⚡', badgeColor: 'bg-yellow-400 text-slate-900', bgGradient: 'from-yellow-400 to-orange-600', icon: '🎴' },
   { id: 'ludo', title: 'Cờ Cá Ngựa (Ludo Pop)', desc: 'Đua ngựa về chuồng cực hài hước, đá ngựa đối thủ về vạch xuất phát.', category: 'Party', isStrategy: false, players: '2 - 4 Người', aiElo: 'Easy / Hard', badge: 'FUN 🎲', badgeColor: 'bg-cyan-400 text-slate-900', bgGradient: 'from-cyan-400 to-blue-600', icon: '🎲' },
@@ -782,6 +782,7 @@ export default function Games() {
 
   const triggerToast = (msg) => { setToastMessage(msg); setShowInviteToast(true); setTimeout(() => setShowInviteToast(false), 3500); };
   const handleOpenRoomList = (game) => {
+    if (!game.isAvailable) return;
     setSelectedGame(game);
     setActiveModal('roomList');
     setJoiningRoom(null);
@@ -793,6 +794,7 @@ export default function Games() {
       .finally(() => setLobbyLoading(false));
   };
   const handleOpenCreateRoom = (game) => {
+    if (!game.isAvailable) return;
     setSelectedGame(game);
     setRoomName(lang === 'VI' ? `Phòng của ${discordUser.username}` : `${discordUser.username}'s room`);
     setIsRoomLocked(false);
@@ -1330,7 +1332,7 @@ export default function Games() {
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <h3 className="text-sm sm:text-base font-black text-white group-hover:text-yellow-400 transition-colors truncate">{game.title}</h3>
-                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-lg border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0 ${game.badgeColor}`}>{game.badge}</span>
+                          <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-lg border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0 ${game.isAvailable ? game.badgeColor : 'bg-slate-700 text-slate-200'}`}>{game.isAvailable ? game.badge : 'Coming soon'}</span>
                         </div>
                         <p className="text-[10px] sm:text-xs text-slate-400 font-medium line-clamp-2 leading-relaxed mb-2">{game.desc}</p>
                       </div>
@@ -1338,10 +1340,10 @@ export default function Games() {
                         <span className="bg-slate-950/80 text-white text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-800 flex items-center gap-1 shrink-0"><Users className="w-3 h-3 text-cyan-400" /> {game.players}</span>
                         <span className="bg-slate-950/80 text-yellow-300 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-800 flex items-center gap-1 shrink-0"><Bot className="w-3 h-3 text-yellow-400" /> {game.aiElo}</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 mt-auto">
+                      {game.isAvailable && (<div className="grid grid-cols-2 gap-2 mt-auto">
                         <button onClick={() => handleOpenRoomList(game)} className="py-1.5 sm:py-2 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-[10px] sm:text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-1"><Play className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-slate-950" /> {t.quickPlay}</button>
                         <button onClick={() => handleOpenCreateRoom(game)} className="py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[10px] sm:text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-1"><PlusCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400" /> {t.createRoom}</button>
-                      </div>
+                      </div>)}
                     </div>
                   </div>
                 ))
