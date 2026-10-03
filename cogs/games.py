@@ -14,6 +14,7 @@ from discord.ext import commands
 from flask import jsonify, request, session
 
 from webserver import app, load_games_auth_ticket, run_coro
+from cogs import monopoly
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,10 @@ def _leave_room_route(room_id):
     return _dispatch_games_api("leave_room", room_id)
 
 
+def _monopoly_route(room_id):
+    return _dispatch_games_api("monopoly_room", room_id)
+
+
 def _create_tournament_route():
     return _dispatch_games_api("create_tournament")
 
@@ -76,6 +81,7 @@ def register_games_routes():
         ("/api/games/rooms", "games_create_room", _create_room_route, ["POST"]),
         ("/api/games/rooms/<room_id>/join", "games_join_room", _join_room_route, ["POST"]),
         ("/api/games/rooms/<room_id>/leave", "games_leave_room", _leave_room_route, ["POST"]),
+        ("/api/games/rooms/<room_id>/monopoly", "games_monopoly", _monopoly_route, ["GET", "POST"]),
         ("/api/games/tournaments", "games_create_tournament", _create_tournament_route, ["POST"]),
         ("/api/games/tournaments/<guild_id>", "games_delete_tournament", _delete_tournament_route, ["DELETE"]),
         ("/api/games/invite", "games_create_invite", _create_invite_route, ["POST"]),
@@ -389,6 +395,8 @@ class Games(commands.Cog):
         mode = data.get("mode", "pvp")
         if mode not in ("pvp", "pve"):
             return jsonify({"error": "Chế độ chơi không hợp lệ."}), 400
+        if game_id == "monopoly" and mode != "pvp":
+            return jsonify({"error": "Cờ tỷ phú hỗ trợ 2–6 người chơi PvP."}), 400
         if data.get("bot_elo", 1200) not in (500, 1200, 2000):
             return jsonify({"error": "Độ khó bot không hợp lệ."}), 400
         if not isinstance(data.get("is_timer_enabled", True), bool):
@@ -469,7 +477,7 @@ class Games(commands.Cog):
                     "name": member.display_name,
                     "avatar": self._avatar(member),
                 })
-            if len(room["players"]) >= room["max_players"]:
+            if len(room["players"]) >= room["max_players"] and room["game_id"] != "monopoly":
                 room["status"] = "in-game"
             room["updated_at"] = time.time()
             self._save_data()
@@ -501,10 +509,55 @@ class Games(commands.Cog):
             if not room["players"] or room["host"]["id"] == str(user["id"]):
                 del self._data["rooms"][room_id]
             else:
-                room["status"] = "waiting"
+                if room.get("monopoly") and room["monopoly"]["phase"] != "finished":
+                    state = room["monopoly"]
+                    player = next(p for p in state["players"] if p["id"] == str(user["id"]))
+                    monopoly.eliminate(state, player)
+                    if state['turn'] == player['id'] or sum(not p['bankrupt'] for p in state['players']) <= 1:
+                        monopoly.advance(state)
+                    state['revision'] += 1
+                elif not room.get("monopoly"):
+                    room["status"] = "waiting"
                 room["updated_at"] = time.time()
             self._save_data()
         return jsonify({"success": True})
+
+    def monopoly_room(self, room_id):
+        user, error = self._user()
+        if user is None:
+            return error
+        data = request.get_json(silent=True) if request.method == 'POST' else request.args
+        if data is None or not hasattr(data, 'get'):
+            return jsonify({'error': 'Dữ liệu không hợp lệ.'}), 400
+        guild, _, error = self._get_guild_member(data.get('guild_id'), user['id'])
+        if error:
+            return error
+        with self._lock:
+            room = self._data['rooms'].get(room_id)
+            if not room or guild is None or room['guild_id'] != str(guild.id) or room['game_id'] != 'monopoly':
+                return jsonify({'error': 'Không tìm thấy phòng Cờ tỷ phú.'}), 404
+            if not any(p['id'] == str(user['id']) for p in room['players']):
+                return jsonify({'error': 'Bạn chưa tham gia phòng.'}), 403
+            state = room.get('monopoly')
+            if request.method == 'POST':
+                action = data.get('action')
+                if action == 'start':
+                    if room['host']['id'] != str(user['id']) or state or len(room['players']) < 2:
+                        return jsonify({'error': 'Chủ phòng cần ít nhất 2 người để bắt đầu.'}), 409
+                    state = room['monopoly'] = monopoly.start(room['players'])
+                    state['revision'] = 0
+                    room['status'] = 'in-game'
+                else:
+                    if not state or data.get('revision') != state['revision']:
+                        return jsonify({'error': 'Trạng thái đã thay đổi. Hãy thử lại.'}), 409
+                    try:
+                        monopoly.act(state, str(user['id']), action)
+                    except ValueError as exc:
+                        return jsonify({'error': str(exc)}), 409
+                state['revision'] += 1
+                room['updated_at'] = time.time()
+                self._save_data()
+            return jsonify({'state': state, 'players': room['players'], 'hostId': room['host']['id']})
 
     def create_tournament(self):
         user, error = self._user()

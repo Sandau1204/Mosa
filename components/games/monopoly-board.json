@@ -1,0 +1,220 @@
+{
+  "top": [
+    {
+      "id": 13,
+      "name": "PHÁT",
+      "desc": "+2TR VNĐ",
+      "type": "corner",
+      "icon": "🏁",
+      "bg": "bg-emerald-50"
+    },
+    {
+      "id": 14,
+      "district": "QUẬN 5",
+      "name": "Hải Thượng Lãn Ông",
+      "price": "1 TR",
+      "type": "property",
+      "icon": "🏮",
+      "color": "bg-purple-500"
+    },
+    {
+      "id": 15,
+      "name": "Thẻ Cơ Hội",
+      "desc": "CƠ HỘI",
+      "type": "chance",
+      "icon": "🎲",
+      "bg": "bg-amber-50"
+    },
+    {
+      "id": 16,
+      "district": "QUẬN 5",
+      "name": "Châu Văn Liêm",
+      "price": "1,2 TR",
+      "type": "property",
+      "icon": "🍜",
+      "color": "bg-purple-500"
+    },
+    {
+      "id": 17,
+      "name": "Bến Xe Miền Đông",
+      "price": "2 TR",
+      "type": "station",
+      "icon": "🚌",
+      "bg": "bg-slate-50"
+    },
+    {
+      "id": 18,
+      "district": "QUẬN 3",
+      "name": "Phạm Ngọc Thạch",
+      "price": "1,8 TR",
+      "type": "property",
+      "icon": "☕",
+      "color": "bg-blue-500"
+    },
+    {
+      "id": 19,
+      "name": "BỐT CẢNH SÁT",
+      "desc": "SÀI GÒN",
+      "type": "corner",
+      "icon": "🚓",
+      "bg": "bg-blue-50"
+    }
+  ],
+  "right": [
+    {
+      "id": 20,
+      "district": "QUẬN 3",
+      "name": "Võ Văn Tần",
+      "price": "2 TR",
+      "type": "property",
+      "icon": "🌳",
+      "color": "bg-blue-500"
+    },
+    {
+      "id": 21,
+      "name": "Thẻ Vận Mệnh",
+      "desc": "VẬN MỆNH",
+      "type": "chest",
+      "icon": "🔮",
+      "bg": "bg-rose-50"
+    },
+    {
+      "id": 22,
+      "district": "BÌNH THẠNH",
+      "name": "Điện Biên Phủ",
+      "price": "2,5 TR",
+      "type": "property",
+      "icon": "🌉",
+      "color": "bg-orange-500"
+    },
+    {
+      "id": 23,
+      "district": "BÌNH THẠNH",
+      "name": "Xô Viết Nghệ Tĩnh",
+      "price": "2,8 TR",
+      "type": "property",
+      "icon": "🛵",
+      "color": "bg-orange-500"
+    },
+    {
+      "id": 24,
+      "name": "Sân Bay Tân Sơn Nhất",
+      "price": "3,5 TR",
+      "type": "station",
+      "icon": "✈️",
+      "bg": "bg-cyan-50"
+    }
+  ],
+  "bottom": [
+    {
+      "id": 1,
+      "name": "VƯỢT ĐÈN ĐỎ",
+      "desc": "SÀI GÒN",
+      "type": "corner",
+      "icon": "🚨",
+      "bg": "bg-red-50",
+      "topBar": "bg-red-600"
+    },
+    {
+      "id": 2,
+      "district": "QUẬN 7",
+      "name": "Nguyễn Văn Linh",
+      "price": "4,2 TR",
+      "type": "property",
+      "icon": "🏢",
+      "color": "bg-emerald-500"
+    },
+    {
+      "id": 3,
+      "name": "Chợ Bến Thành",
+      "price": "4 TR",
+      "type": "special",
+      "icon": "🏰",
+      "bg": "bg-amber-50",
+      "topBar": "bg-amber-500"
+    },
+    {
+      "id": 4,
+      "district": "TP. THỦ ĐỨC",
+      "name": "Phạm Văn Đồng",
+      "price": "3,5 TR",
+      "type": "property",
+      "icon": "🌴",
+      "color": "bg-teal-500"
+    },
+    {
+      "id": 5,
+      "name": "CỤC THUẾ TP.HCM",
+      "desc": "1,5 TR VNĐ",
+      "type": "tax",
+      "icon": "🏛️",
+      "bg": "bg-rose-50",
+      "topBar": "bg-rose-600"
+    },
+    {
+      "id": 6,
+      "district": "TP. THỦ ĐỨC",
+      "name": "Võ Nguyên Giáp",
+      "price": "3,2 TR",
+      "type": "property",
+      "icon": "🌉",
+      "color": "bg-teal-500"
+    },
+    {
+      "id": 7,
+      "name": "CÔNG VIÊN TAO ĐÀN",
+      "desc": "SÀI GÒN",
+      "type": "corner",
+      "icon": "🌴",
+      "bg": "bg-green-50",
+      "topBar": "bg-teal-600"
+    }
+  ],
+  "left": [
+    {
+      "id": 12,
+      "district": "Q1 SUPER DELUXE",
+      "name": "Đồng Khởi",
+      "price": "8 TR",
+      "type": "property",
+      "icon": "👑",
+      "color": "bg-red-500",
+      "isPremium": true
+    },
+    {
+      "id": 11,
+      "district": "QUẬN 1",
+      "name": "Nguyễn Huệ",
+      "price": "6,5 TR",
+      "type": "property",
+      "icon": "🌸",
+      "color": "bg-red-500"
+    },
+    {
+      "id": 10,
+      "district": "QUẬN 1",
+      "name": "Lê Lợi",
+      "price": "5,5 TR",
+      "type": "property",
+      "icon": "🛍️",
+      "color": "bg-red-500"
+    },
+    {
+      "id": 9,
+      "name": "Thẻ Vận Mệnh",
+      "desc": "VẬN MỆNH",
+      "type": "chest",
+      "icon": "🔮",
+      "bg": "bg-rose-50"
+    },
+    {
+      "id": 8,
+      "district": "QUẬN 7",
+      "name": "Nguyễn Hữu Thọ",
+      "price": "4,5 TR",
+      "type": "property",
+      "icon": "🏙️",
+      "color": "bg-emerald-500"
+    }
+  ]
+}

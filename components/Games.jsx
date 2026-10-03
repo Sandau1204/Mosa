@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import GameRoomShell from './GameRoomShell';
 import ChessRoom from './games/ChessRoom';
+import MonopolyRoom from './games/MonopolyRoom';
 import XiangqiRoom from './games/XiangqiRoom';
 
 const TRANSLATIONS = {
@@ -230,7 +231,7 @@ const TRANSLATIONS = {
 const GAMES_DATA = [
   { id: 'xiangqi', isAvailable: true, title: 'Cờ Tướng (Xiangqi)', desc: 'Cờ Tướng truyền thống đỉnh cao, đấu 1v1 hoặc tập luyện với AI Kiện Tướng.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '300 - 2400 ELO', badge: 'HOT 🔥', badgeColor: 'bg-rose-500 text-white', bgGradient: 'from-amber-500 to-red-600', icon: '♟️' },
   { id: 'chess', isAvailable: true, title: 'Cờ Vua (Chess)', desc: 'Thách đấu Cờ Vua chuẩn quốc tế với bảng phân tích nước đi và Replay.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '400 - 2800 ELO', badge: 'POPULAR 🏆', badgeColor: 'bg-indigo-600 text-white', bgGradient: 'from-blue-600 to-indigo-800', icon: '♚' },
-  { id: 'monopoly', title: 'Cờ Tỷ Phú (Business Land)', desc: 'Đổ xí ngầu, mua đất, xây khách sạn và đẩy bạn bè vào cảnh phá sản!', category: 'Party', isStrategy: false, players: '2 - 6 Người', aiElo: 'Smart Bot', badge: 'PARTY 🎉', badgeColor: 'bg-emerald-500 text-slate-900', bgGradient: 'from-emerald-400 to-teal-700', icon: '🪙' },
+  { id: 'monopoly', isAvailable: true, title: 'Cờ Tỷ Phú Sài Gòn', desc: 'Khám phá Sài Gòn, đổ xúc xắc, mua đất và thu tiền thuê cùng bạn bè!', category: 'Party', isStrategy: false, players: '2 - 6 Người', aiElo: 'Chỉ đấu người', badge: 'PARTY 🎉', badgeColor: 'bg-emerald-500 text-slate-900', bgGradient: 'from-emerald-400 to-teal-700', icon: '🪙' },
   { id: 'uno', title: 'Bài UNO Crazy', desc: 'Trận chiến bài UNO siêu tốc với các lá +4, Đổi Hướng vô cùng cay đắng!', category: 'Party', isStrategy: false, players: '2 - 8 Người', aiElo: 'Fast Bot', badge: 'NEW ⚡', badgeColor: 'bg-yellow-400 text-slate-900', bgGradient: 'from-yellow-400 to-orange-600', icon: '🎴' },
   { id: 'ludo', title: 'Cờ Cá Ngựa (Ludo Pop)', desc: 'Đua ngựa về chuồng cực hài hước, đá ngựa đối thủ về vạch xuất phát.', category: 'Party', isStrategy: false, players: '2 - 4 Người', aiElo: 'Easy / Hard', badge: 'FUN 🎲', badgeColor: 'bg-cyan-400 text-slate-900', bgGradient: 'from-cyan-400 to-blue-600', icon: '🎲' },
   { id: 'caro', title: 'Cờ Caro (Gomoku 5-in-a-row)', desc: 'Nối 5 nước cờ Caro cổ điển, nhịp độ nhanh giải trí cực tốt.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '3 Chế độ AI', badge: 'QUICK ⏱️', badgeColor: 'bg-purple-500 text-white', bgGradient: 'from-purple-500 to-pink-600', icon: '❌' },
@@ -796,6 +797,7 @@ export default function Games() {
   const handleOpenCreateRoom = (game) => {
     if (!game.isAvailable) return;
     setSelectedGame(game);
+    if (game.id === 'monopoly') setLobbyMode('pvp');
     setRoomName(lang === 'VI' ? `Phòng của ${discordUser.username}` : `${discordUser.username}'s room`);
     setIsRoomLocked(false);
     setRoomPassword('');
@@ -820,7 +822,7 @@ export default function Games() {
       });
       await refreshLobbyAfterAction();
       setJoiningRoom(null);
-      if (room.gameId === 'xiangqi' || room.gameId === 'chess') {
+      if (['xiangqi', 'chess', 'monopoly'].includes(room.gameId)) {
         handleEnterGameRoom(result.room, room.gameId);
       } else {
         setActiveModal(null);
@@ -853,15 +855,15 @@ export default function Games() {
           name: roomName,
           password: roomPassword,
           is_locked: isRoomLocked,
-          is_timer_enabled: isTimerEnabled,
-          allow_spectators: allowSpectators,
-          mode: lobbyMode,
+          is_timer_enabled: selectedGame.id === 'monopoly' ? false : isTimerEnabled,
+          allow_spectators: selectedGame.id === 'monopoly' ? false : allowSpectators,
+          mode: selectedGame.id === 'monopoly' ? 'pvp' : lobbyMode,
           bot_elo: botEloLevel
         })
       });
       await refreshLobbyAfterAction();
       setActiveModal(null);
-      if (selectedGame.id === 'xiangqi' || selectedGame.id === 'chess') {
+      if (['xiangqi', 'chess', 'monopoly'].includes(selectedGame.id)) {
         handleEnterGameRoom(result.room, selectedGame.id);
       } else {
         triggerToast(t.unsupportedGameCreated);
@@ -1213,7 +1215,9 @@ export default function Games() {
       )}
 
       <div className="flex-1 flex overflow-hidden relative">
-        {inGameRoom ? (
+        {inGameRoom?.gameType === 'monopoly' ? (
+          <MonopolyRoom key={inGameRoom.id} room={inGameRoom} userId={discordUser.id} apiBase={apiBase} request={gamesApiRequest} onExit={handleExitGameRoom} />
+        ) : inGameRoom ? (
           <GameRoomShell
             room={inGameRoom}
             t={t}
@@ -1457,6 +1461,7 @@ export default function Games() {
                       </div>
                       <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold"><span>Chủ phòng: <strong className="text-slate-200">{room.host}</strong></span><span>•</span><span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 text-cyan-400" /> {room.players}/{room.maxPlayers}</span><span>•</span><span className={room.status === 'in-game' ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>{room.status === 'in-game' ? t.statusInGame : t.statusReady}</span></div>
                     </div>
+                    {room.isJoined && room.gameId === 'monopoly' && <button onClick={() => handleEnterGameRoom(room, 'monopoly')} className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black">Vào lại phòng</button>}
                     <button disabled={roomActionLoading || (!room.isJoined && (room.players >= room.maxPlayers || room.status === 'in-game'))} onClick={() => room.isJoined ? handleLeaveLobbyRoom(room) : room.isLocked ? (setJoiningRoom(room), setPasswordInput(''), setPasswordError('')) : handleJoinRoom(room)} className={`w-full sm:w-auto px-5 py-2.5 rounded-xl border-2 border-slate-950 font-black text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-1.5 ${roomActionLoading || (!room.isJoined && (room.players >= room.maxPlayers || room.status === 'in-game')) ? 'bg-slate-800 text-slate-500 border-slate-800 cursor-not-allowed shadow-none' : room.isJoined ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'bg-yellow-400 hover:bg-yellow-300 text-slate-950'}`}>
                       {room.isJoined ? <LogOut className="w-4 h-4" /> : <DoorOpen className="w-4 h-4" />} {room.isJoined ? t.leaveRoom : t.joinRoomBtn}
                     </button>
@@ -1535,11 +1540,11 @@ export default function Games() {
                 <label className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-2">2. {t.gameMode}</label>
                 <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl border-2 border-slate-800">
                   <button onClick={() => setLobbyMode('pvp')} className={`py-2 px-3 rounded-xl border-2 font-black text-xs transition-all flex flex-col items-center gap-1 ${lobbyMode === 'pvp' ? 'bg-cyan-400 border-slate-950 text-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-transparent border-transparent text-slate-400 hover:text-white'}`}><Users className="w-4 h-4" /> {t.pvpMode}</button>
-                  <button onClick={() => setLobbyMode('pve')} className={`py-2 px-3 rounded-xl border-2 font-black text-xs transition-all flex flex-col items-center gap-1 ${lobbyMode === 'pve' ? 'bg-yellow-400 border-slate-950 text-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-transparent border-transparent text-slate-400 hover:text-white'}`}><Bot className="w-4 h-4" /> {t.pveMode}</button>
+                  <button disabled={selectedGame.id === 'monopoly'} onClick={() => setLobbyMode('pve')} className={`py-2 px-3 rounded-xl border-2 font-black text-xs transition-all flex flex-col items-center gap-1 ${lobbyMode === 'pve' ? 'bg-yellow-400 border-slate-950 text-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-transparent border-transparent text-slate-400 hover:text-white'}`}><Bot className="w-4 h-4" /> {t.pveMode}</button>
                 </div>
               </div>
 
-              {lobbyMode === 'pve' && (
+              {lobbyMode === 'pve' && selectedGame.id !== 'monopoly' && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-200">
                   <label className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-2">{t.botElo}</label>
                   <div className="grid grid-cols-3 gap-2">
@@ -1555,11 +1560,12 @@ export default function Games() {
               <div>
                 <label className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-2">3. {t.matchRules}</label>
                 <div className="space-y-2 bg-slate-950 p-3 rounded-2xl border-2 border-slate-800">
-                  <div className="flex items-center justify-between">
+                  <div className={selectedGame.id === 'monopoly' ? 'hidden' : 'flex items-center justify-between'}>
                     <span className="text-xs font-bold text-slate-300">Tính Giờ Đấu (15p + 5s)</span>
                     <button aria-label="Bật/tắt giờ đấu" onClick={() => setIsTimerEnabled(!isTimerEnabled)} className={`w-10 h-6 rounded-full p-1 border-2 border-slate-950 transition-colors ${isTimerEnabled ? 'bg-cyan-400' : 'bg-slate-800'}`}><div className={`w-3.5 h-3.5 rounded-full bg-slate-950 transition-transform ${isTimerEnabled ? 'translate-x-4' : 'translate-x-0'}`}></div></button>
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-900">
+                  {selectedGame.id === 'monopoly' && <p className="text-xs text-slate-300">2–6 người · Chủ phòng bắt đầu trận · Không giới hạn giờ · Luật rút gọn có trong phòng.</p>}
+                  <div className={selectedGame.id === 'monopoly' ? 'hidden' : 'flex items-center justify-between pt-2 border-t border-slate-900'}>
                     <span className="text-xs font-bold text-slate-300">{t.allowSpectator}</span>
                     <button aria-label="Bật/tắt quyền khán giả" aria-pressed={allowSpectators} onClick={() => setAllowSpectators(!allowSpectators)} className={`w-10 h-6 rounded-full p-1 border-2 border-slate-950 transition-colors ${allowSpectators ? 'bg-cyan-400' : 'bg-slate-800'}`}><div className={`w-3.5 h-3.5 rounded-full bg-slate-950 transition-transform ${allowSpectators ? 'translate-x-4' : 'translate-x-0'}`}></div></button>
                   </div>
