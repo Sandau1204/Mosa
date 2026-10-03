@@ -265,7 +265,6 @@ class Games(commands.Cog):
         ]
         requested_guild_id = request.args.get("guild_id")
         is_dm = request.args.get("context") == "dm"
-        user_id = int(user["id"])
         selected = next(
             (
                 item
@@ -279,8 +278,7 @@ class Games(commands.Cog):
         if not selected and not is_dm:
             selected = next(
                 (item for item in accessible_guilds
-                 if item[0].voice_states.get(user_id)
-                 and item[0].voice_states[user_id].channel),
+                 if item[1] and item[1].voice and item[1].voice.channel),
                 None,
             )
         if not selected and accessible_guilds and not is_dm:
@@ -301,8 +299,8 @@ class Games(commands.Cog):
                 "ping": round(self.bot.latency * 1000),
             })
 
-        guild, _ = selected
-        voice_state = guild.voice_states.get(user_id)
+        guild, member = selected
+        voice_state = member.voice if member else None
         current_voice_channel = voice_state.channel if voice_state else None
         guild_id = str(guild.id)
         with self._lock:
