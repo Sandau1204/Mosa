@@ -1172,7 +1172,7 @@ export default function Games() {
   }
 
   return (
-    <div className="w-full h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
+    <div className="w-full h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
 
       {!inGameRoom && (
         <header className="h-16 bg-slate-900 border-b-4 border-slate-950 px-4 flex items-center justify-between z-30 shrink-0 shadow-md">
@@ -1214,7 +1214,7 @@ export default function Games() {
         </header>
       )}
 
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 min-w-0 min-h-0 flex overflow-hidden relative">
         {inGameRoom?.gameType === 'monopoly' ? (
           <MonopolyRoom key={inGameRoom.id} room={inGameRoom} userId={discordUser.id} apiBase={apiBase} request={gamesApiRequest} onExit={handleExitGameRoom} />
         ) : inGameRoom ? (

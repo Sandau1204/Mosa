@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Clock, LogOut, Zap } from 'lucide-react';
+import { Building2, Clock, Crown, Dice5, Eye, LogOut, SlidersHorizontal, Swords, Zap } from 'lucide-react';
 import board from './monopoly-board.json';
+import styles from './MonopolyRoom.module.css';
 
 const colors = ['bg-red-500', 'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500'];
 const money = value => `${(value / 10).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} TR`;
@@ -11,9 +12,22 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
   const [snapshot, setSnapshot] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const boardSlot = useRef(null);
+  const [boardScale, setBoardScale] = useState(0);
   const pending = useRef(false);
   const sequence = useRef(0);
   const endpoint = `${apiBase}/rooms/${encodeURIComponent(room.id)}/monopoly`;
+  useEffect(() => {
+    const slot = boardSlot.current;
+    if (!slot) return;
+    const resize = () => {
+      setBoardScale(Math.max(0, Math.min(slot.clientWidth / 700, slot.clientHeight / (700 / 1.15), 1)));
+    };
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(slot);
+    return () => observer.disconnect();
+  }, []);
   const refresh = useCallback(async () => {
     const current = ++sequence.current;
     try {
@@ -48,6 +62,21 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
   const currentCell = Object.values(board).flat().find(cell => cell.id === active?.position);
   const canBuy = currentCell?.price && active?.money >= Number(currentCell.price.split(' ')[0].replace(',', '.')) * 10;
 
+  const spectators = snapshot?.spectators || [];
+  const me = players.find(p => p.id === String(userId));
+  const opponents = players.filter(p => p.id !== String(userId));
+  const renderPlayer = p => {
+    const index = players.findIndex(player => player.id === p.id);
+    return <div key={p.id} className={`${styles.player} ${p.bankrupt ? styles.bankrupt : ''}`}>
+      {p.avatar ? <img className={styles.avatar} src={p.avatar} alt="" /> : <span className={`${styles.avatar} ${colors[index]}`}>{p.name?.slice(0, 1)}</span>}
+      <div className={styles.playerInfo}><strong title={p.name}>{p.name}{p.id === String(userId) ? ' (Bạn)' : ''} {p.id === snapshot?.hostId && <Crown size={13} className={styles.crown} />}</strong>
+        <small>Người chơi {index + 1}{state?.turn === p.id && state?.phase !== 'finished' ? ' · Đang chơi' : ''}</small>
+        <b>{p.bankrupt ? 'Đã phá sản' : money(p.money)}</b>
+        <small>{Object.values(state?.owners || {}).filter(id => id === p.id).length} tài sản</small>
+      </div>
+    </div>;
+  };
+
   const renderCell = (cell, column, row) => {
     const owner = players.findIndex(p => p.id === state?.owners[String(cell.id)]);
     return <div key={cell.id} style={{ gridColumn: column, gridRow: row }} title={`${cell.name}${owner >= 0 ? ` · Chủ: ${players[owner].name}` : ''}`} className={`relative min-w-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm flex flex-col ${cell.bg || 'bg-white'}`}>
@@ -65,15 +94,26 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
     </div>;
   };
 
-  return <main className="flex-1 min-w-0 overflow-y-auto bg-slate-950 p-3 sm:p-5 space-y-4">
-    <header className="flex items-center justify-between gap-3 text-white">
-      <div><h1 className="text-lg font-black text-amber-300">🛵 CỜ TỶ PHÚ SÀI GÒN</h1><p className="text-sm text-slate-400">{room.name} · {players.length}/6 người · PvP</p></div>
-      <button disabled={busy} onClick={async () => { setBusy(true); await onExit(); }} className="flex items-center gap-2 rounded-xl bg-rose-500 px-3 py-2 font-bold text-sm"><LogOut size={16} /> Rời phòng</button>
+  return <main className={`${styles.room} bg-slate-950`}>
+    <header className={styles.header}>
+      <button disabled={busy} onClick={async () => { setBusy(true); try { await onExit(); } catch (err) { setError(err.message); } finally { setBusy(false); } }} className={styles.exit}><LogOut size={16} /> THOÁT</button>
+      <details className={styles.rules}><summary aria-label="Luật chơi" title="Luật chơi"><SlidersHorizontal size={18} /></summary><div><strong>Luật chơi Cờ Tỷ Phú</strong><p>Mỗi người có 20 TR. Qua PHÁT nhận 2 TR. Mua đất khi đến ô chưa có chủ; tiền thuê bằng 20% giá đất. Thuế 1,5 TR; vượt đèn đỏ phạt 1 TR và đến bót cảnh sát. Thẻ ngẫu nhiên cộng hoặc trừ tiền. Không đủ tiền trả thì phá sản; người cuối cùng còn lại thắng. Chưa áp dụng xây nhà, thế chấp, trao đổi đất hoặc lượt thêm khi đổ đôi. Rời trận tính là phá sản; chủ phòng rời sẽ đóng phòng.</p></div></details>
+      <h1 title={room.name}>{room.name || 'Phòng Cờ Tỷ Phú'}</h1><span className={styles.badge}>Party 2–6</span>
     </header>
-    {error && <p role="alert" className="bg-rose-950 text-rose-200 p-3 rounded-xl">{error}</p>}
-    <div className="grid xl:grid-cols-[minmax(0,1fr)_280px] gap-4 items-start max-w-[1250px] mx-auto">
-      <div className="overflow-x-auto pb-2">
-        <div style={{ gridTemplateRows: 'repeat(7, minmax(0, 1fr))' }} className="grid grid-cols-7 gap-1 p-2 rounded-3xl bg-slate-50 shadow-2xl min-w-[560px] w-full aspect-[1.15]">
+    {error && <p role="alert" className="shrink-0 max-h-16 overflow-y-auto break-words bg-rose-950 text-rose-200 p-2 text-xs rounded-xl">{error}</p>}
+    <div className={styles.content}>
+      <aside className={styles.leftSidebar}>
+        <section className={`${styles.panel} ${styles.actions}`}>
+          <h2><Swords size={15} /> THAO TÁC TRẬN ĐẤU</h2>
+          <button className={styles.roll} disabled={busy || (state ? !myTurn || state.phase !== 'roll' : !snapshot || snapshot.hostId !== String(userId) || players.length < 2)} onClick={() => action(state ? 'roll' : 'start')}><Dice5 size={20} /> {state ? 'ĐỔ XÚC XẮC' : 'BẮT ĐẦU TRẬN'}</button>
+          <div className={styles.secondaryActions}><button className={styles.buy} disabled={busy || !myTurn || state?.phase !== 'buy' || !canBuy} onClick={() => action('buy')}><Building2 size={16} /> MUA ĐẤT</button><button className={styles.skip} disabled={busy || !myTurn || state?.phase !== 'buy'} onClick={() => action('skip')}>QUA LƯỢT</button></div>
+        </section>
+        <section className={`${styles.panel} ${styles.spectators}`}><h2><Eye size={15} /> KHÁN GIẢ / NGƯỜI XEM <span className={styles.count}>{spectators.length}</span></h2>
+          {spectators.length ? spectators.map(p => <div className={styles.spectator} key={p.id}><span>{p.name}</span><small>Khán giả</small></div>) : <p className={styles.empty}>Chưa có khán giả trong phòng.</p>}
+        </section>
+      </aside>
+      <div ref={boardSlot} className={styles.boardSlot}>
+        <div style={{ gridTemplateRows: 'repeat(7, minmax(0, 1fr))', width: 700, height: 700 / 1.15, transform: `translate(-50%, -50%) scale(${boardScale})`, visibility: boardScale ? 'visible' : 'hidden' }} className={`${styles.board} grid grid-cols-7 gap-1 p-2 rounded-3xl bg-slate-50 shadow-2xl`}>
           {board.top.map((cell, i) => renderCell(cell, i + 1, 1))}
           {board.right.map((cell, i) => renderCell(cell, 7, i + 2))}
           {board.bottom.map((cell, i) => renderCell(cell, i + 1, 7))}
@@ -88,12 +128,11 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
             <div className="w-full rounded-xl border border-slate-200 bg-white p-2 text-[10px] text-slate-500"><p className="font-bold flex gap-1 items-center mb-1"><Clock size={12} /> NHẬT KÝ TRÒ CHƠI</p><p className="truncate" aria-live="polite">{state?.log.at(-1) || 'Mời bạn bè tham gia phòng để cùng chơi!'}</p></div>
           </section>
         </div>
-        <p className="sm:hidden text-xs text-slate-400 mt-2">Vuốt ngang để xem toàn bộ bàn cờ.</p>
       </div>
-      <aside className="space-y-4">
-        <section className="bg-slate-900 rounded-2xl p-4 space-y-3"><h2 className="font-black text-white text-sm">NGƯỜI CHƠI</h2>{!snapshot && <p className="text-slate-400 text-sm">Đang tải phòng…</p>}{players.map((p, index) => <div key={p.id} className={`rounded-xl p-3 border ${state?.turn === p.id && state?.phase !== 'finished' ? 'border-amber-400 bg-amber-400/10' : 'border-slate-700'} ${p.bankrupt ? 'opacity-50' : ''}`}><div className="flex items-center gap-2"><span className={`${colors[index]} rounded-full w-5 h-5 text-center text-xs text-white font-bold`}>{index + 1}</span><span className="text-white font-bold text-sm truncate">{p.name}{p.id === String(userId) ? ' (Bạn)' : ''}</span></div><p className="text-emerald-400 text-sm mt-2 font-bold">{p.bankrupt ? 'Đã phá sản' : money(p.money)} <span className="text-slate-400 font-normal">· {Object.values(state?.owners || {}).filter(id => id === p.id).length} tài sản</span></p></div>)}</section>
-        <details className="rounded-2xl p-4 bg-slate-900 text-xs text-slate-300"><summary className="cursor-pointer font-bold text-amber-300">Luật chơi rút gọn</summary><p className="mt-3 leading-relaxed">Mỗi người có 20 TR. Đi theo chiều kim đồng hồ; qua PHÁT nhận 2 TR. Mua đất khi đến ô chưa có chủ, tiền thuê bằng 20% giá đất. Thuế 1,5 TR; vượt đèn đỏ phạt 1 TR và chuyển đến bót cảnh sát. Thẻ ngẫu nhiên cộng hoặc trừ tiền. Không đủ tiền trả thì phá sản; người cuối cùng còn lại thắng. Chưa áp dụng xây nhà, thế chấp, trao đổi đất hoặc lượt thêm khi đổ đôi. Rời trận tính là phá sản; chủ phòng rời sẽ đóng phòng.</p></details>
-        <section className="rounded-2xl p-4 bg-slate-900"><h2 className="text-sm text-white font-bold mb-3">Nhật ký</h2><ol className="max-h-52 overflow-y-auto space-y-2 text-xs text-slate-400">{state?.log.map((entry, index) => <li key={index}>{entry}</li>)}</ol></section>
+      <aside className={styles.rightSidebar}>
+        <section className={`${styles.panel} ${styles.opponents}`} aria-label="Người chơi khác">{opponents.length ? opponents.map(renderPlayer) : <p className={styles.empty}>{snapshot ? 'Đang chờ người chơi tham gia…' : 'Đang tải phòng…'}</p>}</section>
+        <section className={`${styles.panel} ${styles.history}`}><h2><Clock size={15} /> LỊCH SỬ / HÀNH ĐỘNG <span className={styles.count}>{state?.log.length || 0}</span></h2><ol aria-live="polite">{state?.log.map((entry, index) => <li key={index}>{entry}</li>)}</ol>{!state?.log.length && <p className={styles.empty}>Các hành động sẽ xuất hiện khi trận đấu bắt đầu.</p>}</section>
+        <section className={`${styles.panel} ${styles.self}`} aria-label="Người chơi của bạn">{me ? renderPlayer(me) : <p className={styles.empty}>Bạn đang xem trận đấu.</p>}</section>
       </aside>
     </div>
   </main>;
