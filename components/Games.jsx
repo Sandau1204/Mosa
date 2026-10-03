@@ -14,7 +14,7 @@ import XiangqiRoom from './games/XiangqiRoom';
 
 const TRANSLATIONS = {
   VI: {
-    hubTitle: "DISCORD GAME HUB",
+    hubTitle: "MOSA GAMES",
     noGuilds: "Bot chưa tham gia server Discord nào mà bạn đang ở trong đó.",
     loadingLobby: "Đang tải dữ liệu Game Hub...",
     lobbyLoadError: "Không thể tải dữ liệu Game Hub.",
@@ -120,7 +120,7 @@ const TRANSLATIONS = {
     leftSeatMsg: "Bạn đã rời ghế và chuyển sang vị trí Khán Giả xem trận đấu."
   },
   EN: {
-    hubTitle: "DISCORD GAME HUB",
+    hubTitle: "MOSA GAMES",
     noGuilds: "The bot is not in any Discord server that you belong to.",
     loadingLobby: "Loading Game Hub data...",
     lobbyLoadError: "Could not load Game Hub data.",

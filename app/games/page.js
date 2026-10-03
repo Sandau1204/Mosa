@@ -1,8 +1,8 @@
 import Games from '../../components/Games';
 
 export const metadata = {
-  title: 'Mosa | Discord Game Hub',
-  description: 'Khám phá trò chơi và phòng chơi trong Discord Game Hub.'
+  title: 'Mosa | MOSA GAMES',
+  description: 'Khám phá trò chơi và phòng chơi trong MOSA GAMES.'
 };
 
 export default function GamesPage() {
