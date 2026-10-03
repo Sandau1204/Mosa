@@ -452,9 +452,14 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
     case 'chess':
       return (
         <div className="absolute inset-0 flex items-center justify-center">
-          <svg viewBox="0 0 64 64" className="relative z-10 w-16 h-16 sm:w-20 sm:h-20 filter drop-shadow-[4px_4px_0_#000] group-hover:scale-110 group-hover:-translate-y-2 transition-transform duration-300">
-            <path d="M 18 48 C 20 40 24 36 29 32 C 26 29 24 25 25 21 C 26 17 29 15 32 15 C 35 15 38 17 39 21 C 40 25 38 29 35 32 C 40 36 44 40 46 48 L 49 51 L 49 56 L 15 56 L 15 51 Z" fill="#F8FAFC" stroke="#020617" strokeWidth="3" strokeLinejoin="round" />
-            <path d="M 30 15 L 30 8 L 24 8 L 24 4 L 30 4 L 30 0 L 34 0 L 34 4 L 40 4 L 40 8 L 34 8 L 34 15 Z" fill="#F8FAFC" stroke="#020617" strokeWidth="2.5" strokeLinejoin="round" />
+          <svg aria-hidden="true" viewBox="0 0 80 80" className="relative z-10 w-16 h-16 sm:w-20 sm:h-20 filter drop-shadow-[4px_4px_0_#000] group-hover:scale-110 group-hover:-translate-y-2 transition-transform duration-300">
+            <rect x="7" y="7" width="66" height="66" rx="16" fill="#312e81" stroke="#020617" strokeWidth="4" />
+            <g transform="rotate(-8 40 40)">
+              <rect x="14" y="14" width="52" height="52" rx="6" fill="#fef3c7" stroke="#020617" strokeWidth="3" />
+              <path d="M 17 17 H 29 V 29 H 17 Z M 41 17 H 53 V 29 H 41 Z M 29 29 H 41 V 41 H 29 Z M 53 29 H 63 V 41 H 53 Z M 17 41 H 29 V 53 H 17 Z M 41 41 H 53 V 53 H 41 Z M 29 53 H 41 V 63 H 29 Z M 53 53 H 63 V 63 H 53 Z" fill="#6366f1" />
+            </g>
+            <path d="M 26 56 C 28 47 32 43 38 39 C 35 36 33 32 34 28 C 35 24 38 22 41 22 C 45 22 48 26 48 30 C 48 34 46 37 43 40 C 49 44 53 49 55 56 L 59 60 L 59 65 L 22 65 L 22 60 Z" fill="#fbbf24" stroke="#020617" strokeWidth="3.5" strokeLinejoin="round" />
+            <path d="M 39 22 L 39 16 L 34 16 L 34 12 L 39 12 L 39 8 L 43 8 L 43 12 L 48 12 L 48 16 L 43 16 L 43 22 Z" fill="#fbbf24" stroke="#020617" strokeWidth="3" strokeLinejoin="round" />
           </svg>
         </div>
       );
