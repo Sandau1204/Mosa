@@ -60,6 +60,10 @@ def _monopoly_route(room_id):
     return _dispatch_games_api("monopoly_room", room_id)
 
 
+def _seats_route(room_id):
+    return _dispatch_games_api("room_seats", room_id)
+
+
 def _create_tournament_route():
     return _dispatch_games_api("create_tournament")
 
@@ -82,6 +86,7 @@ def register_games_routes():
         ("/api/games/rooms/<room_id>/join", "games_join_room", _join_room_route, ["POST"]),
         ("/api/games/rooms/<room_id>/leave", "games_leave_room", _leave_room_route, ["POST"]),
         ("/api/games/rooms/<room_id>/monopoly", "games_monopoly", _monopoly_route, ["GET", "POST"]),
+        ("/api/games/rooms/<room_id>/seats", "games_seats", _seats_route, ["GET", "POST"]),
         ("/api/games/tournaments", "games_create_tournament", _create_tournament_route, ["POST"]),
         ("/api/games/tournaments/<guild_id>", "games_delete_tournament", _delete_tournament_route, ["DELETE"]),
         ("/api/games/invite", "games_create_invite", _create_invite_route, ["POST"]),
@@ -233,7 +238,7 @@ class Games(commands.Cog):
             "mode": room["mode"],
             "botElo": room.get("bot_elo"),
             "createdAt": room["created_at"],
-            "isJoined": any(player["id"] == str(user_id) for player in room["players"]),
+            "isJoined": any(player["id"] == str(user_id) for player in room["players"] + room.get("spectators", [])),
         }
 
     def _clean_expired_rooms(self):
@@ -454,7 +459,7 @@ class Games(commands.Cog):
             room = self._data["rooms"].get(room_id)
             if not room or room["guild_id"] != str(guild.id):
                 return jsonify({"error": "Không tìm thấy phòng chơi."}), 404
-            if room["status"] == "in-game":
+            if room["status"] == "in-game" and room["game_id"] not in ("monopoly", "chess", "xiangqi"):
                 return jsonify({"error": "Trận đấu trong phòng này đã bắt đầu."}), 409
             if self._room_is_locked(room):
                 password = data.get("password")
@@ -469,7 +474,20 @@ class Games(commands.Cog):
                 ).hex()
                 if not hmac.compare_digest(submitted, room["password_hash"]):
                     return jsonify({"error": "Mật khẩu phòng không chính xác."}), 403
-            if not any(player["id"] == str(member.id) for player in room["players"]):
+            if room["game_id"] in ("monopoly", "chess", "xiangqi"):
+                spectators = room.setdefault("spectators", [])
+                if not any(p['id'] == str(member.id) for p in room['players'] + spectators):
+                    if room['game_id'] != 'monopoly' and not room.get('allow_spectators', True):
+                        self._ensure_board_seats(room)
+                        side = next((s for s in ('red', 'black') if not any(p['side'] == s for p in room['players'])), None)
+                        if side is None:
+                            return jsonify({'error': 'Phòng đã đủ người và không cho phép khán giả.'}), 409
+                        room['players'].append({'id': str(member.id), 'name': member.display_name,
+                                                'avatar': self._avatar(member), 'side': side, 'isReady': False})
+                        self._reset_board_seats(room)
+                    else:
+                        spectators.append({'id': str(member.id), 'name': member.display_name, 'avatar': self._avatar(member)})
+            elif not any(player["id"] == str(member.id) for player in room["players"]):
                 if len(room["players"]) >= room["max_players"]:
                     return jsonify({"error": "Phòng đã đủ người chơi."}), 409
                 room["players"].append({
@@ -477,7 +495,7 @@ class Games(commands.Cog):
                     "name": member.display_name,
                     "avatar": self._avatar(member),
                 })
-            if len(room["players"]) >= room["max_players"] and room["game_id"] != "monopoly":
+            if len(room["players"]) >= room["max_players"] and room["game_id"] not in ("monopoly", "chess", "xiangqi"):
                 room["status"] = "in-game"
             room["updated_at"] = time.time()
             self._save_data()
@@ -501,26 +519,107 @@ class Games(commands.Cog):
             room = self._data["rooms"].get(room_id)
             if not room or room["guild_id"] != str(guild.id):
                 return jsonify({"error": "Không tìm thấy phòng chơi."}), 404
-            if not any(player["id"] == str(user["id"]) for player in room["players"]):
+            if not any(player["id"] == str(user["id"]) for player in room["players"] + room.get('spectators', [])):
                 return jsonify({"error": "Bạn chưa tham gia phòng này."}), 403
+            room['spectators'] = [p for p in room.get('spectators', []) if p['id'] != str(user['id'])]
+            was_seated = any(p['id'] == str(user['id']) for p in room['players'])
             room["players"] = [
                 player for player in room["players"] if player["id"] != str(user["id"])
             ]
-            if not room["players"] or room["host"]["id"] == str(user["id"]):
+            if not (room["players"] or room['spectators']) or room["host"]["id"] == str(user["id"]):
                 del self._data["rooms"][room_id]
             else:
+                if was_seated and room['game_id'] in ('chess', 'xiangqi'):
+                    self._reset_board_seats(room)
                 if room.get("monopoly") and room["monopoly"]["phase"] != "finished":
                     state = room["monopoly"]
-                    player = next(p for p in state["players"] if p["id"] == str(user["id"]))
-                    monopoly.eliminate(state, player)
-                    if state['turn'] == player['id'] or sum(not p['bankrupt'] for p in state['players']) <= 1:
-                        monopoly.advance(state)
-                    state['revision'] += 1
-                elif not room.get("monopoly"):
+                    self._leave_monopoly_seat(state, str(user['id']))
+                elif not room.get("monopoly") and (was_seated or room['game_id'] not in ('chess', 'xiangqi')):
                     room["status"] = "waiting"
                 room["updated_at"] = time.time()
             self._save_data()
         return jsonify({"success": True})
+
+    @staticmethod
+    def _ensure_board_seats(room):
+        used = {p.get('side') for p in room['players']}
+        for player in room['players']:
+            if player.get('side') not in ('red', 'black'):
+                player['side'] = next(side for side in ('red', 'black') if side not in used)
+                used.add(player['side'])
+            player.setdefault('isReady', False)
+
+    @staticmethod
+    def _reset_board_seats(room):
+        for player in room['players']:
+            player['isReady'] = False
+        room['status'] = 'waiting'
+        room['seatRevision'] = room.get('seatRevision', 0) + 1
+
+    def room_seats(self, room_id):
+        user, error = self._user()
+        if user is None:
+            return error
+        data = request.get_json(silent=True) if request.method == 'POST' else request.args
+        if data is None or not hasattr(data, 'get'):
+            return jsonify({'error': 'Dữ liệu không hợp lệ.'}), 400
+        guild, _, error = self._get_guild_member(data.get('guild_id'), user['id'])
+        if error:
+            return error
+        with self._lock:
+            room = self._data['rooms'].get(room_id)
+            if not room or guild is None or room['guild_id'] != str(guild.id) or room['game_id'] not in ('chess', 'xiangqi'):
+                return jsonify({'error': 'Không tìm thấy phòng cờ.'}), 404
+            user_id = str(user['id'])
+            spectators = room.setdefault('spectators', [])
+            if not any(p['id'] == user_id for p in room['players'] + spectators):
+                return jsonify({'error': 'Bạn chưa tham gia phòng.'}), 403
+            self._ensure_board_seats(room)
+            if request.method == 'POST':
+                action = data.get('action')
+                player = next((p for p in room['players'] if p['id'] == user_id), None)
+                if action == 'sit':
+                    side = data.get('side')
+                    if side not in ('red', 'black'):
+                        return jsonify({'error': 'Chỗ ngồi không hợp lệ.'}), 400
+                    if any(p['side'] == side for p in room['players']) or room['status'] == 'in-game':
+                        return jsonify({'error': 'Chỗ ngồi đã có người hoặc trận đã bắt đầu.'}), 409
+                    if player:
+                        player['side'] = side
+                    else:
+                        player = next(p for p in spectators if p['id'] == user_id)
+                        spectators.remove(player)
+                        room['players'].append(dict(player, side=side, isReady=False))
+                    self._reset_board_seats(room)
+                elif action == 'leave_seat':
+                    if not player:
+                        return jsonify({'error': 'Bạn đang là khán giả.'}), 409
+                    room['players'].remove(player)
+                    spectators.append({k: v for k, v in player.items() if k not in ('side', 'isReady')})
+                    self._reset_board_seats(room)
+                elif action == 'ready':
+                    if not player or room['status'] == 'in-game':
+                        return jsonify({'error': 'Bạn không thể sẵn sàng lúc này.'}), 409
+                    player['isReady'] = not player['isReady']
+                    if len(room['players']) == 2 and all(p['isReady'] for p in room['players']):
+                        room['status'] = 'in-game'
+                else:
+                    return jsonify({'error': 'Thao tác không hợp lệ.'}), 400
+                room['updated_at'] = time.time()
+                self._save_data()
+            return jsonify({'players': room['players'], 'spectators': spectators,
+                            'revision': room.get('seatRevision', 0), 'hostId': room['host']['id'],
+                            'matchStarted': room['status'] == 'in-game' and len(room['players']) == 2
+                            and all(p['isReady'] for p in room['players'])})
+
+    @staticmethod
+    def _leave_monopoly_seat(state, user_id):
+        player = next((p for p in state['players'] if p['id'] == user_id), None)
+        if state['phase'] != 'finished' and player and not player['bankrupt']:
+            monopoly.eliminate(state, player)
+            if state['turn'] == user_id or sum(not p['bankrupt'] for p in state['players']) <= 1:
+                monopoly.advance(state)
+            state['revision'] += 1
 
     def monopoly_room(self, room_id):
         user, error = self._user()
@@ -536,28 +635,45 @@ class Games(commands.Cog):
             room = self._data['rooms'].get(room_id)
             if not room or guild is None or room['guild_id'] != str(guild.id) or room['game_id'] != 'monopoly':
                 return jsonify({'error': 'Không tìm thấy phòng Cờ tỷ phú.'}), 404
-            if not any(p['id'] == str(user['id']) for p in room['players']):
+            spectators = room.setdefault('spectators', [])
+            user_id = str(user['id'])
+            if not any(p['id'] == user_id for p in room['players'] + spectators):
                 return jsonify({'error': 'Bạn chưa tham gia phòng.'}), 403
             state = room.get('monopoly')
             if request.method == 'POST':
                 action = data.get('action')
-                if action == 'start':
-                    if room['host']['id'] != str(user['id']) or state or len(room['players']) < 2:
+                if action in ('join_seat', 'leave_seat'):
+                    source, target = (spectators, room['players']) if action == 'join_seat' else (room['players'], spectators)
+                    player = next((p for p in source if p['id'] == user_id), None)
+                    if player is None:
+                        return jsonify({'error': 'Vai trò của bạn đã thay đổi. Hãy thử lại.'}), 409
+                    if action == 'join_seat' and len(target) >= room.get('max_players', 6):
+                        return jsonify({'error': 'Bàn đã đủ người chơi.'}), 409
+                    if action == 'leave_seat' and state:
+                        self._leave_monopoly_seat(state, user_id)
+                    source.remove(player)
+                    target.append(player)
+                elif action == 'start':
+                    if room['host']['id'] != user_id or (state and state['phase'] != 'finished') or len(room['players']) < 2:
                         return jsonify({'error': 'Chủ phòng cần ít nhất 2 người để bắt đầu.'}), 409
                     state = room['monopoly'] = monopoly.start(room['players'])
                     state['revision'] = 0
                     room['status'] = 'in-game'
                 else:
+                    if not any(p['id'] == user_id for p in room['players']):
+                        return jsonify({'error': 'Khán giả không thể thực hiện lượt chơi.'}), 403
                     if not state or data.get('revision') != state['revision']:
                         return jsonify({'error': 'Trạng thái đã thay đổi. Hãy thử lại.'}), 409
                     try:
                         monopoly.act(state, str(user['id']), action)
                     except ValueError as exc:
                         return jsonify({'error': str(exc)}), 409
-                state['revision'] += 1
+                if state and action not in ('join_seat', 'leave_seat'):
+                    state['revision'] += 1
                 room['updated_at'] = time.time()
                 self._save_data()
-            return jsonify({'state': state, 'players': room['players'], 'hostId': room['host']['id']})
+            return jsonify({'state': state, 'players': room['players'], 'spectators': spectators,
+                            'maxPlayers': room.get('max_players', 6), 'hostId': room['host']['id']})
 
     def create_tournament(self):
         user, error = self._user()

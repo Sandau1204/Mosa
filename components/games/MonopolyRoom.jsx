@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Building2, Clock, Crown, Dice5, Eye, LogOut, SlidersHorizontal, Swords, Zap } from 'lucide-react';
+import { Building2, Clock, Crown, Dice5, Eye, LogOut, SlidersHorizontal, Swords, Users, Zap } from 'lucide-react';
 import board from './monopoly-board.json';
 import styles from './MonopolyRoom.module.css';
 
@@ -63,14 +63,19 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
   const canBuy = currentCell?.price && active?.money >= Number(currentCell.price.split(' ')[0].replace(',', '.')) * 10;
 
   const spectators = snapshot?.spectators || [];
-  const me = players.find(p => p.id === String(userId));
-  const opponents = players.filter(p => p.id !== String(userId));
+  const seatedPlayers = (snapshot?.players || []).map(p => {
+    const current = players.find(player => player.id === p.id);
+    return current ? { ...current, ...p } : { ...p, money: 200 };
+  });
+  const me = seatedPlayers.find(p => p.id === String(userId));
+  const waiting = !state || state.phase === 'finished';
+  const canStart = snapshot?.hostId === String(userId) && seatedPlayers.length >= 2;
   const renderPlayer = p => {
-    const index = players.findIndex(player => player.id === p.id);
+    const index = seatedPlayers.findIndex(player => player.id === p.id);
     return <div key={p.id} className={`${styles.player} ${p.bankrupt ? styles.bankrupt : ''}`}>
       {p.avatar ? <img className={styles.avatar} src={p.avatar} alt="" /> : <span className={`${styles.avatar} ${colors[index]}`}>{p.name?.slice(0, 1)}</span>}
       <div className={styles.playerInfo}><strong title={p.name}>{p.name}{p.id === String(userId) ? ' (Bạn)' : ''} {p.id === snapshot?.hostId && <Crown size={13} className={styles.crown} />}</strong>
-        <small>Người chơi {index + 1}{state?.turn === p.id && state?.phase !== 'finished' ? ' · Đang chơi' : ''}</small>
+        <small>Người chơi {index + 1}{state && !waiting && (!players.some(player => player.id === p.id) || p.bankrupt) ? ' · Chờ ván sau' : state?.turn === p.id && !waiting ? ' · Đang chơi' : ''}</small>
         <b>{p.bankrupt ? 'Đã phá sản' : money(p.money)}</b>
         <small>{Object.values(state?.owners || {}).filter(id => id === p.id).length} tài sản</small>
       </div>
@@ -105,7 +110,7 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
       <aside className={styles.leftSidebar}>
         <section className={`${styles.panel} ${styles.actions}`}>
           <h2><Swords size={15} /> THAO TÁC TRẬN ĐẤU</h2>
-          <button className={styles.roll} disabled={busy || (state ? !myTurn || state.phase !== 'roll' : !snapshot || snapshot.hostId !== String(userId) || players.length < 2)} onClick={() => action(state ? 'roll' : 'start')}><Dice5 size={20} /> {state ? 'ĐỔ XÚC XẮC' : 'BẮT ĐẦU TRẬN'}</button>
+          <button className={styles.roll} disabled={busy || (waiting ? !canStart : !myTurn || state.phase !== 'roll')} onClick={() => action(waiting ? 'start' : 'roll')}><Dice5 size={20} /> {waiting ? (state ? 'BẮT ĐẦU VÁN MỚI' : 'BẮT ĐẦU TRẬN') : 'ĐỔ XÚC XẮC'}</button>
           <div className={styles.secondaryActions}><button className={styles.buy} disabled={busy || !myTurn || state?.phase !== 'buy' || !canBuy} onClick={() => action('buy')}><Building2 size={16} /> MUA ĐẤT</button><button className={styles.skip} disabled={busy || !myTurn || state?.phase !== 'buy'} onClick={() => action('skip')}>QUA LƯỢT</button></div>
         </section>
         <section className={`${styles.panel} ${styles.spectators}`}><h2><Eye size={15} /> KHÁN GIẢ / NGƯỜI XEM <span className={styles.count}>{spectators.length}</span></h2>
@@ -122,17 +127,21 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
             <div className="text-center"><span className="inline-block rounded-full bg-amber-50 border border-amber-200 text-amber-700 px-3 py-1 text-xs font-black">🛵 CỜ TỶ PHÚ SÀI GÒN</span><p className="font-bold text-sm mt-3" aria-live="polite">{state?.phase === 'finished' ? `🏆 ${winner?.name || 'Không có người chơi'} chiến thắng!` : state ? `Lượt của ${active?.name}` : 'Chờ chủ phòng bắt đầu'}</p></div>
             <div className="flex flex-col items-center gap-4">
               <div className="flex gap-3" aria-label={`Xúc xắc: ${state?.dice.join(', ') || '1, 1'}`}>{(state?.dice || [1, 1]).map((value, i) => <span key={i} className={`w-14 h-14 rounded-2xl border-4 border-amber-400 bg-white text-3xl font-black text-amber-500 flex items-center justify-center shadow-[0_4px_0_#fbbf24] ${busy ? 'animate-pulse' : ''}`}>{value}</span>)}</div>
-              {!state ? <button disabled={busy || !snapshot || snapshot.hostId !== String(userId) || players.length < 2} onClick={() => action('start')} className="rounded-full bg-rose-500 px-5 py-3 text-white font-black text-sm disabled:opacity-40">BẮT ĐẦU TRẬN</button> : state.phase === 'buy' ? <div className="text-center space-y-2"><p className="text-xs font-bold">{currentCell?.name} · {currentCell?.price}</p><div className="flex gap-2"><button disabled={busy || !myTurn || !canBuy} onClick={() => action('buy')} className="rounded-full bg-emerald-600 px-4 py-2 text-white text-sm font-bold disabled:opacity-40">Mua đất</button><button disabled={busy || !myTurn} onClick={() => action('skip')} className="rounded-full bg-slate-600 px-4 py-2 text-white text-sm font-bold disabled:opacity-40">Bỏ qua</button></div></div> : <button disabled={busy || !myTurn} onClick={() => action('roll')} className="flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-orange-500 px-5 py-3 text-white font-black text-sm shadow-[0_4px_0_#e11d48] disabled:opacity-40"><Zap size={16} /> ĐỔ XÚC XẮC 🎲</button>}
-              {!state && <p className="text-xs text-slate-500">Cần 2–6 người chơi để bắt đầu.</p>}
+              {waiting ? <button disabled={busy || !canStart} onClick={() => action('start')} className="rounded-full bg-rose-500 px-5 py-3 text-white font-black text-sm disabled:opacity-40">BẮT ĐẦU TRẬN</button> : state.phase === 'buy' ? <div className="text-center space-y-2"><p className="text-xs font-bold">{currentCell?.name} · {currentCell?.price}</p><div className="flex gap-2"><button disabled={busy || !myTurn || !canBuy} onClick={() => action('buy')} className="rounded-full bg-emerald-600 px-4 py-2 text-white text-sm font-bold disabled:opacity-40">Mua đất</button><button disabled={busy || !myTurn} onClick={() => action('skip')} className="rounded-full bg-slate-600 px-4 py-2 text-white text-sm font-bold disabled:opacity-40">Bỏ qua</button></div></div> : <button disabled={busy || !myTurn} onClick={() => action('roll')} className="flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-orange-500 px-5 py-3 text-white font-black text-sm shadow-[0_4px_0_#e11d48] disabled:opacity-40"><Zap size={16} /> ĐỔ XÚC XẮC 🎲</button>}
+              {waiting && <p className="text-xs text-slate-500">Cần 2–6 người chơi để bắt đầu.</p>}
             </div>
             <div className="w-full rounded-xl border border-slate-200 bg-white p-2 text-[10px] text-slate-500"><p className="font-bold flex gap-1 items-center mb-1"><Clock size={12} /> NHẬT KÝ TRÒ CHƠI</p><p className="truncate" aria-live="polite">{state?.log.at(-1) || 'Mời bạn bè tham gia phòng để cùng chơi!'}</p></div>
           </section>
         </div>
       </div>
       <aside className={styles.rightSidebar}>
-        <section className={`${styles.panel} ${styles.opponents}`} aria-label="Người chơi khác">{opponents.length ? opponents.map(renderPlayer) : <p className={styles.empty}>{snapshot ? 'Đang chờ người chơi tham gia…' : 'Đang tải phòng…'}</p>}</section>
+        <section className={`${styles.panel} ${styles.players}`} aria-label="Danh sách người chơi">
+          <h2><Users size={15} /> NGƯỜI CHƠI <span className={styles.count}>{seatedPlayers.length}/{snapshot?.maxPlayers || 6}</span></h2>
+          <div className={styles.playerList}>{seatedPlayers.length ? seatedPlayers.map(renderPlayer) : <p className={styles.empty}>{snapshot ? 'Đang chờ người chơi tham gia…' : 'Đang tải phòng…'}</p>}</div>
+          <button className={styles.seatAction} disabled={busy || !snapshot || (!me && seatedPlayers.length >= snapshot.maxPlayers)} onClick={() => action(me ? 'leave_seat' : 'join_seat')}>{me ? 'Rời bàn' : seatedPlayers.length >= snapshot?.maxPlayers ? 'Bàn đã đầy' : 'Tham gia'}</button>
+          {state && !waiting && <p className={styles.seatHint}>Tham gia để giữ chỗ cho ván tiếp theo. Rời bàn trong ván hiện tại tính là bỏ cuộc.</p>}
+        </section>
         <section className={`${styles.panel} ${styles.history}`}><h2><Clock size={15} /> LỊCH SỬ / HÀNH ĐỘNG <span className={styles.count}>{state?.log.length || 0}</span></h2><ol aria-live="polite">{state?.log.map((entry, index) => <li key={index}>{entry}</li>)}</ol>{!state?.log.length && <p className={styles.empty}>Các hành động sẽ xuất hiện khi trận đấu bắt đầu.</p>}</section>
-        <section className={`${styles.panel} ${styles.self}`} aria-label="Người chơi của bạn">{me ? renderPlayer(me) : <p className={styles.empty}>Bạn đang xem trận đấu.</p>}</section>
       </aside>
     </div>
   </main>;

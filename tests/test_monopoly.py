@@ -94,6 +94,61 @@ class MonopolyApiTests(unittest.TestCase):
         self.assertEqual(self.call({'guild_id': '5', 'action': 'start'}).status_code, 409)
         self.assertEqual(before, self.room['monopoly'])
 
+    def test_spectator_takes_seat_and_host_leaves_without_closing_room(self):
+        self.room['spectators'] = [{'id': '3', 'name': 'C'}]
+        self.cog._user.return_value = ({'id': '3'}, None)
+        self.assertEqual(self.call().json['spectators'][0]['id'], '3')
+        self.assertEqual(self.call({'action': 'join_seat'}).status_code, 200)
+        self.assertEqual(len(self.room['players']), 3)
+        self.assertEqual(self.room['spectators'], [])
+        self.assertEqual(self.call({'action': 'join_seat'}).status_code, 409)
+        self.cog._user.return_value = ({'id': '1'}, None)
+        self.assertEqual(self.call({'action': 'leave_seat'}).status_code, 200)
+        self.assertEqual(self.room['host']['id'], '1')
+        self.assertIn(self.room, self.cog._data['rooms'].values())
+        self.assertEqual(self.room['spectators'][0]['id'], '1')
+
+    def test_full_table_rejects_spectator(self):
+        self.room['max_players'] = 2
+        self.room['spectators'] = [{'id': '3', 'name': 'C'}]
+        self.cog._user.return_value = ({'id': '3'}, None)
+        self.assertEqual(self.call({'action': 'join_seat'}).status_code, 409)
+        self.assertEqual(len(self.room['players']), 2)
+        self.assertEqual(len(self.room['spectators']), 1)
+
+    def test_leave_finishes_game_and_new_seat_plays_next_round(self):
+        self.call({'action': 'start'})
+        self.room['spectators'] = [{'id': '3', 'name': 'C'}]
+        self.cog._user.return_value = ({'id': '3'}, None)
+        self.call({'action': 'join_seat'})
+        self.assertEqual(len(self.room['monopoly']['players']), 2)
+        self.cog._user.return_value = ({'id': '1'}, None)
+        self.call({'action': 'leave_seat'})
+        self.assertEqual(self.room['monopoly']['winner'], '2')
+        self.assertEqual(self.call({'action': 'roll', 'revision': 2}).status_code, 403)
+        self.assertEqual(self.call({'action': 'start'}).status_code, 200)
+        self.assertEqual([p['id'] for p in self.room['monopoly']['players']], ['2', '3'])
+
+    def test_spectator_can_enter_full_running_room_and_exit(self):
+        self.room.update(id='room', name='Room', max_players=2, status='waiting',
+                         is_timer_enabled=False, allow_spectators=True, mode='pvp', created_at=0)
+        self.room['host']['name'] = 'A'
+        self.call({'action': 'start'})
+        self.cog._user.return_value = ({'id': '3'}, None)
+        member = Mock(id=3, display_name='C')
+        self.cog._get_guild_member.return_value = (Mock(id=5), member, None)
+        self.cog._avatar = Mock(return_value='avatar')
+        with app.test_request_context('/join', method='POST', json={'guild_id': '5'}):
+            response = app.make_response(self.cog.join_room('room'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json['room']['isJoined'])
+        before = copy.deepcopy(self.room['monopoly'])
+        with app.test_request_context('/leave', method='POST', json={'guild_id': '5'}):
+            response = app.make_response(self.cog.leave_room('room'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(before, self.room['monopoly'])
+        self.assertEqual(self.room['spectators'], [])
+
 
 if __name__ == '__main__':
     unittest.main()

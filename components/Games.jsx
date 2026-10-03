@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Gamepad2, Trophy, Users, Bot, Sparkles, Volume2, VolumeX, Globe, HelpCircle,
   Search, Swords, Play, PlusCircle, X, Check, ChevronRight, Crown, MessageSquare,
@@ -622,11 +622,82 @@ export default function Games() {
   const [legalMoves, setLegalMoves] = useState([]);
   const [checkSide, setCheckSide] = useState(null);
   const [movesLog, setMovesLog] = useState([]);
-  const spectatorsList = [];
+  const [spectatorsList, setSpectatorsList] = useState([]);
+  const [seatBusy, setSeatBusy] = useState(false);
+  const [seatsLoaded, setSeatsLoaded] = useState(false);
+  const seatSequence = useRef(0);
+  const seatPending = useRef(false);
+  const seatRevision = useRef(null);
+  const serverMatchStarted = useRef(false);
+  const myPlayerId = String(discordUser?.id);
 
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
   const apiBase = isDiscordEmbedded ? '/.proxy/api/games' : '/api/games';
+
+  const applySeats = useCallback(snapshot => {
+    setRedPlayer(snapshot.players.find(p => p.side === 'red') || null);
+    setBlackPlayer(snapshot.players.find(p => p.side === 'black') || null);
+    setSpectatorsList(snapshot.spectators);
+    setSeatsLoaded(true);
+    setIsBoardFlipped(snapshot.players.some(p => p.id === myPlayerId && p.side === 'black'));
+    if (seatRevision.current !== snapshot.revision) {
+      seatRevision.current = snapshot.revision;
+      setMatchStarted(false);
+      setSelectedPiece(null);
+      setLegalMoves([]);
+      setCheckSide(null);
+      setBoardState(inGameRoom?.gameType === 'chess' ? INITIAL_CHESS_BOARD : INITIAL_XIANGQI_BOARD);
+      setMovesLog([]);
+      setCurrentTurn('r');
+      setRedTurnTime(900);
+      setBlackTurnTime(900);
+      serverMatchStarted.current = false;
+    }
+    if (serverMatchStarted.current !== snapshot.matchStarted) {
+      serverMatchStarted.current = snapshot.matchStarted;
+      setMatchStarted(snapshot.matchStarted);
+    }
+  }, [inGameRoom?.gameType, myPlayerId]);
+
+  useEffect(() => {
+    if (!inGameRoom || !['chess', 'xiangqi'].includes(inGameRoom.gameType)) return;
+    let cancelled = false;
+    const refresh = async () => {
+      if (seatPending.current) return;
+      const sequence = ++seatSequence.current;
+      try {
+        const snapshot = await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(inGameRoom.id)}/seats?guild_id=${encodeURIComponent(inGameRoom.guildId)}`);
+        if (!cancelled && sequence === seatSequence.current) applySeats(snapshot);
+      } catch (error) {
+        if (!cancelled && sequence === seatSequence.current) {
+          setSeatsLoaded(false);
+          setToastMessage(error.message); setShowInviteToast(true);
+        }
+      }
+    };
+    refresh();
+    const timer = setInterval(refresh, 2000);
+    return () => { cancelled = true; clearInterval(timer); seatSequence.current++; };
+  }, [apiBase, inGameRoom?.id, inGameRoom?.guildId, inGameRoom?.gameType, applySeats]);
+
+  const changeSeat = async (action, side) => {
+    if (seatPending.current || !seatsLoaded) return;
+    seatPending.current = true;
+    const sequence = ++seatSequence.current;
+    setSeatBusy(true);
+    try {
+      const snapshot = await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(inGameRoom.id)}/seats`, {
+        method: 'POST', body: JSON.stringify({ guild_id: inGameRoom.guildId, action, side })
+      });
+      if (sequence === seatSequence.current) {
+        applySeats(snapshot);
+        if (action === 'leave_seat') triggerToast(t.leftSeatMsg);
+      }
+    } catch (error) {
+      if (sequence === seatSequence.current) triggerToast(error.message);
+    } finally { seatPending.current = false; setSeatBusy(false); }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -765,22 +836,6 @@ export default function Games() {
     return () => clearInterval(timer);
   }, [inGameRoom, currentTurn, matchStarted]);
 
-  useEffect(() => {
-    if (inGameRoom && blackPlayer && blackPlayer.id !== 'u1' && !blackPlayer.isReady) {
-      const timer = setTimeout(() => setBlackPlayer(prev => prev ? {...prev, isReady: true} : prev), 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [inGameRoom, blackPlayer]);
-
-  useEffect(() => {
-    if (inGameRoom && !matchStarted) {
-      if (redPlayer?.isReady && blackPlayer?.isReady) {
-        setMatchStarted(true);
-        triggerToast("Cả hai đã sẵn sàng, trận đấu bắt đầu!");
-      }
-    }
-  }, [redPlayer?.isReady, blackPlayer?.isReady, inGameRoom, matchStarted]);
-
   const triggerToast = (msg) => { setToastMessage(msg); setShowInviteToast(true); setTimeout(() => setShowInviteToast(false), 3500); };
   const handleOpenRoomList = (game) => {
     if (!game.isAvailable) return;
@@ -807,6 +862,8 @@ export default function Games() {
   const handleEnterGameRoom = (roomObj, gameType) => {
     setActiveModal(null);
     setInGameRoom({ ...roomObj, gameType, guildId: selectedGuildId });
+    setSpectatorsList([]); setSeatsLoaded(false); seatRevision.current = null;
+    setSelectedPiece(null); setLegalMoves([]);
     setRedPlayer(null); setBlackPlayer(null); setMatchStarted(false); setIsBoardFlipped(false);
     setRedTurnTime(900); setBlackTurnTime(900); setCurrentTurn('r');
     setBoardState(gameType === 'chess' ? INITIAL_CHESS_BOARD : INITIAL_XIANGQI_BOARD);
@@ -856,7 +913,7 @@ export default function Games() {
           password: roomPassword,
           is_locked: isRoomLocked,
           is_timer_enabled: selectedGame.id === 'monopoly' ? false : isTimerEnabled,
-          allow_spectators: selectedGame.id === 'monopoly' ? false : allowSpectators,
+          allow_spectators: selectedGame.id === 'monopoly' ? true : allowSpectators,
           mode: selectedGame.id === 'monopoly' ? 'pvp' : lobbyMode,
           bot_elo: botEloLevel
         })
@@ -963,32 +1020,14 @@ export default function Games() {
     }
   };
 
-  const handleLeaveSeat = (side) => {
-    if (side === 'red') setRedPlayer(null); else setBlackPlayer(null);
-    triggerToast(t.leftSeatMsg);
-  };
-
-  const handleSit = (side) => {
-    const user = { id: 'u1', name: discordUser.username, avatar: discordUser.avatar, isReady: false };
-    if (side === 'red') {
-      if (blackPlayer?.id === 'u1') setBlackPlayer(null);
-      setRedPlayer(user);
-    } else {
-      if (redPlayer?.id === 'u1') setRedPlayer(null);
-      setBlackPlayer(user);
-    }
-    setIsBoardFlipped(side === 'black');
-    triggerToast("Bạn đã ngồi vào bàn đấu!");
-  };
-
-  const toggleReady = (side) => {
-    if (side === 'red') setRedPlayer(prev => prev ? {...prev, isReady: !prev.isReady} : prev);
-    else setBlackPlayer(prev => prev ? {...prev, isReady: !prev.isReady} : prev);
-  };
+  const handleLeaveSeat = () => changeSeat('leave_seat');
+  const handleSit = side => changeSeat('sit', side);
+  const toggleReady = () => changeSeat('ready');
 
   const handleSelectPiece = (x, y) => {
     if (!matchStarted) { triggerToast("Vui lòng đợi cả hai Sẵn Sàng!"); return; }
     const activeSide = currentTurn === 'r' ? (inGameRoom.gameType === 'chess' ? 'white' : 'red') : 'black';
+    if ((currentTurn === 'r' ? redPlayer : blackPlayer)?.id !== myPlayerId) return;
     const piece = getPieceAt(boardState, x, y);
     if (piece && piece.side === activeSide) {
       setSelectedPiece({ x, y });
@@ -998,7 +1037,7 @@ export default function Games() {
   };
 
   const handleMove = (fromX, fromY, toX, toY) => {
-    if (!matchStarted) return;
+    if (!matchStarted || (currentTurn === 'r' ? redPlayer : blackPlayer)?.id !== myPlayerId) return;
     const activeSide = currentTurn === 'r' ? (inGameRoom.gameType === 'chess' ? 'white' : 'red') : 'black';
     if (!legalMoves.some(m => m.x === toX && m.y === toY)) return;
 
@@ -1035,18 +1074,6 @@ export default function Games() {
     }
   };
 
-  const handleRequestSwap = () => {
-    if (matchStarted) { triggerToast("Không thể đổi phe khi trận đấu đã bắt đầu!"); return; }
-    triggerToast(t.swapRequestMsg);
-    const currentRed = redPlayer; const currentBlack = blackPlayer;
-    setTimeout(() => {
-      triggerToast("Đối thủ đã chấp nhận đổi phe!");
-      setRedPlayer(currentBlack); setBlackPlayer(currentRed);
-      if (currentBlack?.id === 'u1') setIsBoardFlipped(false);
-      else if (currentRed?.id === 'u1') setIsBoardFlipped(true);
-    }, 2000);
-  };
-
   const renderPlayerProfile = (isTopSeat) => {
     const side = isTopSeat ? (isBoardFlipped ? 'red' : 'black') : (isBoardFlipped ? 'black' : 'red');
     const player = side === 'red' ? redPlayer : blackPlayer;
@@ -1071,34 +1098,28 @@ export default function Games() {
             <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 w-full text-center sm:text-left">
               <div className="relative group/avatar shrink-0">
                 <img src={player.avatar} alt={player.name} className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full border-3 border-slate-950 object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ring-2 ${ringColor}`} />
-                {player.id === 'u1' && !matchStarted && (
-                  <button onClick={() => handleLeaveSeat(side)} className="absolute -top-1 -right-1 bg-rose-500 hover:bg-rose-400 text-white rounded-full p-0.5 border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 z-30" title="Rời ghế"><X className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
+                {player.id === myPlayerId && (
+                  <button disabled={seatBusy || !seatsLoaded} aria-label={t.leaveSeat} onClick={() => handleLeaveSeat(side)} className="absolute -top-1 -right-1 bg-rose-500 hover:bg-rose-400 text-white rounded-full p-0.5 border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 z-30" title="Rời ghế"><X className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
                 )}
               </div>
               <div className="flex-1 min-w-0 flex flex-col items-center sm:items-start w-full">
-                <div className="text-[10px] sm:text-xs font-black text-white flex items-center justify-center sm:justify-start gap-1 w-full"><span className="truncate max-w-[70px] sm:max-w-[90px]">{player.name}</span>{player.id !== 'u1' && <Crown className="w-3.5 h-3.5 text-yellow-400 shrink-0" />}</div>
+                <div className="text-[10px] sm:text-xs font-black text-white flex items-center justify-center sm:justify-start gap-1 w-full"><span className="truncate max-w-[70px] sm:max-w-[90px]">{player.name}</span>{player.id !== myPlayerId && <Crown className="w-3.5 h-3.5 text-yellow-400 shrink-0" />}</div>
                 <div className={`text-[9px] sm:text-[10px] font-mono font-extrabold ${sideColor}`}>{sideName}</div>
               </div>
             </div>
             {!matchStarted ? (
-              <button onClick={() => player.id === 'u1' ? toggleReady(side) : null} className={`w-full xl:w-auto px-2 py-1.5 rounded-xl font-black text-[10px] sm:text-xs border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all shrink-0 ${player.isReady ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
-                {player.isReady ? 'SẴN SÀNG' : (player.id === 'u1' ? 'SẴN SÀNG?' : 'ĐANG CHỜ')}
+              <button disabled={seatBusy || !seatsLoaded || player.id !== myPlayerId} onClick={() => toggleReady(side)} className={`w-full xl:w-auto px-2 py-1.5 rounded-xl font-black text-[10px] sm:text-xs border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all shrink-0 ${player.isReady ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                {player.isReady ? 'SẴN SÀNG' : (player.id === myPlayerId ? 'SẴN SÀNG?' : 'ĐANG CHỜ')}
               </button>
             ) : (
               inGameRoom?.isTimerEnabled && (
                 <div className={`w-full xl:w-auto px-2 py-1 text-center rounded-xl font-mono font-black text-xs border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0 ${isMyTurn ? `${timeBg} animate-pulse` : 'bg-slate-950 text-slate-400'}`}>{formatTime(time)}</div>
               )
             )}
-            {player.id !== 'u1' && !matchStarted && (
-              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center p-2 z-20">
-                <button onClick={() => handleRequestSwap()} className="w-full py-2 bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-1.5 uppercase">
-                  <ArrowLeftRight className="w-4 h-4" /> Đổi Phe
-                </button>
-              </div>
-            )}
+
           </>
         ) : (
-          <button onClick={() => handleSit(side)} className="w-full h-full py-2.5 bg-slate-800/50 hover:bg-slate-800 rounded-xl border-2 border-dashed border-slate-600 hover:border-slate-400 text-slate-400 hover:text-white font-black text-[10px] sm:text-xs transition-colors uppercase flex items-center justify-center gap-1 sm:gap-2">
+          <button disabled={seatBusy || !seatsLoaded || matchStarted} onClick={() => handleSit(side)} className="w-full h-full py-2.5 bg-slate-800/50 hover:bg-slate-800 rounded-xl border-2 border-dashed border-slate-600 hover:border-slate-400 text-slate-400 hover:text-white font-black text-[10px] sm:text-xs transition-colors uppercase flex items-center justify-center gap-1 sm:gap-2">
             <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="truncate">Ngồi {emptySeatLabel}</span>
           </button>
         )}
@@ -1225,7 +1246,7 @@ export default function Games() {
             movesLog={movesLog}
             spectatorsList={spectatorsList}
             renderPlayerProfile={renderPlayerProfile}
-            onExit={() => setInGameRoom(null)}
+            onExit={handleExitGameRoom}
             onSettings={() => setIsSettingsModalOpen(true)}
             onOfferDraw={() => triggerToast(t.drawOfferMsg)}
             onResign={() => triggerToast(t.resignMsg)}
@@ -1237,7 +1258,7 @@ export default function Games() {
                 isFlipped={isBoardFlipped}
                 isPlaying={true}
                 activeSide={currentTurn === 'r' ? 'white' : 'black'}
-                playerSide={redPlayer?.id === 'u1' ? 'white' : blackPlayer?.id === 'u1' ? 'black' : null}
+                playerSide={redPlayer?.id === myPlayerId ? 'white' : blackPlayer?.id === myPlayerId ? 'black' : null}
                 selectedPiece={selectedPiece}
                 legalMoves={legalMoves}
                 onSelectPiece={handleSelectPiece}
@@ -1250,7 +1271,7 @@ export default function Games() {
                 isFlipped={isBoardFlipped}
                 isPlaying={true}
                 activeSide={currentTurn === 'r' ? 'red' : 'black'}
-                playerSide={redPlayer?.id === 'u1' ? 'red' : blackPlayer?.id === 'u1' ? 'black' : null}
+                playerSide={redPlayer?.id === myPlayerId ? 'red' : blackPlayer?.id === myPlayerId ? 'black' : null}
                 selectedPiece={selectedPiece}
                 legalMoves={legalMoves}
                 checkSide={checkSide}
@@ -1461,8 +1482,8 @@ export default function Games() {
                       </div>
                       <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold"><span>Chủ phòng: <strong className="text-slate-200">{room.host}</strong></span><span>•</span><span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 text-cyan-400" /> {room.players}/{room.maxPlayers}</span><span>•</span><span className={room.status === 'in-game' ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>{room.status === 'in-game' ? t.statusInGame : t.statusReady}</span></div>
                     </div>
-                    {room.isJoined && room.gameId === 'monopoly' && <button onClick={() => handleEnterGameRoom(room, 'monopoly')} className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black">Vào lại phòng</button>}
-                    <button disabled={roomActionLoading || (!room.isJoined && (room.players >= room.maxPlayers || room.status === 'in-game'))} onClick={() => room.isJoined ? handleLeaveLobbyRoom(room) : room.isLocked ? (setJoiningRoom(room), setPasswordInput(''), setPasswordError('')) : handleJoinRoom(room)} className={`w-full sm:w-auto px-5 py-2.5 rounded-xl border-2 border-slate-950 font-black text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-1.5 ${roomActionLoading || (!room.isJoined && (room.players >= room.maxPlayers || room.status === 'in-game')) ? 'bg-slate-800 text-slate-500 border-slate-800 cursor-not-allowed shadow-none' : room.isJoined ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'bg-yellow-400 hover:bg-yellow-300 text-slate-950'}`}>
+                    {room.isJoined && ['monopoly', 'chess', 'xiangqi'].includes(room.gameId) && <button onClick={() => handleEnterGameRoom(room, room.gameId)} className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black">Vào lại phòng</button>}
+                    <button disabled={roomActionLoading || (!room.isJoined && !['monopoly', 'chess', 'xiangqi'].includes(room.gameId) && (room.players >= room.maxPlayers || room.status === 'in-game'))} onClick={() => room.isJoined ? handleLeaveLobbyRoom(room) : room.isLocked ? (setJoiningRoom(room), setPasswordInput(''), setPasswordError('')) : handleJoinRoom(room)} className={`w-full sm:w-auto px-5 py-2.5 rounded-xl border-2 border-slate-950 font-black text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-1.5 ${roomActionLoading || (!room.isJoined && room.gameId !== 'monopoly' && (room.players >= room.maxPlayers || room.status === 'in-game')) ? 'bg-slate-800 text-slate-500 border-slate-800 cursor-not-allowed shadow-none' : room.isJoined ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'bg-yellow-400 hover:bg-yellow-300 text-slate-950'}`}>
                       {room.isJoined ? <LogOut className="w-4 h-4" /> : <DoorOpen className="w-4 h-4" />} {room.isJoined ? t.leaveRoom : t.joinRoomBtn}
                     </button>
                   </div>

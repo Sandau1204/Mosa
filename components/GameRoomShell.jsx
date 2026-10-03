@@ -79,7 +79,7 @@ export default function GameRoomShell({
               <div key={spectator.id} className="p-2 bg-slate-950 border-2 border-slate-800 rounded-xl flex items-center justify-between">
                 <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
                   <img src={spectator.avatar} alt={spectator.name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-slate-950 object-cover shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] shrink-0" />
-                  <div className="min-w-0"><div className="text-[10px] sm:text-xs font-extrabold text-slate-200 leading-tight truncate">{spectator.name}</div><div className="text-[8px] sm:text-[9px] font-mono text-slate-400">{spectator.elo} ELO</div></div>
+                  <div className="min-w-0"><div className="text-[10px] sm:text-xs font-extrabold text-slate-200 leading-tight truncate">{spectator.name}</div>{spectator.elo != null && <div className="text-[8px] sm:text-[9px] font-mono text-slate-400">{spectator.elo} ELO</div>}</div>
                 </div>
                 <span className="text-[8px] sm:text-[9px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded border border-slate-800 font-bold shrink-0">Khán Giả</span>
               </div>
