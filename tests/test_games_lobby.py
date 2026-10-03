@@ -52,10 +52,17 @@ class GamesLobbyTests(unittest.TestCase):
         self.assertEqual(response.json['guild']['id'], '1')
         self.assertIsNone(response.json['currentVoiceChannel'])
 
-    def test_dm_does_not_select_server(self):
+    def test_dm_detects_voice_server(self):
         response = self.lobby('?context=dm')
-        self.assertIsNone(response.json['guild'])
-        self.assertEqual(response.json['voiceChannels'], [])
+        self.assertEqual(response.json['guild']['id'], '2')
+        self.assertEqual(response.json['currentVoiceChannel']['id'], '30')
+
+    def test_dm_without_voice_connection(self):
+        self.guilds[1][1].voice = None
+        response = self.lobby('?context=dm')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['guild']['id'], '1')
+        self.assertIsNone(response.json['currentVoiceChannel'])
 
     def test_missing_cached_member(self):
         self.guilds[:] = [(guild, None) for guild, _ in self.guilds]

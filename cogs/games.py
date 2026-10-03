@@ -264,7 +264,6 @@ class Games(commands.Cog):
             for guild, _ in accessible_guilds
         ]
         requested_guild_id = request.args.get("guild_id")
-        is_dm = request.args.get("context") == "dm"
         selected = next(
             (
                 item
@@ -275,16 +274,14 @@ class Games(commands.Cog):
         )
         if requested_guild_id and not selected:
             return jsonify({"error": "Bạn không có quyền truy cập server này."}), 403
-        if not selected and not is_dm:
+        if not selected:
             selected = next(
                 (item for item in accessible_guilds
                  if item[1] and item[1].voice and item[1].voice.channel),
                 None,
             )
-        if not selected and accessible_guilds and not is_dm:
+        if not selected and accessible_guilds:
             selected = accessible_guilds[0]
-        if is_dm:
-            selected = None
 
         if not selected:
             return jsonify({

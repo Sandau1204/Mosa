@@ -712,9 +712,7 @@ export default function Games() {
 
   const refreshLobby = useCallback(async () => {
     const guildId = activityContext?.guildId;
-    const query = activityContext && !guildId
-      ? '?context=dm'
-      : guildId ? `?guild_id=${encodeURIComponent(guildId)}` : '';
+    const query = guildId ? `?guild_id=${encodeURIComponent(guildId)}` : '';
     const data = await gamesApiRequest(`${apiBase}/lobby${query}`);
     setLobbyData(data);
     setPing(data.ping);
@@ -1117,11 +1115,10 @@ export default function Games() {
     });
   }, [searchQuery, selectedFilter]);
   const selectedGameRooms = lobbyData.rooms.filter(room => room.gameId === selectedGame?.id);
-  const isDmActivity = activityContext !== null && !activityContext.guildId;
   const currentVoiceChannel = lobbyData.currentVoiceChannel;
   const voiceChannelLabel = currentVoiceChannel
     ? `🔊 ${currentVoiceChannel.name} (${currentVoiceChannel.memberCount})`
-    : (lang === 'VI' ? 'Chưa tham gia kênh thoại' : 'Not in a voice channel');
+    : (lang === 'VI' ? 'Chưa kết nối kênh thoại' : 'Not connected to a voice channel');
 
   if (!discordUser) {
     const isLoading = authStatus === 'loading';
@@ -1180,14 +1177,14 @@ export default function Games() {
               <Gamepad2 className="w-5 h-5 animate-bounce" />
               <span className="tracking-wide uppercase font-black">{t.hubTitle}</span>
             </div>
-            {!isDmActivity && <div className="hidden sm:flex items-center gap-2 bg-slate-800/80 border-2 border-slate-700 px-3 py-1 rounded-lg text-xs min-w-0">
+            <div className="hidden sm:flex items-center gap-2 bg-slate-800/80 border-2 border-slate-700 px-3 py-1 rounded-lg text-xs min-w-0">
               <span className="text-slate-400 font-semibold shrink-0">{t.serverLabel}</span>
               <span className="max-w-40 truncate text-white font-bold">{lobbyData.guild?.name || '—'}</span>
               <span className="text-slate-600">•</span>
               <span className="text-emerald-400 font-bold truncate max-w-64" title={voiceChannelLabel}>
                 {voiceChannelLabel}
               </span>
-            </div>}
+            </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden md:flex items-center gap-2 bg-slate-950 border-2 border-slate-800 px-2.5 py-1 rounded-lg text-xs">
@@ -1208,7 +1205,7 @@ export default function Games() {
             </div>
             <button onClick={() => setIsSettingsModalOpen(true)} className="p-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all active:translate-y-0.5" title={t.settingsTitle}><Sliders className="w-4 h-4" /></button>
             <button onClick={() => setIsRulesModalOpen(true)} className="p-2 bg-yellow-400 hover:bg-yellow-300 text-slate-950 rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"><HelpCircle className="w-4 h-4" /></button>
-            {!isDmActivity && <button onClick={() => setIsSidebarOpenMobile(!isSidebarOpenMobile)} className="lg:hidden p-2 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><Menu className="w-4 h-4" /></button>}
+            <button onClick={() => setIsSidebarOpenMobile(!isSidebarOpenMobile)} className="lg:hidden p-2 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><Menu className="w-4 h-4" /></button>
           </div>
         </header>
       )}
@@ -1259,18 +1256,16 @@ export default function Games() {
         ) : (
 
           <main className="flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-4 custom-scrollbar">
-            {!isDmActivity && (
               <div className="sm:hidden flex flex-wrap items-center gap-2 text-xs font-bold text-slate-300">
                 <span>{t.serverLabel}: {lobbyData.guild?.name || '—'}</span>
                 <span className="text-emerald-400">{voiceChannelLabel}</span>
               </div>
-            )}
             {lobbyError && (
               <div role="alert" className="shrink-0 rounded-xl border-2 border-rose-500/50 bg-rose-500/10 p-3 text-xs font-bold text-rose-300">
                 {lobbyError}
               </div>
             )}
-            {!isDmActivity && !lobbyLoading && lobbyData.guilds.length === 0 && (
+            {!lobbyLoading && lobbyData.guilds.length === 0 && (
               <div className="shrink-0 rounded-xl border-2 border-amber-500/50 bg-amber-500/10 p-3 text-xs font-bold text-amber-200">
                 {t.noGuilds}
               </div>
@@ -1361,7 +1356,7 @@ export default function Games() {
           </main>
         )}
 
-        {!inGameRoom && !isDmActivity && (
+        {!inGameRoom && (
           <aside className={`w-80 bg-slate-900 border-l-4 border-slate-950 flex flex-col shrink-0 z-20 transition-all duration-300 ${isSidebarOpenMobile ? 'fixed inset-y-0 right-0 shadow-2xl flex' : 'hidden lg:flex'}`}>
             <div className="p-4 border-b-4 border-slate-950 bg-slate-950/50 flex items-center justify-between">
               <div className="flex items-center gap-2"><Radio className="w-4 h-4 text-emerald-400 animate-pulse" /><span className="font-black text-xs uppercase tracking-wider text-white">{t.voiceMembers}</span></div>
@@ -1398,7 +1393,7 @@ export default function Games() {
           </aside>
         )}
 
-        {!inGameRoom && !isDmActivity && isSidebarOpenMobile && (<div onClick={() => setIsSidebarOpenMobile(false)} className="lg:hidden fixed inset-0 bg-slate-950/70 z-10 backdrop-blur-sm" />)}
+        {!inGameRoom && isSidebarOpenMobile && (<div onClick={() => setIsSidebarOpenMobile(false)} className="lg:hidden fixed inset-0 bg-slate-950/70 z-10 backdrop-blur-sm" />)}
       </div>
 
       {isSettingsModalOpen && (
