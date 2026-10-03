@@ -264,6 +264,8 @@ class Games(commands.Cog):
             for guild, _ in accessible_guilds
         ]
         requested_guild_id = request.args.get("guild_id")
+        is_dm = request.args.get("context") == "dm"
+        user_id = int(user["id"])
         selected = next(
             (
                 item
@@ -274,8 +276,17 @@ class Games(commands.Cog):
         )
         if requested_guild_id and not selected:
             return jsonify({"error": "Bạn không có quyền truy cập server này."}), 403
-        if not selected and accessible_guilds:
+        if not selected and not is_dm:
+            selected = next(
+                (item for item in accessible_guilds
+                 if item[0].voice_states.get(user_id)
+                 and item[0].voice_states[user_id].channel),
+                None,
+            )
+        if not selected and accessible_guilds and not is_dm:
             selected = accessible_guilds[0]
+        if is_dm:
+            selected = None
 
         if not selected:
             return jsonify({
@@ -283,6 +294,7 @@ class Games(commands.Cog):
                 "guild": None,
                 "voiceMembers": [],
                 "voiceChannels": [],
+                "currentVoiceChannel": None,
                 "rooms": [],
                 "tournament": None,
                 "leaderboard": [],
@@ -290,6 +302,8 @@ class Games(commands.Cog):
             })
 
         guild, _ = selected
+        voice_state = guild.voice_states.get(user_id)
+        current_voice_channel = voice_state.channel if voice_state else None
         guild_id = str(guild.id)
         with self._lock:
             changed = self._clean_expired_rooms()
@@ -339,6 +353,11 @@ class Games(commands.Cog):
             },
             "voiceMembers": voice_members,
             "voiceChannels": voice_channels,
+            "currentVoiceChannel": {
+                "id": str(current_voice_channel.id),
+                "name": current_voice_channel.name,
+                "memberCount": len(current_voice_channel.members),
+            } if current_voice_channel else None,
             "rooms": rooms,
             "tournament": tournament,
             "leaderboard": leaderboard,
