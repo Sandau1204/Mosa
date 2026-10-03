@@ -558,6 +558,7 @@ export default function Games() {
   const t = TRANSLATIONS[lang];
   const [discordUser, setDiscordUser] = useState(null);
   const [authStatus, setAuthStatus] = useState('loading');
+  const [authStep, setAuthStep] = useState(0);
   const [authError, setAuthError] = useState('');
   const [isDiscordEmbedded, setIsDiscordEmbedded] = useState(false);
   const [activityContext, setActivityContext] = useState(null);
@@ -703,6 +704,7 @@ export default function Games() {
     let cancelled = false;
 
     const authenticate = async () => {
+      setAuthStep(0);
       const isEmbedded = window.self !== window.top;
       setIsDiscordEmbedded(isEmbedded);
 
@@ -737,6 +739,7 @@ export default function Games() {
         await discordSdk.ready();
         if (cancelled) return;
         setActivityContext({ guildId: discordSdk.guildId, channelId: discordSdk.channelId });
+        setAuthStep(1);
 
         const { code } = await discordSdk.commands.authorize({
           client_id: discordClientId,
@@ -747,6 +750,7 @@ export default function Games() {
         });
         if (cancelled) return;
 
+        setAuthStep(2);
         const tokenResponse = await fetch('/.proxy/api/games/auth/token', {
           method: 'POST',
           credentials: 'same-origin',
@@ -754,10 +758,12 @@ export default function Games() {
           body: JSON.stringify({ code })
         });
         const tokenData = await tokenResponse.json().catch(() => ({}));
+        if (cancelled) return;
         if (!tokenResponse.ok || !tokenData.access_token || !tokenData.auth_ticket || !tokenData.user) {
           throw new Error(tokenData.error || 'Could not exchange the Discord authorization code.');
         }
 
+        setAuthStep(3);
         const auth = await discordSdk.commands.authenticate({
           access_token: tokenData.access_token
         });
@@ -767,6 +773,7 @@ export default function Games() {
         }
 
         window.sessionStorage.setItem('gamesAuthTicket', tokenData.auth_ticket);
+        setAuthStep(4);
         setDiscordUser(tokenData.user);
         setAuthStatus('authenticated');
       } catch (error) {
@@ -1147,6 +1154,10 @@ export default function Games() {
 
   if (!discordUser) {
     const isLoading = authStatus === 'loading';
+    const authSteps = lang === 'VI'
+      ? ['Kết nối với Discord', 'Xác nhận quyền truy cập', 'Thiết lập phiên đăng nhập', 'Hoàn tất xác thực']
+      : ['Connect to Discord', 'Authorize access', 'Create sign-in session', 'Complete authentication'];
+    const stepFailed = authStatus === 'error' || authStatus === 'unconfigured';
     const message = authStatus === 'unconfigured'
       ? t.discordConfigError
       : authStatus === 'error'
@@ -1161,6 +1172,26 @@ export default function Games() {
           </div>
           <h1 className="text-xl font-black text-white">{t.discordLoginTitle}</h1>
           <p className="mt-2 text-sm font-medium text-slate-300">{message}</p>
+          {isDiscordEmbedded && (
+            <ol aria-label={lang === 'VI' ? 'Các bước xác thực Discord' : 'Discord authentication steps'} className="mt-5 space-y-2 text-left" aria-live="polite">
+              {authSteps.map((label, index) => {
+                const completed = index < authStep;
+                const current = index === authStep;
+                const failed = current && stepFailed;
+                const status = completed
+                  ? (lang === 'VI' ? 'Hoàn tất' : 'Completed')
+                  : failed ? (lang === 'VI' ? 'Gặp lỗi' : 'Failed')
+                    : current ? (lang === 'VI' ? 'Đang thực hiện' : 'In progress')
+                      : (lang === 'VI' ? 'Đang chờ' : 'Pending');
+                return <li key={label} aria-current={current ? 'step' : undefined} className={`flex items-center gap-3 rounded-xl border p-3 ${failed ? 'border-rose-500/50 bg-rose-500/10' : current ? 'border-cyan-400/50 bg-cyan-400/10' : 'border-slate-800 bg-slate-950/40'}`}>
+                  <span aria-hidden="true" className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${completed ? 'bg-emerald-500/20 text-emerald-300' : failed ? 'bg-rose-500/20 text-rose-300' : current ? 'bg-cyan-400/20 text-cyan-300' : 'bg-slate-800 text-slate-500'}`}>
+                    {completed ? <Check className="h-4 w-4" /> : failed ? <X className="h-4 w-4" /> : current ? <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent motion-safe:animate-spin" /> : index + 1}
+                  </span>
+                  <div className="min-w-0"><p className={`text-sm font-bold ${current || completed ? 'text-slate-100' : 'text-slate-500'}`}>{label}</p><p className={`mt-0.5 text-xs ${failed ? 'text-rose-300' : completed ? 'text-emerald-300' : 'text-slate-400'}`}>{status}</p></div>
+                </li>;
+              })}
+            </ol>
+          )}
           {isDiscordEmbedded && authStatus !== 'unconfigured' && authStatus !== 'loading' && (
             <p className="mt-3 text-xs font-semibold text-slate-400">{t.discordOpenInDiscord}</p>
           )}
@@ -1172,6 +1203,7 @@ export default function Games() {
             <button
               onClick={() => {
                 setAuthError('');
+                setAuthStep(0);
                 setAuthStatus('loading');
                 setAuthAttempt(attempt => attempt + 1);
               }}

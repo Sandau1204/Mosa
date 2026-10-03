@@ -105,6 +105,34 @@ class BoardSeatsTests(unittest.TestCase):
         with app.test_request_context('/join', method='POST', json={'guild_id': '5'}):
             self.assertEqual(app.make_response(self.cog.join_room('room')).status_code, 403)
 
+    def test_host_leaving_keeps_spectators_and_transfers_ownership(self):
+        self.cog._user.return_value = ({'id': '1'}, None)
+        with app.test_request_context('/leave', method='POST', json={'guild_id': '5'}):
+            self.assertEqual(app.make_response(self.cog.leave_room('room')).status_code, 200)
+        self.assertEqual(self.room['players'], [])
+        self.assertEqual(self.room['host']['id'], '2')
+        self.assertIn('room', self.cog._data['rooms'])
+        for user_id in ('2', '3'):
+            self.cog._user.return_value = ({'id': user_id}, None)
+            with app.test_request_context('/leave', method='POST', json={'guild_id': '5'}):
+                self.assertEqual(app.make_response(self.cog.leave_room('room')).status_code, 200)
+            self.assertEqual('room' in self.cog._data['rooms'], user_id == '2')
+
+    def test_host_transfers_to_remaining_player(self):
+        self.call('sit', 'black')
+        self.cog._user.return_value = ({'id': '1'}, None)
+        with app.test_request_context('/leave', method='POST', json={'guild_id': '5'}):
+            self.assertEqual(app.make_response(self.cog.leave_room('room')).status_code, 200)
+        self.assertEqual(self.room['host']['id'], '2')
+
+    def test_cleanup_removes_empty_room_but_keeps_spectator_only_room(self):
+        import time
+        self.room.update(players=[], updated_at=time.time())
+        self.assertFalse(self.cog._clean_expired_rooms())
+        self.room['spectators'] = []
+        self.assertTrue(self.cog._clean_expired_rooms())
+        self.assertNotIn('room', self.cog._data['rooms'])
+
 
 if __name__ == '__main__':
     unittest.main()

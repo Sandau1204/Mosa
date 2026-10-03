@@ -247,6 +247,7 @@ class Games(commands.Cog):
             room_id
             for room_id, room in self._data["rooms"].items()
             if now - room.get("updated_at", room.get("created_at", 0)) > ROOM_TTL_SECONDS
+            or not (room.get('players') or room.get('spectators'))
         ]
         for room_id in expired:
             del self._data["rooms"][room_id]
@@ -526,9 +527,12 @@ class Games(commands.Cog):
             room["players"] = [
                 player for player in room["players"] if player["id"] != str(user["id"])
             ]
-            if not (room["players"] or room['spectators']) or room["host"]["id"] == str(user["id"]):
+            if not (room["players"] or room['spectators']):
                 del self._data["rooms"][room_id]
             else:
+                if room['host']['id'] == str(user['id']):
+                    successor = (room['players'] or room['spectators'])[0]
+                    room['host'] = {key: successor[key] for key in ('id', 'name', 'avatar') if key in successor}
                 if was_seated and room['game_id'] in ('chess', 'xiangqi'):
                     self._reset_board_seats(room)
                 if room.get("monopoly") and room["monopoly"]["phase"] != "finished":
