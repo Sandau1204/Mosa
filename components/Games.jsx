@@ -1548,9 +1548,18 @@ export default function Games() {
             <div className={`p-4 bg-slate-800 border-b-4 border-slate-950 flex items-center justify-between text-white relative`}>
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl bg-slate-950/40 border-2 border-slate-950 relative overflow-hidden shrink-0 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center">
-                  <div className="absolute inset-0 scale-[0.65]">
-                    <GameThumbnailContent gameId={selectedGame.id} defaultIcon={selectedGame.icon} />
-                  </div>
+                  {selectedGame.id === 'xiangqi' ? (
+                    <svg role="img" aria-label="Cờ tướng" viewBox="0 0 48 48" className="h-10 w-10 shrink-0">
+                      <circle cx="24" cy="25" r="20" fill="#92400e" />
+                      <circle cx="24" cy="23" r="20" fill="#ffe4b5" stroke="#92400e" strokeWidth="2" />
+                      <circle cx="24" cy="23" r="16" fill="none" stroke="#dc2626" strokeWidth="1.5" />
+                      <text x="24" y="24" textAnchor="middle" dominantBaseline="central" fill="#dc2626" fontSize="25" fontWeight="bold" fontFamily="serif">帥</text>
+                    </svg>
+                  ) : (
+                    <div className="absolute inset-0 scale-[0.65]">
+                      <GameThumbnailContent gameId={selectedGame.id} defaultIcon={selectedGame.icon} />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h3 className="text-lg font-black uppercase tracking-wide drop-shadow-[1px_1px_0px_rgba(0,0,0,1)]">
