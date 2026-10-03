@@ -453,13 +453,12 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
       return (
         <div className="absolute inset-0 flex items-center justify-center">
           <svg aria-hidden="true" viewBox="0 0 80 80" className="relative z-10 w-16 h-16 sm:w-20 sm:h-20 filter drop-shadow-[4px_4px_0_#000] group-hover:scale-110 group-hover:-translate-y-2 transition-transform duration-300">
-            <rect x="7" y="7" width="66" height="66" rx="16" fill="#312e81" stroke="#020617" strokeWidth="4" />
-            <g transform="rotate(-8 40 40)">
-              <rect x="14" y="14" width="52" height="52" rx="6" fill="#fef3c7" stroke="#020617" strokeWidth="3" />
-              <path d="M 17 17 H 29 V 29 H 17 Z M 41 17 H 53 V 29 H 41 Z M 29 29 H 41 V 41 H 29 Z M 53 29 H 63 V 41 H 53 Z M 17 41 H 29 V 53 H 17 Z M 41 41 H 53 V 53 H 41 Z M 29 53 H 41 V 63 H 29 Z M 53 53 H 63 V 63 H 53 Z" fill="#6366f1" />
-            </g>
-            <path d="M 25 56 L 28 49 L 34 45 L 34 40 L 30 36 L 31 31 L 35 29 L 40 34 L 45 29 L 49 31 L 50 36 L 46 40 L 46 45 L 52 49 L 55 56 L 60 60 L 60 65 L 20 65 L 20 60 Z" fill="#fbbf24" stroke="#020617" strokeWidth="3.5" strokeLinejoin="round" />
-            <path d="M 39 22 L 39 16 L 34 16 L 34 12 L 39 12 L 39 8 L 43 8 L 43 12 L 48 12 L 48 16 L 43 16 L 43 22 Z" fill="#fbbf24" stroke="#020617" strokeWidth="3" strokeLinejoin="round" />
+            <path d="M 36 23 V 16 H 29 V 9 H 36 V 3 H 44 V 9 H 51 V 16 H 44 V 23" fill="#fbbf24" stroke="#020617" strokeWidth="3" strokeLinejoin="round" />
+            <path d="M 28 39 L 22 23 Q 31 19 40 26 Q 49 19 58 23 L 52 39 Z" fill="#fffbeb" stroke="#020617" strokeWidth="3.5" strokeLinejoin="round" />
+            <rect x="27" y="36" width="26" height="8" rx="3" fill="#fbbf24" stroke="#020617" strokeWidth="3" />
+            <path d="M 31 44 H 49 Q 46 54 57 61 H 23 Q 34 54 31 44 Z" fill="#fffbeb" stroke="#020617" strokeWidth="3.5" strokeLinejoin="round" />
+            <rect x="20" y="59" width="40" height="8" rx="3" fill="#fbbf24" stroke="#020617" strokeWidth="3" />
+            <path d="M 21 67 H 59 L 63 75 H 17 Z" fill="#fffbeb" stroke="#020617" strokeWidth="3.5" strokeLinejoin="round" />
           </svg>
         </div>
       );
@@ -494,15 +493,20 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
     case 'ludo':
       return (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative z-10 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:gap-x-4 sm:gap-y-2 group-hover:scale-110 group-hover:-translate-y-2 transition-transform duration-300">
-            {['bg-red-500', 'bg-blue-500', 'bg-yellow-400', 'bg-green-500'].map((color) => (
-              <div key={color} className="flex flex-col items-center filter drop-shadow-[2px_2px_0_#000]">
-                <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-slate-950 ${color}`}></div>
-                <div className={`-mt-0.5 w-5 h-4 sm:w-6 sm:h-5 rounded-t-full border-2 border-slate-950 ${color}`}></div>
-                <div className={`-mt-0.5 w-7 h-2 sm:w-8 sm:h-2.5 rounded-full border-2 border-slate-950 ${color}`}></div>
-              </div>
-            ))}
-          </div>
+          <svg aria-hidden="true" viewBox="0 0 80 80" className="relative z-10 w-16 h-16 sm:w-20 sm:h-20 filter drop-shadow-[4px_4px_0_#000] group-hover:scale-110 group-hover:-translate-y-2 transition-transform duration-300">
+            <path d="M 16 64 C 16 50 31 45 30 34 L 23 39 L 10 32 L 22 17 L 29 15 L 29 5 L 39 13 C 57 18 57 40 48 51 L 54 64 Z" fill="#fb7185" stroke="#020617" strokeWidth="3.5" strokeLinejoin="round" />
+            <path d="M 39 19 Q 50 32 40 47" fill="none" stroke="#be123c" strokeWidth="5" strokeLinecap="round" />
+            <circle cx="28" cy="24" r="2.5" fill="#020617" />
+            <rect x="12" y="62" width="46" height="11" rx="4" fill="#f43f5e" stroke="#020617" strokeWidth="3.5" />
+            <g transform="rotate(12 62 56)">
+              <rect x="48" y="42" width="28" height="28" rx="6" fill="#fffbeb" stroke="#020617" strokeWidth="3" />
+              <circle cx="55" cy="49" r="2.5" fill="#020617" />
+              <circle cx="69" cy="49" r="2.5" fill="#020617" />
+              <circle cx="62" cy="56" r="2.5" fill="#020617" />
+              <circle cx="55" cy="63" r="2.5" fill="#020617" />
+              <circle cx="69" cy="63" r="2.5" fill="#020617" />
+            </g>
+          </svg>
         </div>
       );
     case 'caro':
