@@ -61,7 +61,7 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
       <div className="absolute bottom-0.5 left-0.5 right-0.5 flex justify-center gap-0.5 flex-wrap">
         {players.map((p, index) => !p.bankrupt && p.position === cell.id && <span key={p.id} title={p.name} aria-label={`${p.name} ở ${cell.name}`} className={`${colors[index]} w-4 h-4 rounded-full border-2 border-white shadow text-[8px] text-white text-center font-bold`}>{index + 1}</span>)}
       </div>
-      {owner >= 0 && <span className={`${colors[owner]} absolute top-0 right-0 w-2 h-2 rounded-bl`} aria-label={`Đất của ${players[owner].name}`} />}
+      {owner >= 0 && <span className={`${colors[owner]} absolute top-0 right-0 w-2 h-2 rounded-bl`} title={`Đất của ${players[owner].name}`} />}
     </div>;
   };
 
