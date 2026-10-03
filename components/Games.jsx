@@ -229,10 +229,10 @@ const TRANSLATIONS = {
 
 const GAMES_DATA = [
   { id: 'xiangqi', title: 'Cờ Tướng (Xiangqi)', desc: 'Cờ Tướng truyền thống đỉnh cao, đấu 1v1 hoặc tập luyện với AI Kiện Tướng.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '300 - 2400 ELO', badge: 'HOT 🔥', badgeColor: 'bg-rose-500 text-white', bgGradient: 'from-amber-500 to-red-600', icon: '♟️' },
-  { id: 'chess', title: 'Cờ Vua (Chess)', desc: 'Thách đấu Cờ Vua chuẩn quốc tế với bảng phân tích nước đi và Replay.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '400 - 2800 ELO', badge: 'POPULAR 🏆', badgeColor: 'bg-indigo-600 text-white', bgGradient: 'from-blue-600 to-indigo-800', icon: '♔' },
-  { id: 'monopoly', title: 'Cờ Tỷ Phú (Business Land)', desc: 'Đổ xí ngầu, mua đất, xây khách sạn và đẩy bạn bè vào cảnh phá sản!', category: 'Party', isStrategy: false, players: '2 - 6 Người', aiElo: 'Smart Bot', badge: 'PARTY 🎉', badgeColor: 'bg-emerald-500 text-slate-900', bgGradient: 'from-emerald-400 to-teal-700', icon: '🎩' },
+  { id: 'chess', title: 'Cờ Vua (Chess)', desc: 'Thách đấu Cờ Vua chuẩn quốc tế với bảng phân tích nước đi và Replay.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '400 - 2800 ELO', badge: 'POPULAR 🏆', badgeColor: 'bg-indigo-600 text-white', bgGradient: 'from-blue-600 to-indigo-800', icon: '♚' },
+  { id: 'monopoly', title: 'Cờ Tỷ Phú (Business Land)', desc: 'Đổ xí ngầu, mua đất, xây khách sạn và đẩy bạn bè vào cảnh phá sản!', category: 'Party', isStrategy: false, players: '2 - 6 Người', aiElo: 'Smart Bot', badge: 'PARTY 🎉', badgeColor: 'bg-emerald-500 text-slate-900', bgGradient: 'from-emerald-400 to-teal-700', icon: '🪙' },
   { id: 'uno', title: 'Bài UNO Crazy', desc: 'Trận chiến bài UNO siêu tốc với các lá +4, Đổi Hướng vô cùng cay đắng!', category: 'Party', isStrategy: false, players: '2 - 8 Người', aiElo: 'Fast Bot', badge: 'NEW ⚡', badgeColor: 'bg-yellow-400 text-slate-900', bgGradient: 'from-yellow-400 to-orange-600', icon: '🎴' },
-  { id: 'ludo', title: 'Cờ Cá Ngựa (Ludo Pop)', desc: 'Đua ngựa về chuồng cực hài hước, đá ngựa đối thủ về vạch xuất phát.', category: 'Party', isStrategy: false, players: '2 - 4 Người', aiElo: 'Easy / Hard', badge: 'FUN 🎲', badgeColor: 'bg-cyan-400 text-slate-900', bgGradient: 'from-cyan-400 to-blue-600', icon: '🐴' },
+  { id: 'ludo', title: 'Cờ Cá Ngựa (Ludo Pop)', desc: 'Đua ngựa về chuồng cực hài hước, đá ngựa đối thủ về vạch xuất phát.', category: 'Party', isStrategy: false, players: '2 - 4 Người', aiElo: 'Easy / Hard', badge: 'FUN 🎲', badgeColor: 'bg-cyan-400 text-slate-900', bgGradient: 'from-cyan-400 to-blue-600', icon: '🎲' },
   { id: 'caro', title: 'Cờ Caro (Gomoku 5-in-a-row)', desc: 'Nối 5 nước cờ Caro cổ điển, nhịp độ nhanh giải trí cực tốt.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '3 Chế độ AI', badge: 'QUICK ⏱️', badgeColor: 'bg-purple-500 text-white', bgGradient: 'from-purple-500 to-pink-600', icon: '❌' },
   { id: 'werewolf', title: 'Ma Sói Mini (Werewolf)', desc: 'Trò chơi tranh luận bằng Voice Discord! Tìm ra Ma Sói đang ẩn nấp.', category: 'Party', isStrategy: true, players: '6 - 16 Người', aiElo: 'Chỉ đấu người', badge: 'VOICE 🎙️', badgeColor: 'bg-slate-700 text-yellow-300', bgGradient: 'from-slate-800 to-purple-900', icon: '🐺' }
 ];
@@ -458,7 +458,7 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
               <rect x="14" y="14" width="52" height="52" rx="6" fill="#fef3c7" stroke="#020617" strokeWidth="3" />
               <path d="M 17 17 H 29 V 29 H 17 Z M 41 17 H 53 V 29 H 41 Z M 29 29 H 41 V 41 H 29 Z M 53 29 H 63 V 41 H 53 Z M 17 41 H 29 V 53 H 17 Z M 41 41 H 53 V 53 H 41 Z M 29 53 H 41 V 63 H 29 Z M 53 53 H 63 V 63 H 53 Z" fill="#6366f1" />
             </g>
-            <path d="M 26 56 C 28 47 32 43 38 39 C 35 36 33 32 34 28 C 35 24 38 22 41 22 C 45 22 48 26 48 30 C 48 34 46 37 43 40 C 49 44 53 49 55 56 L 59 60 L 59 65 L 22 65 L 22 60 Z" fill="#fbbf24" stroke="#020617" strokeWidth="3.5" strokeLinejoin="round" />
+            <path d="M 25 56 L 28 49 L 34 45 L 34 40 L 30 36 L 31 31 L 35 29 L 40 34 L 45 29 L 49 31 L 50 36 L 46 40 L 46 45 L 52 49 L 55 56 L 60 60 L 60 65 L 20 65 L 20 60 Z" fill="#fbbf24" stroke="#020617" strokeWidth="3.5" strokeLinejoin="round" />
             <path d="M 39 22 L 39 16 L 34 16 L 34 12 L 39 12 L 39 8 L 43 8 L 43 12 L 48 12 L 48 16 L 43 16 L 43 22 Z" fill="#fbbf24" stroke="#020617" strokeWidth="3" strokeLinejoin="round" />
           </svg>
         </div>
@@ -466,11 +466,12 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
     case 'monopoly':
       return (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative z-10 flex gap-1.5 sm:gap-2 items-end group-hover:scale-110 group-hover:-translate-y-2 transition-transform duration-300">
-            <div className="w-3.5 sm:w-4 h-8 sm:h-10 bg-red-500 rounded-t-full border-2 border-slate-950 shadow-[3px_3px_0_#000]"></div>
-            <div className="w-3.5 sm:w-4 h-12 sm:h-16 bg-blue-500 rounded-t-full border-2 border-slate-950 shadow-[3px_3px_0_#000]"></div>
-            <div className="w-3.5 sm:w-4 h-7 sm:h-9 bg-green-500 rounded-t-full border-2 border-slate-950 shadow-[3px_3px_0_#000]"></div>
-            <div className="w-3.5 sm:w-4 h-10 sm:h-12 bg-yellow-400 rounded-t-full border-2 border-slate-950 shadow-[3px_3px_0_#000]"></div>
+          <div className="relative z-10 flex items-center group-hover:scale-110 group-hover:-translate-y-2 transition-transform duration-300">
+            <div className="relative w-16 h-11 sm:w-20 sm:h-14 -rotate-6 bg-emerald-400 rounded-lg border-[3px] border-slate-950 shadow-[4px_4px_0_#000] flex items-center justify-center">
+              <div className="absolute inset-1.5 rounded-md border-2 border-emerald-800/70"></div>
+              <span className="relative text-2xl sm:text-3xl font-black text-emerald-950">$</span>
+            </div>
+            <div className="absolute -right-4 -bottom-3 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-yellow-300 border-[3px] border-slate-950 shadow-[3px_3px_0_#000] flex items-center justify-center text-lg sm:text-xl font-black text-yellow-800">¢</div>
           </div>
         </div>
       );
@@ -493,16 +494,14 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
     case 'ludo':
       return (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative z-10 flex items-end gap-2 sm:gap-3 group-hover:scale-110 group-hover:-translate-y-2 transition-transform duration-300">
-            <svg viewBox="0 0 64 64" className="w-12 h-12 sm:w-16 sm:h-16 filter drop-shadow-[3px_3px_0_#000]">
-              <path d="M 22 50 C 22 35 15 25 22 15 C 28 5 42 10 35 25 C 32 30 36 40 40 50 Z" fill="#06b6d4" stroke="#020617" strokeWidth="3" strokeLinejoin="round" />
-              <path d="M 18 50 L 44 50 L 44 56 L 18 56 Z" fill="#06b6d4" stroke="#020617" strokeWidth="3" strokeLinejoin="round" />
-              <circle cx="28" cy="22" r="3" fill="#020617" />
-            </svg>
-            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-white rounded-md sm:rounded-lg border-2 border-slate-950 shadow-[3px_3px_0_#000] flex flex-col justify-between p-1 sm:p-1.5">
-              <div className="flex justify-between w-full"><div className="w-1.5 h-1.5 bg-slate-950 rounded-full"/><div className="w-1.5 h-1.5 bg-slate-950 rounded-full"/></div>
-              <div className="flex justify-between w-full"><div className="w-1.5 h-1.5 bg-slate-950 rounded-full"/><div className="w-1.5 h-1.5 bg-slate-950 rounded-full"/></div>
-            </div>
+          <div className="relative z-10 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:gap-x-4 sm:gap-y-2 group-hover:scale-110 group-hover:-translate-y-2 transition-transform duration-300">
+            {['bg-red-500', 'bg-blue-500', 'bg-yellow-400', 'bg-green-500'].map((color) => (
+              <div key={color} className="flex flex-col items-center filter drop-shadow-[2px_2px_0_#000]">
+                <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-slate-950 ${color}`}></div>
+                <div className={`-mt-0.5 w-5 h-4 sm:w-6 sm:h-5 rounded-t-full border-2 border-slate-950 ${color}`}></div>
+                <div className={`-mt-0.5 w-7 h-2 sm:w-8 sm:h-2.5 rounded-full border-2 border-slate-950 ${color}`}></div>
+              </div>
+            ))}
           </div>
         </div>
       );
