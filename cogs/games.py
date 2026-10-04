@@ -10,7 +10,7 @@ import time
 import uuid
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from flask import jsonify, request, session
 
 from webserver import app, load_games_auth_ticket, run_coro
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 DATA_FOLDER = os.getenv("DATA_FOLDER", "data")
 GAMES_FILE = os.path.join(DATA_FOLDER, "games.json")
 ROOM_TTL_SECONDS = 24 * 60 * 60
+ACTIVITY_PRESENCE_TTL_SECONDS = 60
 _routes_registered = False
 GAME_PLAYER_LIMITS = {
     "xiangqi": 2,
@@ -58,6 +59,10 @@ def _leave_room_route(room_id):
     return _dispatch_games_api("leave_room", room_id)
 
 
+def _close_activity_route(room_id):
+    return _dispatch_games_api("close_activity", room_id)
+
+
 def _monopoly_route(room_id):
     return _dispatch_games_api("monopoly_room", room_id)
 
@@ -87,6 +92,7 @@ def register_games_routes():
         ("/api/games/rooms", "games_create_room", _create_room_route, ["POST"]),
         ("/api/games/rooms/<room_id>/join", "games_join_room", _join_room_route, ["POST"]),
         ("/api/games/rooms/<room_id>/leave", "games_leave_room", _leave_room_route, ["POST"]),
+        ("/api/games/rooms/<room_id>/activity-close", "games_close_activity", _close_activity_route, ["POST"]),
         ("/api/games/rooms/<room_id>/monopoly", "games_monopoly", _monopoly_route, ["GET", "POST"]),
         ("/api/games/rooms/<room_id>/seats", "games_seats", _seats_route, ["GET", "POST"]),
         ("/api/games/tournaments", "games_create_tournament", _create_tournament_route, ["POST"]),
@@ -103,8 +109,71 @@ class Games(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self._lock = threading.RLock()
+        self._activity_presence = {}
+        self._closed_activity = {}
         self._data = self._load_data()
         app.extensions["games_cog"] = self
+        self.cleanup_activity_rooms.start()
+
+    def cog_unload(self):
+        self.cleanup_activity_rooms.cancel()
+
+    @tasks.loop(seconds=15)
+    async def cleanup_activity_rooms(self):
+        with self._lock:
+            if self._remove_inactive_room_members():
+                self._save_data()
+
+    def _remove_inactive_room_members(self):
+        now = time.monotonic()
+        changed = False
+        retained_keys = set()
+        for room_id, room in list(self._data['rooms'].items()):
+            seated_ids = {p['id'] for p in room['players']}
+            departed_ids = set()
+            for player in room['players'] + room.get('spectators', []):
+                key = (room['guild_id'], player['id'])
+                closed_at = self._closed_activity.get(key)
+                # A short grace period lets a reload reconnect without losing its seat.
+                if closed_at is not None and now - closed_at >= 15:
+                    departed_ids.add(player['id'])
+                else:
+                    retained_keys.add(key)
+            if not departed_ids:
+                continue
+            changed = True
+            room['players'] = [p for p in room['players'] if p['id'] not in departed_ids]
+            room['spectators'] = [p for p in room.get('spectators', []) if p['id'] not in departed_ids]
+            remaining = room['players'] + room['spectators']
+            if not remaining:
+                del self._data['rooms'][room_id]
+                continue
+            if room['host']['id'] in departed_ids:
+                room['host'] = {k: remaining[0][k] for k in ('id', 'name', 'avatar') if k in remaining[0]}
+            if departed_ids & seated_ids and room['game_id'] in ('chess', 'xiangqi'):
+                self._reset_board_seats(room)
+            if room.get('monopoly'):
+                for user_id in sorted(departed_ids & seated_ids):
+                    self._leave_monopoly_seat(room['monopoly'], user_id)
+            elif departed_ids & seated_ids:
+                room['status'] = 'waiting'
+            room['updated_at'] = time.time()
+        self._activity_presence = {
+            key: seen_at for key, seen_at in self._activity_presence.items()
+            if key in retained_keys or now - seen_at < ACTIVITY_PRESENCE_TTL_SECONDS
+        }
+        self._closed_activity = {key: closed_at for key, closed_at in self._closed_activity.items() if key in retained_keys}
+        return changed
+
+    def close_activity(self, room_id):
+        user, error = self._user()
+        if user is None:
+            return error
+        with self._lock:
+            room = self._data['rooms'].get(room_id)
+            if room and any(p['id'] == str(user['id']) for p in room['players'] + room.get('spectators', [])):
+                self._closed_activity[(room['guild_id'], str(user['id']))] = time.monotonic()
+        return jsonify({'success': True})
 
     def _load_data(self):
         try:
@@ -315,7 +384,15 @@ class Games(commands.Cog):
         current_voice_channel = voice_state.channel if voice_state else None
         guild_id = str(guild.id)
         with self._lock:
+            now = time.monotonic()
+            self._activity_presence[(guild_id, str(user["id"]))] = now
+            self._closed_activity.pop((guild_id, str(user["id"])), None)
+            activity_user_ids = {
+                user_id for (presence_guild_id, user_id), seen_at in self._activity_presence.items()
+                if presence_guild_id == guild_id and now - seen_at < ACTIVITY_PRESENCE_TTL_SECONDS
+            }
             changed = self._clean_expired_rooms()
+            changed = self._remove_inactive_room_members() or changed
             rooms = [
                 self._public_room(room, user["id"])
                 for room in self._data["rooms"].values()
@@ -326,8 +403,8 @@ class Games(commands.Cog):
             active_player_ids = {
                 player["id"]
                 for room in self._data["rooms"].values()
-                if room["guild_id"] == guild_id and room["status"] == "in-game"
-                for player in room["players"]
+                if room["guild_id"] == guild_id
+                for player in room["players"] + room.get("spectators", [])
             }
             if changed:
                 self._save_data()
@@ -347,7 +424,11 @@ class Games(commands.Cog):
                 "avatar": self._avatar(member),
                 "role": member.top_role.name if member.top_role else "Member",
                 "channel": member.voice.channel.name,
-                "status": "in-game" if str(member.id) in active_player_ids else "lobby",
+                "status": (
+                    "in-game" if str(member.id) in active_player_ids
+                    else "ready" if str(member.id) in activity_user_ids
+                    else "not-joined"
+                ),
                 "isOwner": member.id == guild.owner_id,
             }
             for channel in guild.voice_channels

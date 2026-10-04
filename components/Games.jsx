@@ -62,9 +62,9 @@ const TRANSLATIONS = {
     voiceMembers: "Thành Viên Kênh Thoại",
     leaderboard: "Bảng Xếp Hạng Server",
     inviteDiscord: "Gửi Lời Mời Chat Discord",
-    statusInLobby: "Đang chọn game",
-    statusReady: "Đã sẵn sàng",
-    statusInGame: "Đang trong trận",
+    statusNotJoined: "Chưa tham gia",
+    statusReady: "Sẵn sàng",
+    statusInGame: "Trong trận",
     rulesTitle: "CẨM NANG GAME HUB",
     rulesContent: "Chào mừng bạn đến với Discord Boardgame Hub! Chọn trò chơi yêu thích, rủ bạn bè trong Voice Channel cùng tham gia hoặc luyện tập với Bot AI để tích lũy ELO.",
     close: "Đóng",
@@ -181,7 +181,7 @@ const TRANSLATIONS = {
     voiceMembers: "Voice Channel Players",
     leaderboard: "Server Leaderboard",
     inviteDiscord: "Invite to Discord Chat",
-    statusInLobby: "Selecting game",
+    statusNotJoined: "Not joined",
     statusReady: "Ready to play",
     statusInGame: "In a match",
     rulesTitle: "GAME HUB GUIDE",
@@ -714,7 +714,7 @@ export default function Games() {
   const refreshLobby = useCallback(async () => {
     const guildId = activityContext?.guildId;
     const query = guildId ? `?guild_id=${encodeURIComponent(guildId)}` : '';
-    const data = await gamesApiRequest(`${apiBase}/lobby${query}`);
+    const data = await gamesApiRequest(`${apiBase}/lobby${query}`, { cache: 'no-store' });
     setLobbyData(data);
     setPing(data.ping);
     setLobbyError('');
@@ -731,6 +731,18 @@ export default function Games() {
       triggerToast(message);
     }
   };
+
+  useEffect(() => {
+    if (!inGameRoom || !discordUser) return;
+    const onPageHide = (event) => {
+      if (event.persisted) return;
+      gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(inGameRoom.id)}/activity-close`, {
+        method: 'POST', keepalive: true
+      }).catch(() => {});
+    };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [apiBase, inGameRoom?.id, discordUser]);
 
   useEffect(() => {
     if (!discordUser) return undefined;
@@ -1378,7 +1390,7 @@ export default function Games() {
                       <span className="text-[10px] font-bold text-slate-400">{member.channel} • {member.role}</span>
                     </div>
                   </div>
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${member.status === 'in-game' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{member.status === 'in-game' ? t.statusInGame : t.statusInLobby}</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${member.status === 'in-game' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : member.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{member.status === 'in-game' ? t.statusInGame : member.status === 'ready' ? t.statusReady : t.statusNotJoined}</span>
                 </div>
               ))}
               {lobbyData.voiceMembers.length === 0 && <p className="px-2 py-3 text-center text-xs font-semibold text-slate-500">{t.noVoiceMembers}</p>}
