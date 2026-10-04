@@ -16,14 +16,15 @@ from welcome_settings import load_welcome_settings, save_welcome_settings
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv('FLASK_SECRET_KEY')
-if not app.secret_key:
-    app.secret_key = secrets.token_hex(32)
+secret_key = os.getenv('FLASK_SECRET_KEY')
+if not secret_key:
+    secret_key = secrets.token_hex(32)
     logging.getLogger(__name__).warning(
         'FLASK_SECRET_KEY is not configured; sessions will be invalidated on restart.'
     )
+app.secret_key = secret_key
 app.permanent_session_lifetime = datetime.timedelta(days=30)
-games_auth_serializer = URLSafeTimedSerializer(app.secret_key, salt='games-hub-api')
+games_auth_serializer = URLSafeTimedSerializer(secret_key, salt='games-hub-api')
 
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
