@@ -36,6 +36,7 @@ class GamesLobbyTests(unittest.TestCase):
         self.cog._accessible_guilds = Mock(return_value=self.guilds)
         self.cog._lock = threading.RLock()
         self.cog._activity_presence = {}
+        self.cog._global_presence = {}
         self.cog._closed_activity = {}
         self.cog._save_data = Mock()
         self.cog._data = {'rooms': {}, 'tournaments': {}, 'leaderboards': {}}
@@ -49,6 +50,38 @@ class GamesLobbyTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json['guild']['id'], '2')
         self.assertEqual(response.json['currentVoiceChannel']['id'], '30')
+
+    def test_global_members_include_web_dm_and_other_servers_once(self):
+        with patch('cogs.games.time.monotonic', return_value=100):
+            self.lobby('?guild_id=1')
+            self.cog._user.return_value = ({'id': '8', 'username': 'Other server'}, None)
+            self.lobby('?guild_id=2')
+            self.cog._accessible_guilds.return_value = []
+            self.cog._user.return_value = ({'id': '9', 'username': 'DM user'}, None)
+            self.lobby('?context=dm')
+            self.cog._user.return_value = ({'id': '10', 'username': 'Web user'}, None)
+            response = self.lobby()
+            members = response.json['members']
+            self.assertEqual({m['id'] for m in members}, {'7', '8', '9', '10'})
+            self.assertTrue(all(m['status'] == 'ready' for m in members))
+            self.assertEqual(response.json['voiceMembers'], [])
+            self.cog._user.return_value = ({'id': '7', 'username': 'Another tab'}, None)
+            self.assertEqual(len(self.lobby().json['members']), 4)
+
+        with patch('cogs.games.time.monotonic', return_value=161):
+            members = self.lobby().json['members']
+            self.assertEqual([m['id'] for m in members], ['7'])
+
+    def test_global_members_show_room_membership_without_exposing_server_details(self):
+        self.create_global_room()
+        response = self.lobby()
+        member = response.json['members'][0]
+        self.assertEqual(member['id'], '7')
+        self.assertEqual(member['status'], 'in-game')
+        self.assertNotIn('seen_at', member)
+        self.assertNotIn('channel', member)
+        self.assertNotIn('guild_id', member)
+        self.assertEqual(response.json['guild']['id'], '2')
 
     def test_activity_guild_takes_priority(self):
         response = self.lobby('?guild_id=1')
@@ -73,8 +106,8 @@ class GamesLobbyTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(response.json['currentVoiceChannel'])
 
-    def test_rejects_inaccessible_guild(self):
-        self.assertEqual(self.lobby('?guild_id=999').status_code, 403)
+    def test_unknown_guild_does_not_block_global_lobby(self):
+        self.assertEqual(self.lobby('?guild_id=999').status_code, 200)
 
     def test_voice_member_activity_status(self):
         for user_id in (7, 8, 9, 10, 11):
@@ -201,6 +234,61 @@ class GamesLobbyTests(unittest.TestCase):
         self.cog._closed_activity[('2', '7')] = 0
         self.lobby()
         self.assertNotIn(('2', '7'), self.cog._closed_activity)
+
+    def room_request(self, method, room_id=None, payload=None, http_method='POST'):
+        with app.test_request_context('/rooms', method=http_method, json=payload):
+            result = getattr(self.cog, method)(room_id) if room_id else getattr(self.cog, method)()
+            return app.make_response(result)
+
+    def create_global_room(self, game='chess', **extra):
+        return self.room_request('create_room', payload={'game_id': game, 'name': 'Global', **extra})
+
+    def test_global_rooms_visible_without_common_guild_and_across_servers(self):
+        created = self.create_global_room()
+        self.assertEqual(created.status_code, 201)
+        room_id = created.json['room']['id']
+        self.cog._data['rooms'][room_id]['guild_id'] = '999'  # Existing server room.
+        for guilds in (self.guilds, []):
+            self.cog._accessible_guilds.return_value = guilds
+            for query in ('', '?context=dm', '?guild_id=1'):
+                self.assertEqual([r['id'] for r in self.lobby(query).json['rooms']], [room_id])
+
+    def test_room_lifecycle_without_guild_membership(self):
+        self.cog._get_guild_member = Mock(side_effect=AssertionError('No guild lookup allowed'))
+        for game in ('chess', 'xiangqi', 'monopoly'):
+            room_id = self.create_global_room(game).json['room']['id']
+            self.cog._user.return_value = ({'id': '8', 'username': 'Visitor'}, None)
+            joined = self.room_request('join_room', room_id, {})
+            self.assertEqual(joined.status_code, 200)
+            endpoint = 'monopoly_room' if game == 'monopoly' else 'room_seats'
+            self.assertEqual(self.room_request(endpoint, room_id, http_method='GET').status_code, 200)
+            self.assertEqual(self.room_request('leave_room', room_id, {}).status_code, 200)
+            self.assertEqual(self.room_request(endpoint, room_id, http_method='GET').status_code, 403)
+            self.cog._user.return_value = ({'id': '7'}, None)
+
+    def test_global_locked_room_still_requires_password(self):
+        room_id = self.create_global_room(is_locked=True, password='secret').json['room']['id']
+        self.cog._user.return_value = ({'id': '8'}, None)
+        self.assertEqual(self.room_request('join_room', room_id, {}).status_code, 403)
+        self.assertEqual(self.room_request('join_room', room_id, {'password': 'secret'}).status_code, 200)
+        self.assertNotIn('password_hash', self.lobby().json['rooms'][0])
+
+    def test_dm_reconnect_cancels_close_for_existing_server_room(self):
+        room_id = self.create_global_room().json['room']['id']
+        self.cog._data['rooms'][room_id]['guild_id'] = '999'
+        self.cog._closed_activity[('999', '7')] = 0
+        self.cog._accessible_guilds.return_value = []
+        self.assertTrue(self.lobby('?context=dm').json['rooms'][0]['isJoined'])
+        self.assertEqual(self.cog._closed_activity, {})
+
+    def test_offline_bot_does_not_block_rooms(self):
+        self.create_global_room()
+        self.cog.bot.is_ready.return_value = False
+        self.cog.bot.latency = float('nan')
+        response = self.lobby()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json['rooms']), 1)
+        self.assertIsNone(response.json['ping'])
 
 
 if __name__ == '__main__':

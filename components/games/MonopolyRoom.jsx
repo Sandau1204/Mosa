@@ -31,7 +31,7 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
   const refresh = useCallback(async () => {
     const current = ++sequence.current;
     try {
-      const result = await request(`${endpoint}?guild_id=${encodeURIComponent(room.guildId)}`);
+      const result = await request(endpoint);
       if (current === sequence.current) { setSnapshot(result); setError(''); }
     } catch (err) {
       if (current === sequence.current) setError(err.message);
@@ -49,7 +49,7 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
     setBusy(true);
     setError('');
     try {
-      const result = await request(endpoint, { method: 'POST', body: JSON.stringify({ guild_id: room.guildId, action: name, revision: snapshot?.state?.revision }) });
+      const result = await request(endpoint, { method: 'POST', body: JSON.stringify({ action: name, revision: snapshot?.state?.revision }) });
       setSnapshot(result);
     } catch (err) { setError(err.message); }
     finally { pending.current = false; setBusy(false); }

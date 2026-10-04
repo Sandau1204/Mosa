@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import secrets
 import tempfile
@@ -110,6 +111,7 @@ class Games(commands.Cog):
         self.bot = bot
         self._lock = threading.RLock()
         self._activity_presence = {}
+        self._global_presence = {}
         self._closed_activity = {}
         self._data = self._load_data()
         app.extensions["games_cog"] = self
@@ -328,14 +330,12 @@ class Games(commands.Cog):
         user, error = self._user()
         if user is None:
             return error
-        if not self.bot.is_ready():
-            return jsonify({"error": "Discord bot hiện không khả dụng."}), 503
 
         try:
-            accessible_guilds = self._accessible_guilds(user)
+            accessible_guilds = self._accessible_guilds(user) if self.bot.is_ready() else []
         except Exception:
             logger.exception("Could not load Game Hub servers for Discord user %s.", user["id"])
-            return jsonify({"error": "Không thể tải danh sách server từ Discord."}), 503
+            accessible_guilds = []
 
         guilds = [
             {
@@ -355,8 +355,6 @@ class Games(commands.Cog):
             ),
             None,
         )
-        if requested_guild_id and not selected:
-            return jsonify({"error": "Bạn không có quyền truy cập server này."}), 403
         if not selected:
             selected = next(
                 (item for item in accessible_guilds
@@ -366,17 +364,49 @@ class Games(commands.Cog):
         if not selected and accessible_guilds:
             selected = accessible_guilds[0]
 
+        # Rooms and reconnects do not depend on the current Discord server.
+        with self._lock:
+            now = time.monotonic()
+            self._global_presence[str(user['id'])] = {
+                'id': str(user['id']),
+                'name': user.get('global_name') or user.get('username') or str(user['id']),
+                'avatar': user.get('avatar'),
+                'seen_at': now,
+            }
+            self._global_presence = {
+                uid: profile for uid, profile in self._global_presence.items()
+                if now - profile['seen_at'] < ACTIVITY_PRESENCE_TTL_SECONDS
+            }
+            for key in list(self._closed_activity):
+                if key[1] == str(user["id"]):
+                    self._closed_activity.pop(key, None)
+            changed = self._clean_expired_rooms()
+            changed = self._remove_inactive_room_members() or changed
+            rooms = [self._public_room(room, user["id"]) for room in self._data["rooms"].values()]
+            joined_ids = {
+                player['id'] for room in self._data['rooms'].values()
+                for player in room['players'] + room.get('spectators', [])
+            }
+            members = [
+                {key: profile[key] for key in ('id', 'name', 'avatar')}
+                | {'status': 'in-game' if profile['id'] in joined_ids else 'ready'}
+                for profile in self._global_presence.values()
+            ]
+            if changed:
+                self._save_data()
+
         if not selected:
             return jsonify({
                 "guilds": guilds,
                 "guild": None,
                 "voiceMembers": [],
+                "members": members,
                 "voiceChannels": [],
                 "currentVoiceChannel": None,
-                "rooms": [],
+                "rooms": rooms,
                 "tournament": None,
                 "leaderboard": [],
-                "ping": round(self.bot.latency * 1000),
+                "ping": round(self.bot.latency * 1000) if math.isfinite(self.bot.latency) else None,
             })
 
         guild, member = selected
@@ -391,23 +421,13 @@ class Games(commands.Cog):
                 user_id for (presence_guild_id, user_id), seen_at in self._activity_presence.items()
                 if presence_guild_id == guild_id and now - seen_at < ACTIVITY_PRESENCE_TTL_SECONDS
             }
-            changed = self._clean_expired_rooms()
-            changed = self._remove_inactive_room_members() or changed
-            rooms = [
-                self._public_room(room, user["id"])
-                for room in self._data["rooms"].values()
-                if room["guild_id"] == guild_id
-            ]
             tournament = self._data["tournaments"].get(guild_id)
             leaderboard = self._data["leaderboards"].get(guild_id, [])
             active_player_ids = {
                 player["id"]
                 for room in self._data["rooms"].values()
-                if room["guild_id"] == guild_id
                 for player in room["players"] + room.get("spectators", [])
             }
-            if changed:
-                self._save_data()
 
         voice_channels = [
             {
@@ -442,6 +462,7 @@ class Games(commands.Cog):
                 "isOwner": guild.owner_id == int(user["id"]),
             },
             "voiceMembers": voice_members,
+            "members": members,
             "voiceChannels": voice_channels,
             "currentVoiceChannel": {
                 "id": str(current_voice_channel.id),
@@ -451,7 +472,7 @@ class Games(commands.Cog):
             "rooms": rooms,
             "tournament": tournament,
             "leaderboard": leaderboard,
-            "ping": round(self.bot.latency * 1000),
+            "ping": round(self.bot.latency * 1000) if math.isfinite(self.bot.latency) else None,
         })
 
     def create_room(self):
@@ -462,11 +483,6 @@ class Games(commands.Cog):
         if not isinstance(data, dict):
             return jsonify({"error": "Dữ liệu tạo phòng không hợp lệ."}), 400
 
-        guild, member, error = self._get_guild_member(data.get("guild_id"), user["id"])
-        if error:
-            return error
-        if guild is None or member is None:
-            return jsonify({"error": "Không thể xác minh thành viên server."}), 503
         game_id = data.get("game_id")
         if not isinstance(game_id, str) or game_id not in GAME_PLAYER_LIMITS:
             return jsonify({"error": "Trò chơi không hợp lệ."}), 400
@@ -496,18 +512,18 @@ class Games(commands.Cog):
         salt = secrets.token_bytes(16) if password else None
         room = {
             "id": uuid.uuid4().hex,
-            "guild_id": str(guild.id),
+            "guild_id": None,
             "game_id": game_id,
             "name": name.strip(),
             "host": {
-                "id": str(member.id),
-                "name": member.display_name,
-                "avatar": self._avatar(member),
+                "id": str(user["id"]),
+                "name": (user.get("global_name") or user.get("username") or str(user["id"])),
+                "avatar": user.get("avatar"),
             },
             "players": [{
-                "id": str(member.id),
-                "name": member.display_name,
-                "avatar": self._avatar(member),
+                "id": str(user["id"]),
+                "name": (user.get("global_name") or user.get("username") or str(user["id"])),
+                "avatar": user.get("avatar"),
             }],
             "max_players": GAME_PLAYER_LIMITS[game_id],
             "password_salt": salt.hex() if salt else None,
@@ -524,7 +540,7 @@ class Games(commands.Cog):
             self._clean_expired_rooms()
             self._data["rooms"][room["id"]] = room
             self._save_data()
-        return jsonify({"room": self._public_room(room, member.id)}), 201
+        return jsonify({"room": self._public_room(room, user["id"])}), 201
 
     def join_room(self, room_id):
         user, error = self._user()
@@ -533,15 +549,10 @@ class Games(commands.Cog):
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify({"error": "Dữ liệu tham gia phòng không hợp lệ."}), 400
-        guild, member, error = self._get_guild_member(data.get("guild_id"), user["id"])
-        if error:
-            return error
-        if guild is None or member is None:
-            return jsonify({"error": "Không thể xác minh thành viên server."}), 503
 
         with self._lock:
             room = self._data["rooms"].get(room_id)
-            if not room or room["guild_id"] != str(guild.id):
+            if not room:
                 return jsonify({"error": "Không tìm thấy phòng chơi."}), 404
             if room["status"] == "in-game" and room["game_id"] not in ("monopoly", "chess", "xiangqi"):
                 return jsonify({"error": "Trận đấu trong phòng này đã bắt đầu."}), 409
@@ -560,48 +571,39 @@ class Games(commands.Cog):
                     return jsonify({"error": "Mật khẩu phòng không chính xác."}), 403
             if room["game_id"] in ("monopoly", "chess", "xiangqi"):
                 spectators = room.setdefault("spectators", [])
-                if not any(p['id'] == str(member.id) for p in room['players'] + spectators):
+                if not any(p['id'] == str(user["id"]) for p in room['players'] + spectators):
                     if room['game_id'] != 'monopoly' and not room.get('allow_spectators', True):
                         self._ensure_board_seats(room)
                         side = next((s for s in ('red', 'black') if not any(p['side'] == s for p in room['players'])), None)
                         if side is None:
                             return jsonify({'error': 'Phòng đã đủ người và không cho phép khán giả.'}), 409
-                        room['players'].append({'id': str(member.id), 'name': member.display_name,
-                                                'avatar': self._avatar(member), 'side': side, 'isReady': False})
+                        room['players'].append({'id': str(user["id"]), 'name': (user.get("global_name") or user.get("username") or str(user["id"])),
+                                                'avatar': user.get("avatar"), 'side': side, 'isReady': False})
                         self._reset_board_seats(room)
                     else:
-                        spectators.append({'id': str(member.id), 'name': member.display_name, 'avatar': self._avatar(member)})
-            elif not any(player["id"] == str(member.id) for player in room["players"]):
+                        spectators.append({'id': str(user["id"]), 'name': (user.get("global_name") or user.get("username") or str(user["id"])), 'avatar': user.get("avatar")})
+            elif not any(player["id"] == str(user["id"]) for player in room["players"]):
                 if len(room["players"]) >= room["max_players"]:
                     return jsonify({"error": "Phòng đã đủ người chơi."}), 409
                 room["players"].append({
-                    "id": str(member.id),
-                    "name": member.display_name,
-                    "avatar": self._avatar(member),
+                    "id": str(user["id"]),
+                    "name": (user.get("global_name") or user.get("username") or str(user["id"])),
+                    "avatar": user.get("avatar"),
                 })
             if len(room["players"]) >= room["max_players"] and room["game_id"] not in ("monopoly", "chess", "xiangqi"):
                 room["status"] = "in-game"
             room["updated_at"] = time.time()
             self._save_data()
-            public_room = self._public_room(room, member.id)
+            public_room = self._public_room(room, user["id"])
         return jsonify({"room": public_room})
 
     def leave_room(self, room_id):
         user, error = self._user()
         if user is None:
             return error
-        data = request.get_json(silent=True)
-        guild, _, error = self._get_guild_member(
-            data.get("guild_id") if isinstance(data, dict) else None,
-            user["id"],
-        )
-        if error:
-            return error
-        if guild is None:
-            return jsonify({"error": "Không thể xác minh server."}), 503
         with self._lock:
             room = self._data["rooms"].get(room_id)
-            if not room or room["guild_id"] != str(guild.id):
+            if not room:
                 return jsonify({"error": "Không tìm thấy phòng chơi."}), 404
             if not any(player["id"] == str(user["id"]) for player in room["players"] + room.get('spectators', [])):
                 return jsonify({"error": "Bạn chưa tham gia phòng này."}), 403
@@ -654,12 +656,9 @@ class Games(commands.Cog):
         data = request.get_json(silent=True) if request.method == 'POST' else request.args
         if data is None or not hasattr(data, 'get'):
             return jsonify({'error': 'Dữ liệu không hợp lệ.'}), 400
-        guild, _, error = self._get_guild_member(data.get('guild_id'), user['id'])
-        if error:
-            return error
         with self._lock:
             room = self._data['rooms'].get(room_id)
-            if not room or guild is None or room['guild_id'] != str(guild.id) or room['game_id'] not in ('chess', 'xiangqi'):
+            if not room or room['game_id'] not in ('chess', 'xiangqi'):
                 return jsonify({'error': 'Không tìm thấy phòng cờ.'}), 404
             user_id = str(user['id'])
             spectators = room.setdefault('spectators', [])
@@ -813,12 +812,9 @@ class Games(commands.Cog):
         data = request.get_json(silent=True) if request.method == 'POST' else request.args
         if data is None or not hasattr(data, 'get'):
             return jsonify({'error': 'Dữ liệu không hợp lệ.'}), 400
-        guild, _, error = self._get_guild_member(data.get('guild_id'), user['id'])
-        if error:
-            return error
         with self._lock:
             room = self._data['rooms'].get(room_id)
-            if not room or guild is None or room['guild_id'] != str(guild.id) or room['game_id'] != 'monopoly':
+            if not room or room['game_id'] != 'monopoly':
                 return jsonify({'error': 'Không tìm thấy phòng Cờ tỷ phú.'}), 404
             spectators = room.setdefault('spectators', [])
             user_id = str(user['id'])

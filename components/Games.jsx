@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import GameRoomShell from './GameRoomShell';
 import DiscordIcon from './DiscordIcon';
+import { isDiscordActivity, waitForDiscordReady } from '../shared/games-auth';
 import ChessRoom from './games/ChessRoom';
 import MonopolyRoom from './games/MonopolyRoom';
 import XiangqiRoom from './games/XiangqiRoom';
@@ -17,7 +18,7 @@ import XiangqiRoom from './games/XiangqiRoom';
 const TRANSLATIONS = {
   VI: {
     hubTitle: "MOSA GAMES",
-    noGuilds: "Bot chưa tham gia server Discord nào mà bạn đang ở trong đó.",
+    noGuilds: "Phòng chơi chung cho mọi người trên web và Discord, kể cả DM.",
     loadingLobby: "Đang tải dữ liệu Game Hub...",
     lobbyLoadError: "Không thể tải dữ liệu Game Hub.",
     noVoiceMembers: "Hiện không có thành viên nào trong kênh thoại.",
@@ -61,6 +62,9 @@ const TRANSLATIONS = {
     startBtn: "BẮT ĐẦU TRẬN",
     voiceMembers: "Thành Viên Kênh Thoại",
     leaderboard: "Bảng Xếp Hạng Server",
+    globalMembers: "Thành Viên",
+    globalLeaderboard: "Bảng Xếp Hạng",
+    noMembers: "Hiện chưa có thành viên nào.",
     inviteDiscord: "Gửi Lời Mời Chat Discord",
     statusNotJoined: "Chưa tham gia",
     statusReady: "Sẵn sàng",
@@ -136,7 +140,7 @@ const TRANSLATIONS = {
   },
   EN: {
     hubTitle: "MOSA GAMES",
-    noGuilds: "The bot is not in any Discord server that you belong to.",
+    noGuilds: "Rooms are shared across the web and Discord, including DMs.",
     loadingLobby: "Loading Game Hub data...",
     lobbyLoadError: "Could not load Game Hub data.",
     noVoiceMembers: "There are no members in voice channels right now.",
@@ -180,6 +184,9 @@ const TRANSLATIONS = {
     startBtn: "START MATCH",
     voiceMembers: "Voice Channel Players",
     leaderboard: "Server Leaderboard",
+    globalMembers: "Members",
+    globalLeaderboard: "Leaderboard",
+    noMembers: "There are no members right now.",
     inviteDiscord: "Invite to Discord Chat",
     statusNotJoined: "Not joined",
     statusReady: "Ready to play",
@@ -385,10 +392,10 @@ const GameThumbnailContent = ({ gameId, defaultIcon }) => {
   }
 };
 
+let activityAuthTicket = null;
+
 async function gamesApiRequest(path, options = {}) {
-  const authTicket = typeof window !== 'undefined'
-    ? window.sessionStorage.getItem('gamesAuthTicket')
-    : null;
+  const authTicket = path.startsWith('/.proxy/') ? activityAuthTicket : null;
   const response = await fetch(path, {
     credentials: 'same-origin',
     ...options,
@@ -417,7 +424,9 @@ export default function Games() {
   const [authError, setAuthError] = useState('');
   const [isDiscordEmbedded, setIsDiscordEmbedded] = useState(false);
   const [activityContext, setActivityContext] = useState(null);
+  const isServerActivity = isDiscordEmbedded && Boolean(activityContext?.guildId && activityContext?.channelId);
   const [authAttempt, setAuthAttempt] = useState(0);
+  const discordSdkRef = useRef(null);
   const discordClientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
 
   const [bgmMuted, setBgmMuted] = useState(false);
@@ -426,6 +435,7 @@ export default function Games() {
     guilds: [],
     guild: null,
     voiceMembers: [],
+    members: [],
     voiceChannels: [],
     rooms: [],
     tournament: null,
@@ -436,6 +446,9 @@ export default function Games() {
   const [lobbyLoading, setLobbyLoading] = useState(true);
   const [lobbyError, setLobbyError] = useState('');
   const [roomActionLoading, setRoomActionLoading] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const invitePending = useRef(false);
+  const [inviteUrl, setInviteUrl] = useState('');
   const [tournamentActionLoading, setTournamentActionLoading] = useState(false);
   const [tournamentTitle, setTournamentTitle] = useState('');
   const [tournamentGameId, setTournamentGameId] = useState('xiangqi');
@@ -564,7 +577,7 @@ export default function Games() {
       refreshing = true;
       const sequence = ++seatSequence.current;
       try {
-        const snapshot = await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(inGameRoom.id)}/seats?guild_id=${encodeURIComponent(inGameRoom.guildId)}`, { cache: 'no-store' });
+        const snapshot = await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(inGameRoom.id)}/seats`, { cache: 'no-store' });
         if (!cancelled && sequence === seatSequence.current) applySeats(snapshot);
       } catch (error) {
         if (!cancelled && sequence === seatSequence.current) {
@@ -587,7 +600,7 @@ export default function Games() {
     setSeatBusy(true);
     try {
       const snapshot = await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(inGameRoom.id)}/seats`, {
-        method: 'POST', body: JSON.stringify({ guild_id: inGameRoom.guildId, action, side })
+        method: 'POST', body: JSON.stringify({ action, side })
       });
       if (sequence === seatSequence.current) {
         applySeats(snapshot);
@@ -607,7 +620,7 @@ export default function Games() {
     try {
       const snapshot = await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(inGameRoom.id)}/seats`, {
         method: 'POST',
-        body: JSON.stringify({ guild_id: inGameRoom.guildId, action, ...extra })
+        body: JSON.stringify({ action, ...extra })
       });
       if (sequence === seatSequence.current) {
         applySeats(snapshot);
@@ -627,19 +640,24 @@ export default function Games() {
 
     const authenticate = async () => {
       setAuthStep(0);
-      const isEmbedded = window.self !== window.top;
+      const isEmbedded = isDiscordActivity({
+        search: window.location.search,
+        hostname: window.location.hostname,
+        embedded: window.self !== window.top,
+        hasOpener: Boolean(window.opener)
+      });
       setIsDiscordEmbedded(isEmbedded);
+      activityAuthTicket = null;
 
       try {
         if (!isEmbedded) {
           const sessionResponse = await fetch('/api/games/auth/session', {
-            credentials: 'same-origin'
+            credentials: 'same-origin', cache: 'no-store'
           });
           const sessionData = await sessionResponse.json().catch(() => ({}));
           if (cancelled) return;
 
           if (sessionResponse.ok && sessionData.authenticated && sessionData.user) {
-            window.sessionStorage.removeItem('gamesAuthTicket');
             setDiscordUser(sessionData.user);
             setAuthStatus('authenticated');
             return;
@@ -657,8 +675,9 @@ export default function Games() {
         }
 
         const { DiscordSDK } = await import('@discord/embedded-app-sdk');
-        const discordSdk = new DiscordSDK(discordClientId);
-        await discordSdk.ready();
+        if (cancelled) return;
+        const discordSdk = discordSdkRef.current ||= new DiscordSDK(discordClientId);
+        await waitForDiscordReady(discordSdk);
         if (cancelled) return;
         setActivityContext({ guildId: discordSdk.guildId, channelId: discordSdk.channelId });
         setAuthStep(1);
@@ -694,7 +713,7 @@ export default function Games() {
           throw new Error('Discord returned a different user during authentication.');
         }
 
-        window.sessionStorage.setItem('gamesAuthTicket', tokenData.auth_ticket);
+        activityAuthTicket = tokenData.auth_ticket;
         setAuthStep(4);
         setDiscordUser(tokenData.user);
         setAuthStatus('authenticated');
@@ -803,7 +822,7 @@ export default function Games() {
 
   const handleEnterGameRoom = (roomObj, gameType) => {
     setActiveModal(null);
-    setInGameRoom({ ...roomObj, gameType, guildId: selectedGuildId });
+    setInGameRoom({ ...roomObj, gameType });
     setSpectatorsList([]); setSeatsLoaded(false); seatRevision.current = null;
     matchRevision.current = null; matchActionPending.current = false;
     chessRevision.current = null; chessSnapshotKey.current = null;
@@ -821,7 +840,7 @@ export default function Games() {
     try {
       const result = await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(room.id)}/join`, {
         method: 'POST',
-        body: JSON.stringify({ guild_id: selectedGuildId, password })
+        body: JSON.stringify({ password })
       });
       await refreshLobbyAfterAction();
       setJoiningRoom(null);
@@ -844,7 +863,7 @@ export default function Games() {
   };
 
   const handleCreateRoom = async () => {
-    if (!selectedGame || !selectedGuildId) {
+    if (!selectedGame) {
       triggerToast(lobbyError || t.noGuilds);
       return;
     }
@@ -853,7 +872,6 @@ export default function Games() {
       const result = await gamesApiRequest(`${apiBase}/rooms`, {
         method: 'POST',
         body: JSON.stringify({
-          guild_id: selectedGuildId,
           game_id: selectedGame.id,
           name: roomName,
           password: roomPassword,
@@ -884,7 +902,7 @@ export default function Games() {
     try {
       await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(room.id)}/leave`, {
         method: 'POST',
-        body: JSON.stringify({ guild_id: room.guildId })
+        body: JSON.stringify({})
       });
       await refreshLobbyAfterAction();
     } catch (error) {
@@ -935,19 +953,33 @@ export default function Games() {
   };
 
   const handleCreateInvite = async () => {
+    if (invitePending.current) return;
+    invitePending.current = true;
+    setInviteBusy(true);
     try {
-      const result = await gamesApiRequest(`${apiBase}/invite`, {
-        method: 'POST',
-        body: JSON.stringify({ guild_id: selectedGuildId })
-      });
+      if (isDiscordEmbedded) {
+        const sdk = discordSdkRef.current;
+        if (!sdk) throw new Error(t.inviteError);
+        const result = await sdk.commands.shareLink({
+          message: lang === 'VI' ? 'Cùng chơi MOSA GAMES nhé!' : 'Join me in MOSA GAMES!'
+        });
+        if (result.didSendMessage) triggerToast(lang === 'VI' ? 'Đã gửi lời mời.' : 'Invite sent.');
+        else if (result.didCopyLink) triggerToast(lang === 'VI' ? 'Đã sao chép lời mời.' : 'Invite copied.');
+        return;
+      }
+      const url = new URL('/games', window.location.origin).href;
+      setInviteUrl(url);
       try {
-        await navigator.clipboard.writeText(result.url);
-        triggerToast(result.url);
+        await navigator.clipboard.writeText(url);
+        triggerToast(lang === 'VI' ? 'Đã sao chép link Games. Dán vào chat Discord để mời bạn bè.' : 'Games link copied. Paste it into Discord to invite friends.');
       } catch {
-        triggerToast(`${t.inviteError}: ${result.url}`);
+        // The selectable link remains available when clipboard access is blocked.
       }
     } catch (error) {
       triggerToast(error instanceof Error ? error.message : t.inviteError);
+    } finally {
+      invitePending.current = false;
+      setInviteBusy(false);
     }
   };
 
@@ -1067,6 +1099,7 @@ export default function Games() {
   }, [searchQuery, selectedFilter]);
   const selectedGameRooms = lobbyData.rooms.filter(room => room.gameId === selectedGame?.id);
   const currentVoiceChannel = lobbyData.currentVoiceChannel;
+  const visibleMembers = isServerActivity ? lobbyData.voiceMembers : (lobbyData.members || []);
   const voiceChannelLabel = currentVoiceChannel
     ? `🔊 ${currentVoiceChannel.name} (${currentVoiceChannel.memberCount})`
     : (lang === 'VI' ? 'Chưa kết nối kênh thoại' : 'Not connected to a voice channel');
@@ -1094,6 +1127,7 @@ export default function Games() {
             <DiscordIcon className="h-7 w-7" />
           </div>
           <h1 className="text-xl font-black text-white">{t.discordLoginTitle}</h1>
+          <p className="mt-1 text-xs font-bold text-indigo-300">{isDiscordEmbedded ? 'Discord Activity' : 'Web'}</p>
           <p className="mt-2 text-sm font-medium text-slate-300">{message}</p>
           {isDiscordEmbedded && (
             <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/40 p-4 text-left">
@@ -1128,6 +1162,7 @@ export default function Games() {
           ) : (
             <a
               href="/login?next=%2Fgames"
+              target="_top"
               className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border-2 border-slate-950 bg-indigo-500 px-5 py-3 text-sm font-black text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition hover:bg-indigo-400"
             >
               <DiscordIcon className="h-4 w-4" /> {t.discordLoginBtn}
@@ -1149,12 +1184,14 @@ export default function Games() {
               <span className="tracking-wide uppercase font-black">{t.hubTitle}</span>
             </div>
             <div className="hidden sm:flex items-center gap-2 bg-slate-800/80 border-2 border-slate-700 px-3 py-1 rounded-lg text-xs min-w-0">
+              {isServerActivity ? (<>
               <span className="text-slate-400 font-semibold shrink-0">{t.serverLabel}</span>
               <span className="max-w-40 truncate text-white font-bold">{lobbyData.guild?.name || '—'}</span>
               <span className="text-slate-600">•</span>
               <span className="text-emerald-400 font-bold truncate max-w-64" title={voiceChannelLabel}>
                 {voiceChannelLabel}
               </span>
+              </>) : <span className="text-white font-bold">Global</span>}
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -1275,8 +1312,10 @@ export default function Games() {
 
           <main className="flex-1 overflow-y-auto p-3 sm:p-5 flex flex-col gap-4 custom-scrollbar">
               <div className="sm:hidden flex flex-wrap items-center gap-2 text-xs font-bold text-slate-300">
-                <span>{t.serverLabel}: {lobbyData.guild?.name || '—'}</span>
-                <span className="text-emerald-400">{voiceChannelLabel}</span>
+                {isServerActivity ? (<>
+                  <span>{t.serverLabel}: {lobbyData.guild?.name || '—'}</span>
+                  <span className="text-emerald-400">{voiceChannelLabel}</span>
+                </>) : <span className="text-white">Global</span>}
               </div>
             {lobbyError && (
               <div role="alert" className="shrink-0 rounded-xl border-2 border-rose-500/50 bg-rose-500/10 p-3 text-xs font-bold text-rose-300">
@@ -1377,27 +1416,38 @@ export default function Games() {
         {!inGameRoom && (
           <aside className={`w-80 bg-slate-900 border-l-4 border-slate-950 flex flex-col shrink-0 z-20 transition-all duration-300 ${isSidebarOpenMobile ? 'fixed inset-y-0 right-0 shadow-2xl flex' : 'hidden lg:flex'}`}>
             <div className="p-4 border-b-4 border-slate-950 bg-slate-950/50 flex items-center justify-between">
-              <div className="flex items-center gap-2"><Radio className="w-4 h-4 text-emerald-400 animate-pulse" /><span className="font-black text-xs uppercase tracking-wider text-white">{t.voiceMembers}</span></div>
-              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/30">{lobbyData.voiceMembers.length} {t.onlinePlayers}</span>
+              <div className="flex items-center gap-2"><Radio className="w-4 h-4 text-emerald-400 animate-pulse" /><span className="font-black text-xs uppercase tracking-wider text-white">{isServerActivity ? t.voiceMembers : t.globalMembers}</span></div>
+              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/30">{visibleMembers.length} {t.onlinePlayers}</span>
             </div>
             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-              {lobbyData.voiceMembers.map((member) => (
+              {visibleMembers.map((member) => (
                 <div key={member.id} className="p-2.5 bg-slate-950 border-2 border-slate-800 rounded-xl flex items-center justify-between hover:border-slate-700 transition-colors">
                   <div className="flex items-center gap-2.5">
                     <div className="relative"><img src={member.avatar} alt={member.name} className="w-9 h-9 rounded-full object-cover border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" /><span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-slate-950"></span></div>
                     <div>
                       <div className="flex items-center gap-1.5"><span className="font-extrabold text-xs text-white leading-tight">{member.name}</span>{member.isOwner && (<Crown className="w-3 h-3 text-yellow-400 fill-yellow-400" />)}</div>
-                      <span className="text-[10px] font-bold text-slate-400">{member.channel} • {member.role}</span>
+                      {isServerActivity && <span className="text-[10px] font-bold text-slate-400">{member.channel}</span>}
                     </div>
                   </div>
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${member.status === 'in-game' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : member.status === 'ready' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{member.status === 'in-game' ? t.statusInGame : member.status === 'ready' ? t.statusReady : t.statusNotJoined}</span>
                 </div>
               ))}
-              {lobbyData.voiceMembers.length === 0 && <p className="px-2 py-3 text-center text-xs font-semibold text-slate-500">{t.noVoiceMembers}</p>}
-              <button disabled={!lobbyData.guild || lobbyData.voiceChannels.length === 0} onClick={handleCreateInvite} className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Share2 className="w-3.5 h-3.5" />{t.inviteDiscord}</button>
+              {visibleMembers.length === 0 && <p className="px-2 py-3 text-center text-xs font-semibold text-slate-500">{isServerActivity ? t.noVoiceMembers : t.noMembers}</p>}
+              <button disabled={inviteBusy} onClick={handleCreateInvite} className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Share2 className="w-3.5 h-3.5" />{inviteBusy ? '…' : t.inviteDiscord}</button>
+              {inviteUrl && !isDiscordEmbedded && (
+                <div className="rounded-xl border border-indigo-400/30 bg-slate-950 p-3 space-y-2">
+                  <label htmlFor="games-invite-link" className="block text-xs text-slate-300">
+                    {lang === 'VI' ? 'Sao chép link này và gửi vào chat Discord:' : 'Copy this link and send it in Discord:'}
+                  </label>
+                  <input id="games-invite-link" readOnly value={inviteUrl} onFocus={event => event.target.select()} className="w-full rounded-lg bg-slate-800 p-2 text-xs text-white select-text" />
+                  <a href="https://discord.com/channels/@me" target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-bold text-indigo-300 underline">
+                    {lang === 'VI' ? 'Mở Discord' : 'Open Discord'}
+                  </a>
+                </div>
+              )}
             </div>
             <div className="p-3 border-t-4 border-slate-950 bg-slate-950/80 space-y-2">
-              <div className="flex items-center justify-between mb-1"><span className="font-black text-xs uppercase tracking-wider text-yellow-400 flex items-center gap-1.5"><Trophy className="w-4 h-4 text-yellow-400" />{t.leaderboard}</span></div>
+              <div className="flex items-center justify-between mb-1"><span className="font-black text-xs uppercase tracking-wider text-yellow-400 flex items-center gap-1.5"><Trophy className="w-4 h-4 text-yellow-400" />{isServerActivity ? t.leaderboard : t.globalLeaderboard}</span></div>
               <div className="space-y-1.5">
                 {lobbyData.leaderboard.map((item, index) => (
                   <div key={item.rank} className="p-2 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
@@ -1605,7 +1655,7 @@ export default function Games() {
 
             <div className="p-4 bg-slate-950 border-t-4 border-slate-950 flex gap-3">
               <button onClick={() => setActiveModal(null)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs rounded-xl border-2 border-slate-950 transition-all">HỦY</button>
-              <button disabled={roomActionLoading || lobbyData.guilds.length === 0} onClick={handleCreateRoom} className="flex-[2] py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Check className="w-4 h-4" /> {t.startBtn}</button>
+              <button disabled={roomActionLoading} onClick={handleCreateRoom} className="flex-[2] py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Check className="w-4 h-4" /> {t.startBtn}</button>
             </div>
           </div>
         </div>

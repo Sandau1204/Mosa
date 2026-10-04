@@ -21,6 +21,10 @@ const nextConfig = {
               destination: `${flaskApiUrl}/login`
             },
             {
+              source: '/callback',
+              destination: `${flaskApiUrl}/callback`
+            },
+            {
               source: '/logout',
               destination: `${flaskApiUrl}/logout`
             },

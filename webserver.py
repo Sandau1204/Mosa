@@ -4,6 +4,7 @@ import logging
 import re
 import secrets
 import uuid
+from urllib.parse import urlencode
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from dotenv import load_dotenv
@@ -148,39 +149,48 @@ def login():
     next_url = request.args.get('next', '')
     if next_url.startswith('/') and not next_url.startswith('//') and '\\' not in next_url:
         session['next_url'] = next_url
-    auth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
+    if not CLIENT_ID or not CLIENT_SECRET:
+        return jsonify({'error': 'Discord authentication is not configured.'}), 503
+    state = secrets.token_urlsafe(32)
+    session['oauth_state'] = state
+    auth_url = 'https://discord.com/api/oauth2/authorize?' + urlencode({
+        'client_id': CLIENT_ID, 'redirect_uri': REDIRECT_URI,
+        'response_type': 'code', 'scope': 'identify guilds', 'state': state
+    })
     return redirect(auth_url)
 
 @app.route('/callback')
 def callback():
+    expected_state = session.pop('oauth_state', None)
+    state = request.args.get('state', '')
+    if not expected_state or not secrets.compare_digest(expected_state, state):
+        return jsonify({'error': 'Invalid or expired Discord login. Please sign in again.'}), 400
+    next_url = session.pop('next_url', url_for('music'))
+    if request.args.get('error'):
+        return redirect(next_url)
     code = request.args.get('code')
     if not code:
-        return redirect(url_for('panel'))
+        return jsonify({'error': 'Discord did not return an authorization code.'}), 400
     import requests
-    data = {
-        'client_id': CLIENT_ID,
-        'client_secret': CLIENT_SECRET,
-        'grant_type': 'authorization_code',
-        'code': code,
-        'redirect_uri': REDIRECT_URI
-    }
-    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    r = requests.post('https://discord.com/api/oauth2/token', data=data, headers=headers, timeout=10)
-    token_data = r.json()
-    if 'access_token' not in token_data:
-        return "Xác thực thất bại!", 400
-    access_token = token_data['access_token']
-    user_resp = requests.get('https://discord.com/api/users/@me', headers={'Authorization': f'Bearer {access_token}'})
-    user_data = user_resp.json()
-    # OAuth is shared with the music page; panel admin APIs enforce OWNER_ID.
-    avatar_hash = user_data.get('avatar')
-    if avatar_hash:
-        # Kiểm tra nếu hash bắt đầu bằng "a_" thì đó là ảnh GIF động
-        ext = "gif" if avatar_hash.startswith("a_") else "png"
-        avatar_url = f"https://cdn.discordapp.com/avatars/{user_data.get('id')}/{avatar_hash}.{ext}?size=1024"
-    else:
-        # Nếu không có avatar, dùng avatar mặc định
-        avatar_url = "https://cdn.discordapp.com/embed/avatars/0.png"
+    try:
+        response = requests.post('https://discord.com/api/oauth2/token', data={
+            'client_id': CLIENT_ID, 'client_secret': CLIENT_SECRET,
+            'grant_type': 'authorization_code', 'code': code, 'redirect_uri': REDIRECT_URI
+        }, headers={'Content-Type': 'application/x-www-form-urlencoded'}, timeout=10)
+        token_data = response.json()
+        if not response.ok or not isinstance(token_data, dict) or not token_data.get('access_token'):
+            return jsonify({'error': 'Discord rejected the login. Please try again.'}), 400
+        access_token = token_data['access_token']
+        user_resp = requests.get('https://discord.com/api/users/@me',
+                                 headers={'Authorization': f'Bearer {access_token}'}, timeout=10)
+        user_data = user_resp.json()
+        if (not user_resp.ok or not isinstance(user_data, dict)
+                or not user_data.get('id') or not user_data.get('username')):
+            return jsonify({'error': 'Could not verify the Discord account.'}), 502
+    except (requests.RequestException, ValueError):
+        app.logger.exception('Discord web authentication failed.')
+        return jsonify({'error': 'Discord authentication is temporarily unavailable. Please try again.'}), 502
+    avatar_url = discord_avatar_url(user_data)
     guild_ids = None
     try:
         guilds_resp = requests.get(
@@ -207,7 +217,6 @@ def callback():
     }
     session.permanent = True
     # Chuyển hướng về trang mà người dùng vừa truy cập (mặc định là music nếu không có)
-    next_url = session.pop('next_url', url_for('music'))
     return redirect(next_url)
 
 
@@ -313,7 +322,7 @@ def games_auth_token():
 @app.route('/api/games/auth/session')
 def games_auth_session():
     user = session.get('user')
-    if not user:
+    if not isinstance(user, dict) or not user.get('id'):
         return jsonify({'authenticated': False}), 401
     return jsonify({
         'authenticated': True,
