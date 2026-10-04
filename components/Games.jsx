@@ -117,9 +117,22 @@ const TRANSLATIONS = {
     turnBlack: "Lượt Đen Đi",
     sitDown: "Ngồi Vào Ghế",
     swapRequestMsg: "Đã gửi yêu cầu đổi phe cờ tới đối thủ!",
-    drawOfferMsg: "Bạn đã gửi yêu cầu Xin Hòa!",
+    drawOfferMsg: "Đã gửi yêu cầu xin hòa tới đối thủ.",
     resignMsg: "Bạn đã nhận thua trận đấu này!",
-    leftSeatMsg: "Bạn đã rời ghế và chuyển sang vị trí Khán Giả xem trận đấu."
+    leftSeatMsg: "Bạn đã rời ghế và chuyển sang vị trí Khán Giả xem trận đấu.",
+    drawOfferTitle: "Đối thủ xin hòa",
+    drawOfferFrom: "Phe {side} đã gửi yêu cầu hòa.",
+    acceptDraw: "Chấp nhận hòa",
+    declineDraw: "Từ chối",
+    matchDraw: "Trận đấu hòa!",
+    matchWon: "Bạn thắng!",
+    matchLost: "Bạn thua!",
+    redWon: "Bên Đỏ thắng",
+    blackWon: "Bên Đen thắng",
+    whiteWon: "Bên Trắng thắng",
+    redSideName: "Đỏ",
+    blackSideName: "Đen",
+    whiteSideName: "Trắng"
   },
   EN: {
     hubTitle: "MOSA GAMES",
@@ -223,9 +236,22 @@ const TRANSLATIONS = {
     turnBlack: "Black's Turn",
     sitDown: "Take Seat",
     swapRequestMsg: "Sent swap side request to opponent!",
-    drawOfferMsg: "Sent draw request to opponent!",
+    drawOfferMsg: "Draw request sent to your opponent.",
     resignMsg: "You resigned from this match!",
-    leftSeatMsg: "You left your seat and became a Spectator."
+    leftSeatMsg: "You left your seat and became a Spectator.",
+    drawOfferTitle: "Your opponent offers a draw",
+    drawOfferFrom: "The {side} side has offered a draw.",
+    acceptDraw: "Accept draw",
+    declineDraw: "Decline",
+    matchDraw: "The match is a draw!",
+    matchWon: "You won!",
+    matchLost: "You lost!",
+    redWon: "Red wins",
+    blackWon: "Black wins",
+    whiteWon: "White wins",
+    redSideName: "Red",
+    blackSideName: "Black",
+    whiteSideName: "White"
   }
 };
 
@@ -615,6 +641,8 @@ export default function Games() {
   const [redPlayer, setRedPlayer] = useState(null);
   const [blackPlayer, setBlackPlayer] = useState(null);
   const [matchStarted, setMatchStarted] = useState(false);
+  const [drawOffer, setDrawOffer] = useState(null);
+  const [gameResult, setGameResult] = useState(null);
   const [isBoardFlipped, setIsBoardFlipped] = useState(false);
   const [redTurnTime, setRedTurnTime] = useState(900); // 15 mins
   const [blackTurnTime, setBlackTurnTime] = useState(900); // 15 mins
@@ -630,7 +658,9 @@ export default function Games() {
   const seatSequence = useRef(0);
   const seatPending = useRef(false);
   const seatRevision = useRef(null);
+  const matchRevision = useRef(null);
   const serverMatchStarted = useRef(false);
+  const matchActionPending = useRef(false);
   const myPlayerId = String(discordUser?.id);
 
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
@@ -641,6 +671,8 @@ export default function Games() {
     setRedPlayer(snapshot.players.find(p => p.side === 'red') || null);
     setBlackPlayer(snapshot.players.find(p => p.side === 'black') || null);
     setSpectatorsList(snapshot.spectators);
+    setDrawOffer(snapshot.drawOffer || null);
+    setGameResult(snapshot.gameResult || null);
     setSeatsLoaded(true);
     setIsBoardFlipped(snapshot.players.some(p => p.id === myPlayerId && p.side === 'black'));
     if (seatRevision.current !== snapshot.revision) {
@@ -655,6 +687,17 @@ export default function Games() {
       setRedTurnTime(900);
       setBlackTurnTime(900);
       serverMatchStarted.current = false;
+    }
+    if (matchRevision.current !== snapshot.matchRevision) {
+      matchRevision.current = snapshot.matchRevision;
+      setSelectedPiece(null);
+      setLegalMoves([]);
+      setCheckSide(null);
+      setBoardState(inGameRoom?.gameType === 'chess' ? INITIAL_CHESS_BOARD : INITIAL_XIANGQI_BOARD);
+      setMovesLog([]);
+      setCurrentTurn('r');
+      setRedTurnTime(900);
+      setBlackTurnTime(900);
     }
     if (serverMatchStarted.current !== snapshot.matchStarted) {
       serverMatchStarted.current = snapshot.matchStarted;
@@ -699,6 +742,30 @@ export default function Games() {
     } catch (error) {
       if (sequence === seatSequence.current) triggerToast(error.message);
     } finally { seatPending.current = false; setSeatBusy(false); }
+  };
+
+  const submitMatchAction = async (action, extra = {}) => {
+    if (!inGameRoom || !seatsLoaded || matchActionPending.current || seatPending.current) return;
+    matchActionPending.current = true;
+    seatPending.current = true;
+    const sequence = ++seatSequence.current;
+    setSeatBusy(true);
+    try {
+      const snapshot = await gamesApiRequest(`${apiBase}/rooms/${encodeURIComponent(inGameRoom.id)}/seats`, {
+        method: 'POST',
+        body: JSON.stringify({ guild_id: inGameRoom.guildId, action, ...extra })
+      });
+      if (sequence === seatSequence.current) {
+        applySeats(snapshot);
+        if (action === 'draw_offer') triggerToast(t.drawOfferMsg);
+      }
+    } catch (error) {
+      if (sequence === seatSequence.current) triggerToast(error instanceof Error ? error.message : t.lobbyLoadError);
+    } finally {
+      matchActionPending.current = false;
+      seatPending.current = false;
+      setSeatBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -871,6 +938,8 @@ export default function Games() {
     setActiveModal(null);
     setInGameRoom({ ...roomObj, gameType, guildId: selectedGuildId });
     setSpectatorsList([]); setSeatsLoaded(false); seatRevision.current = null;
+    matchRevision.current = null; matchActionPending.current = false;
+    setDrawOffer(null); setGameResult(null);
     setSelectedPiece(null); setLegalMoves([]);
     setRedPlayer(null); setBlackPlayer(null); setMatchStarted(false); setIsBoardFlipped(false);
     setRedTurnTime(900); setBlackTurnTime(900); setCurrentTurn('r');
@@ -1076,10 +1145,7 @@ export default function Games() {
       setCurrentTurn('r');
     }
 
-    if (targetPiece?.type === 'K' || targetPiece?.type === 'k') {
-      triggerToast(`Phe ${activeSide === 'red' || activeSide === 'white' ? 'Trắng/Đỏ' : 'Đen'} đã chiến thắng!`);
-      setMatchStarted(false);
-    }
+    if (targetPiece?.type === 'K' || targetPiece?.type === 'k') submitMatchAction('finish');
   };
 
   const renderPlayerProfile = (isTopSeat) => {
@@ -1271,13 +1337,38 @@ export default function Games() {
             room={inGameRoom}
             t={t}
             matchStarted={matchStarted}
+            canControlMatch={redPlayer?.id === myPlayerId || blackPlayer?.id === myPlayerId}
             movesLog={movesLog}
             spectatorsList={spectatorsList}
             renderPlayerProfile={renderPlayerProfile}
             onExit={handleExitGameRoom}
             onSettings={() => setIsSettingsModalOpen(true)}
-            onOfferDraw={() => triggerToast(t.drawOfferMsg)}
-            onResign={() => triggerToast(t.resignMsg)}
+            onOfferDraw={() => submitMatchAction('draw_offer')}
+            onResign={() => submitMatchAction('resign')}
+            drawOffer={drawOffer}
+            drawOfferPending={Boolean(drawOffer)}
+            isDrawOfferRecipient={drawOffer?.playerId !== myPlayerId && (redPlayer?.id === myPlayerId || blackPlayer?.id === myPlayerId)}
+            drawOfferMessage={drawOffer ? t.drawOfferFrom.replace(
+                '{side}',
+                drawOffer.side === 'red'
+                  ? inGameRoom.gameType === 'chess' ? t.whiteSideName : t.redSideName
+                  : t.blackSideName
+            ) : ''}
+            onRespondDraw={accept => submitMatchAction('draw_response', { accept })}
+            drawResponseBusy={seatBusy}
+            gameResult={gameResult}
+            resultTitle={gameResult?.winner == null
+                ? t.matchDraw
+                : (redPlayer?.id === myPlayerId || blackPlayer?.id === myPlayerId)
+                  ? gameResult.winner === (redPlayer?.id === myPlayerId ? 'red' : 'black') ? t.matchWon : t.matchLost
+                  : gameResult.winner === 'red'
+                    ? inGameRoom.gameType === 'chess' ? t.whiteWon : t.redWon
+                    : t.blackWon}
+            resultDetail={gameResult?.winner == null
+                ? t.matchDraw
+                : gameResult.winner === 'red'
+                  ? inGameRoom.gameType === 'chess' ? t.whiteWon : t.redWon
+                  : t.blackWon}
             noSpectatorsLabel={t.noSpectators}
           >
             {inGameRoom.gameType === 'chess' ? (

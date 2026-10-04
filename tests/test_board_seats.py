@@ -22,10 +22,18 @@ class BoardSeatsTests(unittest.TestCase):
                          is_timer_enabled=True, mode='pvp', created_at=0)
         self.cog._data = {'rooms': {'room': self.room}}
 
-    def call(self, action=None, side=None):
+    def call(self, action=None, side=None, **extra):
+        payload = {'guild_id': '5', 'action': action, 'side': side, **extra}
         with app.test_request_context('/seats?guild_id=5', method='POST' if action else 'GET',
-                                      json={'guild_id': '5', 'action': action, 'side': side} if action else None):
+                                      json=payload if action else None):
             return app.make_response(self.cog.room_seats('room'))
+
+    def start_match(self):
+        self.call('sit', 'black')
+        self.cog._user.return_value = ({'id': '1'}, None)
+        self.call('ready')
+        self.cog._user.return_value = ({'id': '2'}, None)
+        return self.call('ready')
 
     def test_spectator_takes_empty_seat_in_both_games(self):
         for game in ('chess', 'xiangqi'):
@@ -64,6 +72,73 @@ class BoardSeatsTests(unittest.TestCase):
         self.assertEqual(self.call('ready').status_code, 409)
         self.assertEqual(self.call('leave_seat').status_code, 409)
         self.assertEqual(self.call('sit', 'invalid').status_code, 400)
+
+    def test_draw_offer_can_be_declined_by_opponent(self):
+        self.start_match()
+        offer = self.call('draw_offer')
+        self.assertEqual(offer.status_code, 200)
+        self.assertEqual(offer.json['drawOffer']['playerId'], '2')
+        self.assertEqual(offer.json['drawOffer']['side'], 'black')
+
+        self.cog._user.return_value = ({'id': '1'}, None)
+        self.assertEqual(self.call().json['drawOffer']['playerId'], '2')
+        response = self.call('draw_response', accept=False)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json['drawOffer'])
+        self.assertIsNone(response.json['gameResult'])
+        self.assertTrue(response.json['matchStarted'])
+
+    def test_accepted_draw_is_shared_with_spectators_and_ends_match(self):
+        self.start_match()
+        self.call('draw_offer')
+        self.cog._user.return_value = ({'id': '1'}, None)
+        response = self.call('draw_response', accept=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['gameResult'], {'winner': None, 'reason': 'draw'})
+        self.assertFalse(response.json['matchStarted'])
+
+        self.cog._user.return_value = ({'id': '3'}, None)
+        spectator_response = self.call()
+        self.assertEqual(spectator_response.json['gameResult'], response.json['gameResult'])
+        self.assertFalse(spectator_response.json['matchStarted'])
+
+    def test_resigning_and_capturing_king_report_the_winner(self):
+        for action, user_id, winner, reason in (
+            ('resign', '2', 'red', 'resignation'),
+            ('finish', '1', 'red', 'capture'),
+        ):
+            with self.subTest(action=action):
+                self.setUp()
+                self.start_match()
+                self.cog._user.return_value = ({'id': user_id}, None)
+                response = self.call(action)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json['gameResult'], {'winner': winner, 'reason': reason})
+                self.assertFalse(response.json['matchStarted'])
+
+    def test_only_opponent_can_answer_pending_draw_offer(self):
+        self.start_match()
+        self.call('draw_offer')
+        self.assertEqual(self.call('draw_offer').status_code, 409)
+        self.assertEqual(self.call('draw_response', accept=True).status_code, 409)
+
+        self.cog._user.return_value = ({'id': '3'}, None)
+        self.assertEqual(self.call('draw_offer').status_code, 403)
+
+    def test_readying_after_a_result_starts_a_fresh_match(self):
+        self.start_match()
+        self.call('resign')
+        previous_revision = self.room['matchRevision']
+        self.cog._user.return_value = ({'id': '1'}, None)
+        first_ready = self.call('ready')
+        self.assertIsNone(first_ready.json['gameResult'])
+        self.assertFalse(first_ready.json['matchStarted'])
+        self.assertEqual(first_ready.json['matchRevision'], previous_revision)
+
+        self.cog._user.return_value = ({'id': '2'}, None)
+        second_ready = self.call('ready')
+        self.assertTrue(second_ready.json['matchStarted'])
+        self.assertEqual(second_ready.json['matchRevision'], previous_revision + 1)
 
     def test_non_member_cannot_read_or_change_seats(self):
         self.cog._user.return_value = ({'id': '9'}, None)

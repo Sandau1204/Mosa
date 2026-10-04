@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Clock, Eye, Flag, Handshake, LogOut, Sliders, Swords } from 'lucide-react';
+import { Check, Clock, Eye, Flag, Handshake, LogOut, Sliders, Swords, X } from 'lucide-react';
 
 export default function GameRoomShell({
   room,
@@ -14,6 +14,16 @@ export default function GameRoomShell({
   onSettings,
   onOfferDraw,
   onResign,
+  drawOffer,
+  drawOfferPending,
+  isDrawOfferRecipient,
+  drawOfferMessage,
+  onRespondDraw,
+  drawResponseBusy,
+  canControlMatch,
+  gameResult,
+  resultTitle,
+  resultDetail,
   noSpectatorsLabel,
   children
 }) {
@@ -33,7 +43,33 @@ export default function GameRoomShell({
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[auto_1fr_auto] gap-3 lg:gap-4 min-h-0 relative z-10 pb-6 lg:pb-0">
         <div className="order-1 lg:order-none lg:col-start-4 lg:col-span-6 lg:row-start-1 lg:row-span-3 flex flex-col items-center justify-center bg-slate-900 border-4 border-slate-950 rounded-2xl p-2 sm:p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative w-full lg:min-h-0">
-          <div className="w-full h-full max-h-[75vh] flex items-center justify-center">{children}</div>
+          <div className={`w-full h-full max-h-[75vh] flex items-center justify-center ${gameResult ? 'blur-sm' : ''}`}>{children}</div>
+          {drawOffer && isDrawOfferRecipient && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-slate-950/65 p-4 backdrop-blur-sm">
+              <section role="dialog" aria-modal="true" aria-labelledby="draw-offer-title" className="w-full max-w-sm rounded-2xl border-4 border-slate-950 bg-slate-900 p-5 text-center shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                <Handshake className="mx-auto h-9 w-9 text-amber-300" />
+                <h3 id="draw-offer-title" className="mt-2 text-lg font-black text-white">{t.drawOfferTitle}</h3>
+                <p className="mt-2 text-sm font-semibold text-slate-300">{drawOfferMessage}</p>
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <button disabled={drawResponseBusy} onClick={() => onRespondDraw(true)} className="flex items-center justify-center gap-2 rounded-xl border-2 border-slate-950 bg-emerald-500 px-3 py-2.5 text-sm font-black text-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60">
+                    <Check className="h-4 w-4" /> {t.acceptDraw}
+                  </button>
+                  <button disabled={drawResponseBusy} onClick={() => onRespondDraw(false)} className="flex items-center justify-center gap-2 rounded-xl border-2 border-slate-950 bg-rose-500 px-3 py-2.5 text-sm font-black text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-60">
+                    <X className="h-4 w-4" /> {t.declineDraw}
+                  </button>
+                </div>
+              </section>
+            </div>
+          )}
+          {gameResult && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-slate-950/70 p-4 backdrop-blur-md">
+              <section role="status" aria-live="polite" className="w-full max-w-sm rounded-2xl border-4 border-slate-950 bg-slate-900 p-6 text-center shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                <Swords className="mx-auto h-10 w-10 text-yellow-300" />
+                <h3 className="mt-3 text-xl font-black text-white">{resultTitle}</h3>
+                <p className="mt-2 text-sm font-bold text-slate-300">{resultDetail}</p>
+              </section>
+            </div>
+          )}
         </div>
 
         <div className="lg:hidden order-2 grid grid-cols-2 gap-2 shrink-0">
@@ -44,10 +80,10 @@ export default function GameRoomShell({
         <div className="order-3 lg:order-none lg:col-start-1 lg:col-span-3 lg:row-start-1 lg:row-span-1 bg-slate-900 border-4 border-slate-950 rounded-2xl p-3.5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] space-y-2.5 shrink-0">
           <div className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5"><Swords className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400" /> Thao Tác Trận Đấu</div>
           <div className="grid grid-cols-2 gap-2">
-            <button disabled={!matchStarted} onClick={onOfferDraw} className={`py-2 px-1.5 sm:px-3 font-black text-[10px] sm:text-xs rounded-xl border-2 transition-all flex items-center justify-center gap-1 sm:gap-2 uppercase ${matchStarted ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5' : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60'}`}>
+            <button disabled={!matchStarted || !canControlMatch || drawOfferPending} onClick={onOfferDraw} className={`py-2 px-1.5 sm:px-3 font-black text-[10px] sm:text-xs rounded-xl border-2 transition-all flex items-center justify-center gap-1 sm:gap-2 uppercase ${matchStarted && canControlMatch && !drawOfferPending ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5' : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60'}`}>
               <Handshake className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="truncate">{t.offerDraw}</span>
             </button>
-            <button disabled={!matchStarted} onClick={onResign} className={`py-2 px-1.5 sm:px-3 font-black text-[10px] sm:text-xs rounded-xl border-2 transition-all flex items-center justify-center gap-1 sm:gap-2 uppercase ${matchStarted ? 'bg-rose-600 hover:bg-rose-500 text-white border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5' : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60'}`}>
+            <button disabled={!matchStarted || !canControlMatch} onClick={onResign} className={`py-2 px-1.5 sm:px-3 font-black text-[10px] sm:text-xs rounded-xl border-2 transition-all flex items-center justify-center gap-1 sm:gap-2 uppercase ${matchStarted && canControlMatch ? 'bg-rose-600 hover:bg-rose-500 text-white border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5' : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-60'}`}>
               <Flag className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="truncate">{t.resign}</span>
             </button>
           </div>

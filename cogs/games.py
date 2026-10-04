@@ -559,6 +559,8 @@ class Games(commands.Cog):
             player['isReady'] = False
         room['status'] = 'waiting'
         room['seatRevision'] = room.get('seatRevision', 0) + 1
+        room.pop('drawOffer', None)
+        room.pop('gameResult', None)
 
     def room_seats(self, room_id):
         user, error = self._user()
@@ -602,19 +604,65 @@ class Games(commands.Cog):
                     spectators.append({k: v for k, v in player.items() if k not in ('side', 'isReady')})
                     self._reset_board_seats(room)
                 elif action == 'ready':
-                    if not player or room['status'] == 'in-game':
+                    if not player:
+                        return jsonify({'error': 'Bạn không thể sẵn sàng lúc này.'}), 409
+                    if room.get('gameResult'):
+                        room['status'] = 'waiting'
+                        room['drawOffer'] = None
+                        room['gameResult'] = None
+                        for seated_player in room['players']:
+                            seated_player['isReady'] = False
+                    elif room['status'] == 'in-game':
                         return jsonify({'error': 'Bạn không thể sẵn sàng lúc này.'}), 409
                     player['isReady'] = not player['isReady']
                     if len(room['players']) == 2 and all(p['isReady'] for p in room['players']):
                         room['status'] = 'in-game'
+                        room['drawOffer'] = None
+                        room['gameResult'] = None
+                        room['matchRevision'] = room.get('matchRevision', 0) + 1
+                elif action in ('draw_offer', 'draw_response', 'resign', 'finish'):
+                    if not player:
+                        return jsonify({'error': 'Khán giả không thể thực hiện thao tác trận đấu.'}), 403
+                    if (room['status'] != 'in-game' or len(room['players']) != 2
+                            or not all(p['isReady'] for p in room['players']) or room.get('gameResult')):
+                        return jsonify({'error': 'Trận đấu không còn diễn ra.'}), 409
+                    if action == 'draw_offer':
+                        if room.get('drawOffer'):
+                            return jsonify({'error': 'Đã có yêu cầu hòa đang chờ phản hồi.'}), 409
+                        room['drawOffer'] = {
+                            'playerId': user_id,
+                            'side': player['side'],
+                            'name': player.get('name', ''),
+                        }
+                    elif action == 'draw_response':
+                        offer = room.get('drawOffer')
+                        accepted = data.get('accept')
+                        if not isinstance(accepted, bool):
+                            return jsonify({'error': 'Phản hồi yêu cầu hòa không hợp lệ.'}), 400
+                        if not offer or offer['playerId'] == user_id:
+                            return jsonify({'error': 'Không có yêu cầu hòa từ đối thủ.'}), 409
+                        room['drawOffer'] = None
+                        if accepted:
+                            room['gameResult'] = {'winner': None, 'reason': 'draw'}
+                    else:
+                        winner = player['side'] if action == 'finish' else next(
+                            p['side'] for p in room['players'] if p['id'] != user_id
+                        )
+                        reason = 'capture' if action == 'finish' else 'resignation'
+                        room['drawOffer'] = None
+                        room['gameResult'] = {'winner': winner, 'reason': reason}
                 else:
                     return jsonify({'error': 'Thao tác không hợp lệ.'}), 400
                 room['updated_at'] = time.time()
                 self._save_data()
             return jsonify({'players': room['players'], 'spectators': spectators,
                             'revision': room.get('seatRevision', 0), 'hostId': room['host']['id'],
+                            'matchRevision': room.get('matchRevision', 0),
+                            'drawOffer': room.get('drawOffer'),
+                            'gameResult': room.get('gameResult'),
                             'matchStarted': room['status'] == 'in-game' and len(room['players']) == 2
-                            and all(p['isReady'] for p in room['players'])})
+                            and all(p['isReady'] for p in room['players'])
+                            and not room.get('gameResult')})
 
     @staticmethod
     def _leave_monopoly_seat(state, user_id):
