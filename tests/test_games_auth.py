@@ -20,6 +20,32 @@ class GamesAuthTests(unittest.TestCase):
         self.assertEqual(query['redirect_uri'], ['https://mosa.test/callback'])
         return query['state'][0]
 
+    def test_web_owner_badge_uses_configured_id_not_session_flag(self):
+        with self.client.session_transaction() as session:
+            session['user'] = {'id': '7', 'username': 'Player', 'isBotOwner': True}
+        for owner_id, expected in [('7', True), ('8', False), ('', False)]:
+            with self.subTest(owner_id=owner_id), patch.dict('os.environ', {'OWNER_ID': owner_id}):
+                user = self.client.get('/api/games/auth/session').json['user']
+                self.assertEqual(user['isBotOwner'], expected)
+                self.assertNotIn('OWNER_ID', user)
+
+    def test_web_session_normalizes_missing_hash_and_url_avatars(self):
+        for avatar, expected in (
+            (None, 'https://cdn.discordapp.com/embed/avatars/0.png'),
+            ('avatar_hash', 'https://cdn.discordapp.com/avatars/7/avatar_hash.png?size=256'),
+            ('a_animated', 'https://cdn.discordapp.com/avatars/7/a_animated.gif?size=256'),
+            ('https://cdn.discordapp.com/avatars/7/existing.png',
+             'https://cdn.discordapp.com/avatars/7/existing.png'),
+        ):
+            with self.subTest(avatar=avatar):
+                with self.client.session_transaction() as session:
+                    session['user'] = {'id': '7', 'username': 'Player', 'avatar': avatar}
+                response = self.client.get('/api/games/auth/session')
+                self.assertEqual(response.json['user']['avatar'], expected)
+                with self.client.session_transaction() as session:
+                    self.assertEqual(session['user']['avatar'], expected)
+                self.assertEqual(self.client.get('/api/games/auth/session').json['user']['avatar'], expected)
+
     @patch('requests.get')
     @patch('requests.post')
     def test_web_login_returns_to_games_with_verified_session(self, post, get):
@@ -69,3 +95,15 @@ class GamesAuthTests(unittest.TestCase):
         self.assertEqual(response.json['user']['id'], '7')
         self.assertTrue(response.json['auth_ticket'])
         self.assertNotIn('redirect_uri', post.call_args.kwargs['data'])
+
+    @patch('requests.get')
+    @patch('requests.post')
+    def test_activity_owner_badge_uses_verified_discord_id(self, post, get):
+        for owner_id, expected in [('7', True), ('8', False), ('', False)]:
+            with self.subTest(owner_id=owner_id), patch.dict('os.environ', {'OWNER_ID': owner_id}):
+                post.return_value = Mock(ok=True, json=lambda: {'access_token': 'token'})
+                get.side_effect = [Mock(ok=True, json=lambda: {'id': '7', 'username': 'Player'}),
+                                   Mock(ok=True, json=lambda: [])]
+                response = self.client.post('/.proxy/api/games/auth/token', json={'code': 'sdk-code', 'isBotOwner': True})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json['user']['isBotOwner'], expected)

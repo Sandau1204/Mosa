@@ -14,7 +14,7 @@ import discord
 from discord.ext import commands, tasks
 from flask import jsonify, request, session
 
-from webserver import app, load_games_auth_ticket, run_coro
+from webserver import app, is_bot_owner, load_games_auth_ticket, run_coro
 from cogs.engines import monopoly
 from cogs.engines import chess_game
 from cogs.engines import xiangqi_game
@@ -326,6 +326,13 @@ class Games(commands.Cog):
             del self._data["rooms"][room_id]
         return bool(expired)
 
+    @staticmethod
+    def _is_guild_admin(member):
+        if member is None:
+            return False
+        permissions = member.guild_permissions
+        return permissions.administrator is True or permissions.manage_guild is True
+
     def lobby(self):
         user, error = self._user()
         if user is None:
@@ -392,6 +399,7 @@ class Games(commands.Cog):
                 | {'status': 'in-game' if profile['id'] in joined_ids else 'ready'}
                 for profile in self._global_presence.values()
             ]
+            global_tournament = self._data["tournaments"].get("global")
             if changed:
                 self._save_data()
 
@@ -404,7 +412,9 @@ class Games(commands.Cog):
                 "voiceChannels": [],
                 "currentVoiceChannel": None,
                 "rooms": rooms,
-                "tournament": None,
+                "tournament": global_tournament,
+                "globalTournament": global_tournament,
+                "serverTournament": None,
                 "leaderboard": [],
                 "ping": round(self.bot.latency * 1000) if math.isfinite(self.bot.latency) else None,
             })
@@ -421,7 +431,8 @@ class Games(commands.Cog):
                 user_id for (presence_guild_id, user_id), seen_at in self._activity_presence.items()
                 if presence_guild_id == guild_id and now - seen_at < ACTIVITY_PRESENCE_TTL_SECONDS
             }
-            tournament = self._data["tournaments"].get(guild_id)
+            tournament = global_tournament if request.args.get("context") == "global" else self._data["tournaments"].get(guild_id)
+            server_tournament = None if request.args.get('context') == 'global' else self._data['tournaments'].get(guild_id)
             leaderboard = self._data["leaderboards"].get(guild_id, [])
             active_player_ids = {
                 player["id"]
@@ -460,6 +471,7 @@ class Games(commands.Cog):
                 "id": guild_id,
                 "name": guild.name,
                 "isOwner": guild.owner_id == int(user["id"]),
+                "isAdmin": self._is_guild_admin(member),
             },
             "voiceMembers": voice_members,
             "members": members,
@@ -471,6 +483,8 @@ class Games(commands.Cog):
             } if current_voice_channel else None,
             "rooms": rooms,
             "tournament": tournament,
+            "globalTournament": global_tournament,
+            "serverTournament": server_tournament,
             "leaderboard": leaderboard,
             "ping": round(self.bot.latency * 1000) if math.isfinite(self.bot.latency) else None,
         })
@@ -863,13 +877,19 @@ class Games(commands.Cog):
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify({"error": "Dữ liệu giải đấu không hợp lệ."}), 400
-        guild, member, error = self._get_guild_member(data.get("guild_id"), user["id"])
-        if error:
-            return error
-        if guild is None or member is None:
-            return jsonify({"error": "Không thể xác minh thành viên server."}), 503
-        if member.id != guild.owner_id:
-            return jsonify({"error": "Chỉ chủ server mới có thể tạo giải đấu."}), 403
+        tournament_key = data.get('guild_id')
+        if tournament_key == 'global':
+            if not is_bot_owner(user['id']):
+                return jsonify({'error': 'Only the bot owner can create global tournaments.'}), 403
+        else:
+            guild, member, error = self._get_guild_member(data.get("guild_id"), user["id"])
+            if error:
+                return error
+            if guild is None or member is None:
+                return jsonify({"error": "Không thể xác minh thành viên server."}), 503
+            if member.id != guild.owner_id and not self._is_guild_admin(member):
+                return jsonify({"error": "Chỉ chủ server hoặc Admin có quyền quản lý server mới có thể tạo giải đấu."}), 403
+            tournament_key = str(guild.id)
         title = data.get("title")
         game_id = data.get("game_id")
         if not isinstance(title, str) or not title.strip() or len(title.strip()) > 100:
@@ -886,11 +906,11 @@ class Games(commands.Cog):
             "desc": description.strip()[:500],
             "prize": prize.strip()[:120],
             "gameId": game_id,
-            "createdBy": str(member.id),
+            "createdBy": str(user["id"]),
             "createdAt": time.time(),
         }
         with self._lock:
-            self._data["tournaments"][str(guild.id)] = tournament
+            self._data["tournaments"][tournament_key] = tournament
             self._save_data()
         return jsonify({"tournament": tournament}), 201
 
@@ -898,15 +918,19 @@ class Games(commands.Cog):
         user, error = self._user()
         if user is None:
             return error
-        guild, member, error = self._get_guild_member(guild_id, user["id"])
-        if error:
-            return error
-        if guild is None or member is None:
-            return jsonify({"error": "Không thể xác minh thành viên server."}), 503
-        if member.id != guild.owner_id:
-            return jsonify({"error": "Chỉ chủ server mới có thể hủy giải đấu."}), 403
+        if guild_id == 'global':
+            if not is_bot_owner(user['id']):
+                return jsonify({'error': 'Only the bot owner can delete global tournaments.'}), 403
+        else:
+            guild, member, error = self._get_guild_member(guild_id, user["id"])
+            if error:
+                return error
+            if guild is None or member is None:
+                return jsonify({"error": "Không thể xác minh thành viên server."}), 503
+            if member.id != guild.owner_id:
+                return jsonify({"error": "Chỉ chủ server mới có thể hủy giải đấu."}), 403
         with self._lock:
-            self._data["tournaments"].pop(str(guild.id), None)
+            self._data["tournaments"].pop(str(guild_id), None)
             self._save_data()
         return jsonify({"success": True})
 

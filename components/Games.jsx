@@ -1,5 +1,8 @@
 'use client';
 
+import DiscordAvatar from './DiscordAvatar';
+import tournamentStyles from './TournamentCarousel.module.css';
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Gamepad2, Trophy, Users, Bot, Sparkles, Volume2, VolumeX, Globe, HelpCircle,
@@ -84,7 +87,7 @@ const TRANSLATIONS = {
     deleteTournamentBtn: "Hủy Giải Đấu",
     ownerLabel: "Server Owner",
     memberLabel: "Thành Viên",
-    createTournamentTitle: "TẠO GIẢI ĐẤU MỚI (DÀNH CHO OWNER)",
+    createTournamentTitle: "TẠO GIẢI ĐẤU MỚI (OWNER / ADMIN)",
     tournamentNameInput: "Tên giải đấu",
     selectGameInput: "Trò chơi tổ chức",
     prizeInput: "Phần thưởng giải đấu",
@@ -206,7 +209,7 @@ const TRANSLATIONS = {
     deleteTournamentBtn: "Delete Tournament",
     ownerLabel: "Server Owner",
     memberLabel: "Member",
-    createTournamentTitle: "CREATE TOURNAMENT (OWNER ONLY)",
+    createTournamentTitle: "CREATE TOURNAMENT (OWNER / ADMIN)",
     tournamentNameInput: "Tournament Title",
     selectGameInput: "Selected Game",
     prizeInput: "Tournament Prize",
@@ -439,6 +442,8 @@ export default function Games() {
     voiceChannels: [],
     rooms: [],
     tournament: null,
+    globalTournament: null,
+    serverTournament: null,
     leaderboard: [],
     ping: null
   });
@@ -466,7 +471,18 @@ export default function Games() {
   const [isRoomLocked, setIsRoomLocked] = useState(false);
   const [roomPassword, setRoomPassword] = useState('');
   const isServerOwner = lobbyData.guild?.isOwner === true;
-  const activeTournament = lobbyData.tournament;
+  const isServerAdmin = lobbyData.guild?.isAdmin === true;
+  const canCreateTournament = isServerActivity ? (isServerOwner || isServerAdmin) : discordUser?.isBotOwner === true;
+
+  const tournamentScope = isServerActivity ? selectedGuildId : 'global';
+  const tournaments = [
+    ...(lobbyData.globalTournament ? [{ ...lobbyData.globalTournament, scope: 'global' }] : []),
+    ...(isServerActivity && lobbyData.serverTournament ? [{ ...lobbyData.serverTournament, scope: selectedGuildId }] : [])
+  ];
+  const [tournamentIndex, setTournamentIndex] = useState(0);
+  const activeTournament = tournaments[tournamentIndex % Math.max(tournaments.length, 1)];
+  const canDeleteTournament = activeTournament?.scope === 'global' ? discordUser?.isBotOwner === true : isServerOwner;
+  const ownTournament = isServerActivity ? lobbyData.serverTournament : lobbyData.globalTournament;
   const [isCreateTournamentModalOpen, setIsCreateTournamentModalOpen] = useState(false);
 
   // Lobby Config State
@@ -732,14 +748,14 @@ export default function Games() {
 
   const refreshLobby = useCallback(async () => {
     const guildId = activityContext?.guildId;
-    const query = guildId ? `?guild_id=${encodeURIComponent(guildId)}` : '';
+    const query = isServerActivity ? `?guild_id=${encodeURIComponent(guildId)}` : '?context=global';
     const data = await gamesApiRequest(`${apiBase}/lobby${query}`, { cache: 'no-store' });
     setLobbyData(data);
     setPing(data.ping);
     setLobbyError('');
     setSelectedGuildId(data.guild?.id || '');
     return data;
-  }, [apiBase, activityContext]);
+  }, [apiBase, activityContext, isServerActivity]);
 
   const refreshLobbyAfterAction = async () => {
     try {
@@ -918,14 +934,14 @@ export default function Games() {
       const result = await gamesApiRequest(`${apiBase}/tournaments`, {
         method: 'POST',
         body: JSON.stringify({
-          guild_id: selectedGuildId,
+          guild_id: tournamentScope,
           title: tournamentTitle,
           game_id: tournamentGameId,
           prize: tournamentPrize,
           description: tournamentDescription
         })
       });
-      setLobbyData(previous => ({ ...previous, tournament: result.tournament }));
+      setLobbyData(previous => ({ ...previous, [tournamentScope === 'global' ? 'globalTournament' : 'serverTournament']: result.tournament }));
       setIsCreateTournamentModalOpen(false);
       setTournamentTitle('');
       setTournamentPrize('');
@@ -939,12 +955,14 @@ export default function Games() {
   };
 
   const handleDeleteTournament = async () => {
+    const scope = activeTournament?.scope;
+    if (!scope) return;
     setTournamentActionLoading(true);
     try {
-      await gamesApiRequest(`${apiBase}/tournaments/${encodeURIComponent(selectedGuildId)}`, {
+      await gamesApiRequest(`${apiBase}/tournaments/${encodeURIComponent(scope)}`, {
         method: 'DELETE'
       });
-      setLobbyData(previous => ({ ...previous, tournament: null }));
+      setLobbyData(previous => ({ ...previous, [scope === 'global' ? 'globalTournament' : 'serverTournament']: null }));
     } catch (error) {
       triggerToast(error instanceof Error ? error.message : t.lobbyLoadError);
     } finally {
@@ -1055,7 +1073,7 @@ export default function Games() {
           <>
             <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 w-full text-center sm:text-left">
               <div className="relative group/avatar shrink-0">
-                <img src={player.avatar} alt={player.name} className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full border-3 border-slate-950 object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ring-2 ${ringColor}`} />
+                <DiscordAvatar src={player.avatar} alt={player.name} className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full border-3 border-slate-950 object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ring-2 ${ringColor}`} />
                 {player.id === myPlayerId && (
                   <button disabled={seatBusy || !seatsLoaded} aria-label={t.leaveSeat} onClick={() => handleLeaveSeat(side)} className="absolute -top-1 -right-1 bg-rose-500 hover:bg-rose-400 text-white rounded-full p-0.5 border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 z-30" title="Rời ghế"><X className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
                 )}
@@ -1200,14 +1218,16 @@ export default function Games() {
             </div>
             <div className="flex items-center gap-2 bg-slate-800 border-2 border-slate-950 px-2.5 py-1 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
               <div className="relative group cursor-pointer">
-                <img src={discordUser.avatar} alt={discordUser.username} className="w-9 h-9 rounded-full border-2 border-yellow-400 object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-105 transition-transform" />
+                <DiscordAvatar src={discordUser.avatar} alt={discordUser.username} className="w-9 h-9 rounded-full border-2 border-yellow-400 object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] group-hover:scale-105 transition-transform" />
               </div>
               <div className="hidden lg:block text-left">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-black text-white leading-none">{discordUser.username}</span>
-                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded border bg-slate-700 text-slate-300 border-slate-600">
-                    {isServerOwner ? t.ownerLabel : t.memberLabel}
-                  </span>
+                  {(isServerActivity || discordUser.isBotOwner === true) && (
+                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded border bg-slate-700 text-slate-300 border-slate-600">
+                      {isServerActivity ? (isServerOwner ? t.ownerLabel : isServerAdmin ? 'Admin' : t.memberLabel) : 'Owner'}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1327,7 +1347,10 @@ export default function Games() {
                 {t.noGuilds}
               </div>
             )}
-            {activeTournament ? (
+            {activeTournament && (
+              <div className={tournamentStyles.viewport}>
+              <div key={`${activeTournament.scope}:${activeTournament.id}`} className={tournaments.length > 1 ? tournamentStyles.slide : undefined}
+                onAnimationEnd={event => { if (event.target === event.currentTarget) setTournamentIndex(index => index + 1); }}>
               <div className="relative rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 border-4 border-slate-950 p-4 sm:p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-hidden shrink-0">
                 <div className="absolute -right-6 -bottom-6 opacity-20 text-slate-950 text-9xl font-black italic pointer-events-none">VS</div>
                 <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1341,15 +1364,18 @@ export default function Games() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     <button onClick={() => { const game = GAMES_DATA.find(g => g.id === activeTournament.gameId) || GAMES_DATA[0]; handleOpenRoomList(game); }} className="px-5 py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-sm rounded-xl border-3 border-slate-950 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all flex items-center gap-2 shrink-0"><Zap className="w-5 h-5 fill-slate-950" /> THAM GIA NGAY</button>
-                    {isServerOwner && (<button disabled={tournamentActionLoading} onClick={handleDeleteTournament} className="px-3 py-3 bg-slate-950 hover:bg-rose-950 text-rose-400 hover:text-rose-300 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center gap-1 shrink-0 disabled:opacity-50"><X className="w-4 h-4" /> {t.deleteTournamentBtn}</button>)}
+                    {canDeleteTournament && (<button disabled={tournamentActionLoading} onClick={handleDeleteTournament} className="px-3 py-3 bg-slate-950 hover:bg-rose-950 text-rose-400 hover:text-rose-300 font-black text-xs rounded-xl border-2 border-slate-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all flex items-center gap-1 shrink-0 disabled:opacity-50"><X className="w-4 h-4" /> {t.deleteTournamentBtn}</button>)}
                   </div>
                 </div>
               </div>
-            ) : isServerOwner ? (
+              </div>
+              </div>
+            )}
+            {!ownTournament && canCreateTournament ? (
               <div className="rounded-2xl border-4 border-dashed border-slate-800 bg-slate-900/60 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-amber-400/10 border-2 border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0"><Crown className="w-5 h-5" /></div>
-                  <div><div className="text-xs font-black text-amber-400 uppercase tracking-wider">Quyền Server Owner</div><div className="text-sm font-bold text-slate-300">Chưa có giải đấu nào. Tạo giải đấu để thu hút thành viên Server tham gia!</div></div>
+                  <div><div className="text-xs font-black text-amber-400 uppercase tracking-wider">{isServerActivity ? (isServerOwner ? t.ownerLabel : 'Admin') : 'Owner'}</div><div className="text-sm font-bold text-slate-300">Chưa có giải đấu nào. Tạo giải đấu để thu hút thành viên Server tham gia!</div></div>
                 </div>
                 <button onClick={() => setIsCreateTournamentModalOpen(true)} className="px-4 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-black text-xs rounded-xl border-3 border-slate-950 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all flex items-center gap-2 uppercase tracking-wide shrink-0"><PlusCircle className="w-4 h-4" /> {t.createTournamentBtn}</button>
               </div>
@@ -1423,7 +1449,7 @@ export default function Games() {
               {visibleMembers.map((member) => (
                 <div key={member.id} className="p-2.5 bg-slate-950 border-2 border-slate-800 rounded-xl flex items-center justify-between hover:border-slate-700 transition-colors">
                   <div className="flex items-center gap-2.5">
-                    <div className="relative"><img src={member.avatar} alt={member.name} className="w-9 h-9 rounded-full object-cover border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" /><span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-slate-950"></span></div>
+                    <div className="relative"><DiscordAvatar src={member.avatar} alt={member.name} className="w-9 h-9 rounded-full object-cover border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" /><span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-slate-950"></span></div>
                     <div>
                       <div className="flex items-center gap-1.5"><span className="font-extrabold text-xs text-white leading-tight">{member.name}</span>{member.isOwner && (<Crown className="w-3 h-3 text-yellow-400 fill-yellow-400" />)}</div>
                       {isServerActivity && <span className="text-[10px] font-bold text-slate-400">{member.channel}</span>}

@@ -1,0 +1,27 @@
+.viewport {
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.slide {
+  animation: slideLeft 6s linear;
+}
+
+.viewport:hover .slide,
+.viewport:focus-within .slide {
+  animation-play-state: paused;
+}
+
+@keyframes slideLeft {
+  0% { transform: translateX(100%); opacity: 0; }
+  8%, 92% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(-100%); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide { animation-name: still; }
+  @keyframes still {
+    from { opacity: 1; }
+    to { opacity: 1; }
+  }
+}

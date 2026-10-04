@@ -42,6 +42,9 @@ FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
 def discord_avatar_url(user_data):
     avatar_hash = user_data.get('avatar')
     user_id = user_data.get('id')
+    # Sessions store a full URL; Discord's OAuth profile contains only the hash.
+    if isinstance(avatar_hash, str) and avatar_hash.startswith('https://'):
+        return avatar_hash
     if avatar_hash and user_id:
         extension = 'gif' if avatar_hash.startswith('a_') else 'png'
         return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.{extension}?size=256"
@@ -52,6 +55,11 @@ def discord_avatar_url(user_data):
     except (TypeError, ValueError):
         default_avatar = 0
     return f"https://cdn.discordapp.com/embed/avatars/{default_avatar}.png"
+
+
+def is_bot_owner(user_id):
+    owner_id = os.getenv('OWNER_ID', '').strip()
+    return bool(owner_id and str(user_id) == owner_id)
 
 
 def create_games_auth_ticket(user, guild_ids):
@@ -302,6 +310,7 @@ def games_auth_token():
     user = {
         'id': str(user_data['id']),
         'username': user_data.get('global_name') or user_data['username'],
+        'isBotOwner': is_bot_owner(user_data['id']),
         'avatar': discord_avatar_url(user_data)
     }
     guild_ids = [guild['id'] for guild in guilds_data if isinstance(guild, dict) and guild.get('id')]
@@ -324,11 +333,14 @@ def games_auth_session():
     user = session.get('user')
     if not isinstance(user, dict) or not user.get('id'):
         return jsonify({'authenticated': False}), 401
+    user = {**user, 'avatar': discord_avatar_url(user)}
+    session['user'] = user
     return jsonify({
         'authenticated': True,
         'user': {
             'id': str(user.get('id')),
             'username': user.get('username'),
+            'isBotOwner': is_bot_owner(user['id']),
             'avatar': user.get('avatar')
         }
     })

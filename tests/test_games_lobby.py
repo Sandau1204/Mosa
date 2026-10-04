@@ -51,6 +51,63 @@ class GamesLobbyTests(unittest.TestCase):
         self.assertEqual(response.json['guild']['id'], '2')
         self.assertEqual(response.json['currentVoiceChannel']['id'], '30')
 
+    def test_global_tournament_requires_bot_owner_and_is_separate_from_server(self):
+        self.cog._get_guild_member = Mock(side_effect=AssertionError('Global needs no guild'))
+        self.cog._data['tournaments']['2'] = {'title': 'Server Cup'}
+        payload = {'guild_id': 'global', 'title': 'Global Cup', 'game_id': 'chess', 'isBotOwner': True}
+        for owner_id in ('8', ''):
+            with patch.dict('os.environ', {'OWNER_ID': owner_id}):
+                self.assertEqual(self.room_request('create_tournament', payload=payload).status_code, 403)
+        with patch.dict('os.environ', {'OWNER_ID': '7'}):
+            self.assertEqual(self.room_request('create_tournament', payload=payload).status_code, 201)
+            self.assertEqual(self.lobby('?context=global').json['tournament']['title'], 'Global Cup')
+            self.assertEqual(self.lobby('?guild_id=2').json['tournament']['title'], 'Server Cup')
+            global_lobby = self.lobby('?context=global').json
+            self.assertEqual(global_lobby['globalTournament']['title'], 'Global Cup')
+            self.assertIsNone(global_lobby['serverTournament'])
+            server_lobby = self.lobby('?guild_id=2').json
+            self.assertEqual(server_lobby['globalTournament']['title'], 'Global Cup')
+            self.assertEqual(server_lobby['serverTournament']['title'], 'Server Cup')
+            other_server = self.lobby('?guild_id=1').json
+            self.assertEqual(other_server['globalTournament']['title'], 'Global Cup')
+            self.assertIsNone(other_server['serverTournament'])
+            self.cog._accessible_guilds.return_value = []
+            self.assertEqual(self.lobby('?context=global').json['tournament']['title'], 'Global Cup')
+            self.assertIsNone(self.lobby('?context=global').json['serverTournament'])
+        with patch.dict('os.environ', {'OWNER_ID': '8'}):
+            self.assertEqual(self.room_request('delete_tournament', 'global').status_code, 403)
+        with patch.dict('os.environ', {'OWNER_ID': '7'}):
+            self.assertEqual(self.room_request('delete_tournament', 'global').status_code, 200)
+            self.assertNotIn('global', self.cog._data['tournaments'])
+            self.assertIn('2', self.cog._data['tournaments'])
+
+    def test_admin_badge_matches_management_permissions(self):
+        member = self.guilds[1][1]
+        for permissions, expected in ((discord.Permissions.none(), False),
+                                      (discord.Permissions(manage_guild=True), True),
+                                      (discord.Permissions(administrator=True), True),
+                                      (discord.Permissions(manage_messages=True), False)):
+            member.guild_permissions = permissions
+            self.assertEqual(self.lobby().json['guild']['isAdmin'], expected)
+
+    def test_tournament_creation_checks_actual_guild_permissions(self):
+        guild, member = self.guilds[0]
+        self.cog._get_guild_member = Mock(return_value=(guild, member, None))
+        for user_id, permissions, expected in (
+            (7, discord.Permissions(manage_guild=True), 201),
+            (7, discord.Permissions(administrator=True), 201),
+            (7, discord.Permissions.none(), 403),
+            (7, discord.Permissions(manage_messages=True), 403),
+            (99, discord.Permissions.none(), 201),
+        ):
+            member.id = user_id
+            member.guild_permissions = permissions
+            with self.subTest(user_id=user_id, permissions=permissions.value):
+                response = self.room_request('create_tournament', payload={
+                    'guild_id': '1', 'title': 'Cup', 'game_id': 'chess', 'isAdmin': True,
+                })
+                self.assertEqual(response.status_code, expected)
+
     def test_global_members_include_web_dm_and_other_servers_once(self):
         with patch('cogs.games.time.monotonic', return_value=100):
             self.lobby('?guild_id=1')

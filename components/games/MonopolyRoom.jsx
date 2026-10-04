@@ -1,5 +1,7 @@
 'use client';
 
+import DiscordAvatar from '../DiscordAvatar';
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Building2, Clock, Crown, Dice5, Eye, LogOut, SlidersHorizontal, Swords, Users, Zap } from 'lucide-react';
 import board from '../../shared/monopoly-board.json';
@@ -73,7 +75,7 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
   const renderPlayer = p => {
     const index = seatedPlayers.findIndex(player => player.id === p.id);
     return <div key={p.id} className={`${styles.player} ${p.bankrupt ? styles.bankrupt : ''}`}>
-      {p.avatar ? <img className={styles.avatar} src={p.avatar} alt="" /> : <span className={`${styles.avatar} ${colors[index]}`}>{p.name?.slice(0, 1)}</span>}
+      {p.avatar ? <DiscordAvatar className={styles.avatar} src={p.avatar} alt="" /> : <span className={`${styles.avatar} ${colors[index]}`}>{p.name?.slice(0, 1)}</span>}
       <div className={styles.playerInfo}><strong title={p.name}>{p.name}{p.id === String(userId) ? ' (Bạn)' : ''} {p.id === snapshot?.hostId && <Crown size={13} className={styles.crown} />}</strong>
         <small>Người chơi {index + 1}{state && !waiting && (!players.some(player => player.id === p.id) || p.bankrupt) ? ' · Chờ ván sau' : state?.turn === p.id && !waiting ? ' · Đang chơi' : ''}</small>
         <b>{p.bankrupt ? 'Đã phá sản' : money(p.money)}</b>
