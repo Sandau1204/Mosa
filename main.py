@@ -106,6 +106,37 @@ async def sync(ctx, option: Optional[str] = None):
             "Content-Type": "application/json"
         }
         url = f"https://discord.com/api/v10/applications/{app_id}/commands"
+        existing_resp = requests.get(url, headers=headers)
+        if existing_resp.status_code != 200:
+            await msg.edit(
+                content=f"**Lỗi API khi đọc lệnh hiện tại:** "
+                        f"{existing_resp.status_code} - {existing_resp.text}"
+            )
+            return
+
+        # Discord rejects bulk updates that omit the application's Entry Point command.
+        entry_point_fields = {
+            "type",
+            "name",
+            "name_localizations",
+            "description",
+            "description_localizations",
+            "options",
+            "default_member_permissions",
+            "dm_permission",
+            "nsfw",
+            "integration_types",
+            "contexts",
+            "handler",
+        }
+        for existing_command in existing_resp.json():
+            if existing_command.get("type") == 4:
+                payload.append({
+                    key: value
+                    for key, value in existing_command.items()
+                    if key in entry_point_fields
+                })
+
         sync_resp = requests.put(url, headers=headers, json=payload)
         if sync_resp.status_code == 200:
             synced_count = len(sync_resp.json())
