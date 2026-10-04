@@ -43,7 +43,7 @@ export default function GameRoomShell({
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[auto_1fr_auto] gap-3 lg:gap-4 min-h-0 relative z-10 pb-6 lg:pb-0">
         <div className="order-1 lg:order-none lg:col-start-4 lg:col-span-6 lg:row-start-1 lg:row-span-3 flex flex-col items-center justify-center bg-slate-900 border-4 border-slate-950 rounded-2xl p-2 sm:p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative w-full lg:min-h-0">
-          <div className={`w-full h-full max-h-[75vh] flex items-center justify-center ${gameResult ? 'blur-sm' : ''}`}>{children}</div>
+          <div className={`w-full h-full max-h-[75vh] min-w-0 min-h-0 flex items-center justify-center ${room.gameType === 'chess' ? 'lg:[container-type:size]' : ''} ${gameResult ? 'blur-sm' : ''}`}>{children}</div>
           {drawOffer && isDrawOfferRecipient && (
             <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-slate-950/65 p-4 backdrop-blur-sm">
               <section role="dialog" aria-modal="true" aria-labelledby="draw-offer-title" className="w-full max-w-sm rounded-2xl border-4 border-slate-950 bg-slate-900 p-5 text-center shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">

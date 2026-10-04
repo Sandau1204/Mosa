@@ -8,3 +8,4 @@ requests
 flask
 nltk
 psutil
+chess==1.11.2

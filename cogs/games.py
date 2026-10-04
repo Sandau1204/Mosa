@@ -15,6 +15,7 @@ from flask import jsonify, request, session
 
 from webserver import app, load_games_auth_ticket, run_coro
 import monopoly
+import chess_game
 
 
 logger = logging.getLogger(__name__)
@@ -561,6 +562,7 @@ class Games(commands.Cog):
         room['seatRevision'] = room.get('seatRevision', 0) + 1
         room.pop('drawOffer', None)
         room.pop('gameResult', None)
+        room.pop('chess', None)
 
     def room_seats(self, room_id):
         user, error = self._user()
@@ -581,6 +583,18 @@ class Games(commands.Cog):
             if not any(p['id'] == user_id for p in room['players'] + spectators):
                 return jsonify({'error': 'Bạn chưa tham gia phòng.'}), 403
             self._ensure_board_seats(room)
+            if room['game_id'] == 'chess' and room['status'] == 'in-game' and not room.get('gameResult'):
+                # Older rooms had no server board. Start their shared state once.
+                if not room.get('chess'):
+                    room['chess'] = chess_game.start(room.get('is_timer_enabled', False))
+                    self._save_data()
+                board = chess_game.load_board(room['chess'])
+                terminal = chess_game.result(board) or chess_game.expire(room['chess'], board)
+                if terminal:
+                    room['gameResult'] = terminal
+                    room['drawOffer'] = None
+                    chess_game.stop_clock(room['chess'], board)
+                    self._save_data()
             if request.method == 'POST':
                 action = data.get('action')
                 player = next((p for p in room['players'] if p['id'] == user_id), None)
@@ -610,6 +624,7 @@ class Games(commands.Cog):
                         room['status'] = 'waiting'
                         room['drawOffer'] = None
                         room['gameResult'] = None
+                        room.pop('chess', None)
                         for seated_player in room['players']:
                             seated_player['isReady'] = False
                     elif room['status'] == 'in-game':
@@ -620,9 +635,33 @@ class Games(commands.Cog):
                         room['drawOffer'] = None
                         room['gameResult'] = None
                         room['matchRevision'] = room.get('matchRevision', 0) + 1
+                        if room['game_id'] == 'chess':
+                            room['chess'] = chess_game.start(room.get('is_timer_enabled', False))
+                elif action == 'move' and room['game_id'] == 'chess':
+                    if not player:
+                        return jsonify({'error': 'Khán giả không thể đi cờ.'}), 403
+                    if (room['status'] != 'in-game' or len(room['players']) != 2
+                            or not all(p['isReady'] for p in room['players']) or room.get('gameResult')):
+                        return jsonify({'error': 'Trận đấu không còn diễn ra.'}), 409
+                    state = room['chess']
+                    if (type(data.get('matchRevision')) is not int
+                            or data['matchRevision'] != room.get('matchRevision', 0)
+                            or type(data.get('boardRevision')) is not int
+                            or data['boardRevision'] != state['revision']):
+                        return jsonify({'error': 'Bàn cờ đã thay đổi. Hãy thử lại.'}), 409
+                    board = chess_game.load_board(state)
+                    try:
+                        room['gameResult'] = chess_game.move(state, board, player['side'], data)
+                    except ValueError as exc:
+                        return jsonify({'error': str(exc)}), 409
+                    if room.get('gameResult'):
+                        room['drawOffer'] = None
+                        chess_game.stop_clock(state, board)
                 elif action in ('draw_offer', 'draw_response', 'resign', 'finish'):
                     if not player:
                         return jsonify({'error': 'Khán giả không thể thực hiện thao tác trận đấu.'}), 403
+                    if action == 'finish' and room['game_id'] == 'chess':
+                        return jsonify({'error': 'Kết quả cờ vua do máy chủ xác định.'}), 409
                     if (room['status'] != 'in-game' or len(room['players']) != 2
                             or not all(p['isReady'] for p in room['players']) or room.get('gameResult')):
                         return jsonify({'error': 'Trận đấu không còn diễn ra.'}), 409
@@ -653,16 +692,25 @@ class Games(commands.Cog):
                         room['gameResult'] = {'winner': winner, 'reason': reason}
                 else:
                     return jsonify({'error': 'Thao tác không hợp lệ.'}), 400
+                if room.get('chess') and room.get('gameResult'):
+                    chess_game.stop_clock(room['chess'], chess_game.load_board(room['chess']))
                 room['updated_at'] = time.time()
                 self._save_data()
-            return jsonify({'players': room['players'], 'spectators': spectators,
+            match_started = (room['status'] == 'in-game' and len(room['players']) == 2
+                             and all(p['isReady'] for p in room['players']) and not room.get('gameResult'))
+            chess_snapshot = None
+            if room['game_id'] == 'chess':
+                state = room.get('chess') or chess_game.start()
+                chess_snapshot = chess_game.snapshot(state, chess_game.load_board(state), match_started)
+            response = jsonify({'players': room['players'], 'spectators': spectators,
                             'revision': room.get('seatRevision', 0), 'hostId': room['host']['id'],
                             'matchRevision': room.get('matchRevision', 0),
                             'drawOffer': room.get('drawOffer'),
                             'gameResult': room.get('gameResult'),
-                            'matchStarted': room['status'] == 'in-game' and len(room['players']) == 2
-                            and all(p['isReady'] for p in room['players'])
-                            and not room.get('gameResult')})
+                            'chess': chess_snapshot,
+                            'matchStarted': match_started})
+            response.headers['Cache-Control'] = 'no-store'
+            return response
 
     @staticmethod
     def _leave_monopoly_seat(state, user_id):
