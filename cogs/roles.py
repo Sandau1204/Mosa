@@ -177,30 +177,45 @@ class Roles(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         """Sự kiện kích hoạt khi ai đó thả icon vào tin nhắn"""
-        member = getattr(payload, "member", None)
-        if member is None or member.bot:
-            return
         data = self.load_data()
         guild_id = str(payload.guild_id)
         message_id = str(payload.message_id)
         emoji_str = str(payload.emoji)
-        # Kiểm tra xem tin nhắn này có phải là bảng Reaction Role không
-        if guild_id in data and "reaction_roles" in data[guild_id] and message_id in data[guild_id]["reaction_roles"]:
-            # Nếu icon người dùng thả đúng là icon cài đặt role
-            if emoji_str in data[guild_id]["reaction_roles"][message_id]:
-                role_id = data[guild_id]["reaction_roles"][message_id][emoji_str]
-                guild = self.bot.get_guild(payload.guild_id)
-                if guild is None:
-                    return
-                role = guild.get_role(role_id)
-                if role:
-                    try:
-                        await member.add_roles(role)
-                        print(f"✅ Đã cấp role {role.name} cho {member.name}")
-                    except discord.Forbidden:
-                        print(f"❌ Lỗi Forbidden: Bot không có quyền cấp role {role.name}. Hãy kiểm tra lại Role Hierarchy và quyền Manage Roles!")
-                    except Exception as e:
-                        print(f"❌ Lỗi không xác định khi cấp role: {e}")
+        message_roles = data.get(guild_id, {}).get("reaction_roles", {}).get(message_id)
+        if message_roles is None:
+            return
+
+        if emoji_str not in message_roles:
+            channel = self.bot.get_channel(payload.channel_id)
+            if channel is None:
+                print(f"❌ Không tìm thấy kênh {payload.channel_id} để dọn reaction không liên quan.")
+                return
+            try:
+                message = await channel.fetch_message(payload.message_id)
+                await message.clear_reaction(payload.emoji)
+            except discord.Forbidden:
+                print(f"❌ Bot không có quyền xóa reaction không liên quan khỏi tin nhắn {message_id}.")
+            except discord.NotFound:
+                print(f"❌ Không tìm thấy tin nhắn {message_id} để dọn reaction không liên quan.")
+            except discord.HTTPException as error:
+                print(f"❌ Không thể xóa reaction không liên quan khỏi tin nhắn {message_id}: {error}")
+            return
+
+        member = getattr(payload, "member", None)
+        if member is None or member.bot:
+            return
+        guild = self.bot.get_guild(payload.guild_id)
+        if guild is None:
+            return
+        role = guild.get_role(message_roles[emoji_str])
+        if role:
+            try:
+                await member.add_roles(role)
+                print(f"✅ Đã cấp role {role.name} cho {member.name}")
+            except discord.Forbidden:
+                print(f"❌ Lỗi Forbidden: Bot không có quyền cấp role {role.name}. Hãy kiểm tra lại Role Hierarchy và quyền Manage Roles!")
+            except Exception as e:
+                print(f"❌ Lỗi không xác định khi cấp role: {e}")
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
         """Sự kiện kích hoạt khi ai đó gỡ icon khỏi tin nhắn"""
