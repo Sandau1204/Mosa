@@ -296,121 +296,6 @@ const INITIAL_CHESS_BOARD = [
 
 
 function getPieceAt(board, x, y) { return board.find(p => p.x === x && p.y === y) || null; }
-function isInPalace(x, y, side) {
-  if (x < 3 || x > 5) return false;
-  return side === 'red' ? (y >= 7 && y <= 9) : (y >= 0 && y <= 2);
-}
-
-function getPseudoLegalMoves(board, piece) {
-  const moves = [];
-  const { x, y, side, type } = piece;
-
-  const addIfValid = (tx, ty) => {
-    if (tx < 0 || tx > 8 || ty < 0 || ty > 9) return false;
-    const dest = getPieceAt(board, tx, ty);
-    if (!dest) { moves.push({ x: tx, y: ty }); return true; }
-    if (dest.side !== side) { moves.push({ x: tx, y: ty }); }
-    return false;
-  };
-
-  if (type === 'K') {
-    const dirs = [[0,1], [0,-1], [1,0], [-1,0]];
-    for (const [dx, dy] of dirs) {
-      const tx = x + dx, ty = y + dy;
-      if (isInPalace(tx, ty, side)) addIfValid(tx, ty);
-    }
-  } else if (type === 'A') {
-    const dirs = [[1,1], [1,-1], [-1,1], [-1,-1]];
-    for (const [dx, dy] of dirs) {
-      const tx = x + dx, ty = y + dy;
-      if (isInPalace(tx, ty, side)) addIfValid(tx, ty);
-    }
-  } else if (type === 'E') {
-    const dirs = [[2,2], [2,-2], [-2,2], [-2,-2]];
-    for (const [dx, dy] of dirs) {
-      const tx = x + dx, ty = y + dy;
-      const eyeX = x + dx / 2, eyeY = y + dy / 2;
-      const inSide = side === 'red' ? (ty >= 5 && ty <= 9) : (ty >= 0 && ty <= 4);
-      if (inSide && !getPieceAt(board, eyeX, eyeY)) {
-        addIfValid(tx, ty);
-      }
-    }
-  } else if (type === 'H') {
-    const horseMoves = [ { step: [0, 1], dests: [[1, 2], [-1, 2]] }, { step: [0, -1], dests: [[1, -2], [-1, -2]] }, { step: [1, 0], dests: [[2, 1], [2, -1]] }, { step: [-1, 0], dests: [[-2, 1], [-2, -1]] } ];
-    for (const group of horseMoves) {
-      const legX = x + group.step[0], legY = y + group.step[1];
-      if (!getPieceAt(board, legX, legY)) {
-        for (const [dx, dy] of group.dests) { addIfValid(x + dx, y + dy); }
-      }
-    }
-  } else if (type === 'R') {
-    const dirs = [[0,1], [0,-1], [1,0], [-1,0]];
-    for (const [dx, dy] of dirs) {
-      let tx = x + dx, ty = y + dy;
-      while (tx >= 0 && tx <= 8 && ty >= 0 && ty <= 9) {
-        const dest = getPieceAt(board, tx, ty);
-        if (!dest) { moves.push({ x: tx, y: ty }); } else { if (dest.side !== side) moves.push({ x: tx, y: ty }); break; }
-        tx += dx; ty += dy;
-      }
-    }
-  } else if (type === 'C') {
-    const dirs = [[0,1], [0,-1], [1,0], [-1,0]];
-    for (const [dx, dy] of dirs) {
-      let tx = x + dx, ty = y + dy;
-      let screenFound = false;
-      while (tx >= 0 && tx <= 8 && ty >= 0 && ty <= 9) {
-        const dest = getPieceAt(board, tx, ty);
-        if (!screenFound) {
-          if (!dest) { moves.push({ x: tx, y: ty }); } else { screenFound = true; }
-        } else {
-          if (dest) { if (dest.side !== side) moves.push({ x: tx, y: ty }); break; }
-        }
-        tx += dx; ty += dy;
-      }
-    }
-  } else if (type === 'P') {
-    const forward = side === 'red' ? -1 : 1;
-    addIfValid(x, y + forward);
-    const crossedRiver = side === 'red' ? y <= 4 : y >= 5;
-    if (crossedRiver) { addIfValid(x - 1, y); addIfValid(x + 1, y); }
-  }
-  return moves;
-}
-
-function isKingInCheck(board, side) {
-  const king = board.find(p => p.type === 'K' && p.side === side);
-  if (!king) return false;
-  const enemySide = side === 'red' ? 'black' : 'red';
-  const enemyKing = board.find(p => p.type === 'K' && p.side === enemySide);
-  if (enemyKing && king.x === enemyKing.x) {
-    const minY = Math.min(king.y, enemyKing.y);
-    const maxY = Math.max(king.y, enemyKing.y);
-    let countBetween = 0;
-    for (let y = minY + 1; y < maxY; y++) {
-      if (getPieceAt(board, king.x, y)) countBetween++;
-    }
-    if (countBetween === 0) return true;
-  }
-  for (const p of board) {
-    if (p.side === enemySide) {
-      const pMoves = getPseudoLegalMoves(board, p);
-      if (pMoves.some(m => m.x === king.x && m.y === king.y)) { return true; }
-    }
-  }
-  return false;
-}
-
-function getLegalMovesLocal(board, x, y, activeSide) {
-  const piece = getPieceAt(board, x, y);
-  if (!piece || piece.side !== activeSide) return [];
-  const pseudoMoves = getPseudoLegalMoves(board, piece);
-  const legalMoves = [];
-  for (const m of pseudoMoves) {
-    const nextBoard = board.filter(p => !(p.x === m.x && p.y === m.y)).map(p => (p.x === x && p.y === y ? { ...p, x: m.x, y: m.y } : p));
-    if (!isKingInCheck(nextBoard, activeSide)) { legalMoves.push(m); }
-  }
-  return legalMoves;
-}
 
 const GameThumbnailContent = ({ gameId, defaultIcon }) => {
   switch (gameId) {
@@ -646,19 +531,19 @@ export default function Games() {
       setRedTurnTime(900);
       setBlackTurnTime(900);
     }
-    if (inGameRoom?.gameType === 'chess' || serverMatchStarted.current !== snapshot.matchStarted) {
+    if (['chess', 'xiangqi'].includes(inGameRoom?.gameType) || serverMatchStarted.current !== snapshot.matchStarted) {
       setMatchStarted(snapshot.matchStarted);
     }
     serverMatchStarted.current = snapshot.matchStarted;
-    if (inGameRoom?.gameType === 'chess' && snapshot.chess) {
-      const state = snapshot.chess;
+    if (snapshot[inGameRoom?.gameType]) {
+      const state = snapshot[inGameRoom.gameType];
       const key = `${snapshot.revision}:${snapshot.matchRevision}:${state.revision}:${snapshot.matchStarted}`;
       chessRevision.current = state.revision;
       if (chessSnapshotKey.current !== key) {
         chessSnapshotKey.current = key;
         setBoardState(state.board);
         setChessLegalMoves(state.legalMoves);
-        setCurrentTurn(state.turn === 'white' ? 'r' : 'b');
+        setCurrentTurn(state.turn === 'black' ? 'b' : 'r');
         setCheckSide(state.checkSide);
         setMovesLog(state.movesLog);
         setSelectedPiece(null);
@@ -870,7 +755,7 @@ export default function Games() {
 
   useEffect(() => {
     if (!inGameRoom || !inGameRoom.isTimerEnabled || !matchStarted) return;
-    if (inGameRoom.gameType === 'chess') return; // Chess clocks and timeouts come from the server.
+    if (['chess', 'xiangqi'].includes(inGameRoom.gameType)) return; // Server clocks.
     const timer = setInterval(() => {
       if (currentTurn === 'r') {
         setRedTurnTime(prev => { if (prev <= 1) { triggerToast("Phe Trắng/Đỏ hết giờ! Đen thắng!"); setMatchStarted(false); return 0; } return prev - 1; });
@@ -1080,15 +965,14 @@ export default function Games() {
     if ((currentTurn === 'r' ? redPlayer : blackPlayer)?.id !== myPlayerId) return;
     const piece = getPieceAt(boardState, x, y);
     if (piece && piece.side === activeSide) {
-      if (inGameRoom.gameType === 'chess') {
+      if (['chess', 'xiangqi'].includes(inGameRoom.gameType)) {
         const moves = chessLegalMoves.filter(move => move.fromX === x && move.fromY === y);
         if (!moves.length) return;
         setSelectedPiece({ x, y });
         setLegalMoves(moves);
         return;
       }
-      setSelectedPiece({ x, y });
-      setLegalMoves(getLegalMovesLocal(boardState, x, y, activeSide));
+
     }
   };
 
@@ -1097,41 +981,11 @@ export default function Games() {
     if (!matchStarted || (currentTurn === 'r' ? redPlayer : blackPlayer)?.id !== myPlayerId) return;
     const activeSide = currentTurn === 'r' ? (inGameRoom.gameType === 'chess' ? 'white' : 'red') : 'black';
     if (!legalMoves.some(m => m.x === toX && m.y === toY)) return;
-    if (inGameRoom.gameType === 'chess') {
-      const move = { fromX, fromY, toX, toY, boardRevision: chessRevision.current, matchRevision: matchRevision.current };
-      const promotions = legalMoves.filter(m => m.x === toX && m.y === toY && m.promotion).map(m => m.promotion);
-      if (promotions.length) setPendingPromotion({ ...move, options: promotions });
-      else submitMatchAction('move', move);
-      return;
-    }
-
-    const piece = getPieceAt(boardState, fromX, fromY);
-    const targetPiece = getPieceAt(boardState, toX, toY);
-    let newBoard = boardState.filter(p => !(p.x === toX && p.y === toY));
-    newBoard = newBoard.map(p => (p.x === fromX && p.y === fromY) ? { ...p, x: toX, y: toY } : p);
-
-    setBoardState(newBoard); setSelectedPiece(null); setLegalMoves([]);
-    if (inGameRoom?.isTimerEnabled) {
-      if (currentTurn === 'r') setRedTurnTime(prev => prev + 5);
-      else setBlackTurnTime(prev => prev + 5);
-    }
-
-    let notation = '';
-    notation = `${PIECE_LABELS[piece.type][piece.side]} (${fromX+1},${fromY+1}) -> (${toX+1},${toY+1})`;
-
-    if (currentTurn === 'r') {
-      setMovesLog(prev => [...prev, { id: prev.length + 1, red: notation, black: '...' }]);
-      setCurrentTurn('b');
-    } else {
-      setMovesLog(prev => {
-        const updated = [...prev];
-        if (updated.length > 0) updated[updated.length - 1].black = notation;
-        return updated;
-      });
-      setCurrentTurn('r');
-    }
-
-    if (targetPiece?.type === 'K' || targetPiece?.type === 'k') submitMatchAction('finish');
+    if (selectedPiece?.x !== fromX || selectedPiece?.y !== fromY) return;
+    const move = { fromX, fromY, toX, toY, boardRevision: chessRevision.current, matchRevision: matchRevision.current };
+    const promotions = legalMoves.filter(m => m.x === toX && m.y === toY && m.promotion).map(m => m.promotion);
+    if (promotions.length) setPendingPromotion({ ...move, options: promotions });
+    else submitMatchAction('move', move);
   };
 
   const renderPlayerProfile = (isTopSeat) => {
@@ -1350,8 +1204,10 @@ export default function Games() {
                   : gameResult.winner === 'red'
                     ? inGameRoom.gameType === 'chess' ? t.whiteWon : t.redWon
                     : t.blackWon}
-            resultDetail={inGameRoom.gameType === 'chess' && gameResult?.reason === 'checkmate'
-                ? (lang === 'VI' ? 'Chiếu hết — không còn nước đi hợp lệ để cứu vua.' : 'Checkmate — no legal move can save the king.')
+            resultDetail={gameResult?.reason === 'checkmate'
+                ? (lang === 'VI' ? 'Chiếu bí — không còn nước đi hợp lệ để cứu tướng/vua.' : 'Checkmate — no legal move can save the king.')
+                : inGameRoom.gameType === 'xiangqi' && gameResult?.reason === 'stalemate'
+                ? (lang === 'VI' ? 'Hết nước đi hợp lệ — bên đến lượt bị xử thua.' : 'No legal moves — the side to move loses.')
                 : inGameRoom.gameType === 'chess' && gameResult?.reason === 'stalemate'
                 ? (lang === 'VI' ? 'Hòa: hết nước đi hợp lệ nhưng vua không bị chiếu.' : 'Stalemate: no legal moves, but the king is not in check.')
                 : gameResult?.winner == null
@@ -1390,7 +1246,9 @@ export default function Games() {
                 pieceLabels={PIECE_LABELS}
                 board={boardState}
                 isFlipped={isBoardFlipped}
-                isPlaying={true}
+                isPlaying={matchStarted && seatsLoaded && !seatBusy}
+                selectablePieces={chessLegalMoves.map(move => ({ x: move.fromX, y: move.fromY }))}
+                lang={lang}
                 activeSide={currentTurn === 'r' ? 'red' : 'black'}
                 playerSide={redPlayer?.id === myPlayerId ? 'red' : blackPlayer?.id === myPlayerId ? 'black' : null}
                 selectedPiece={selectedPiece}

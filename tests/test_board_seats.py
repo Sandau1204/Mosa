@@ -119,6 +119,10 @@ class BoardSeatsTests(unittest.TestCase):
                 self.start_match()
                 self.cog._user.return_value = ({'id': user_id}, None)
                 response = self.call(action)
+                if action == 'finish':
+                    self.assertEqual(response.status_code, 409)
+                    self.assertIsNone(self.call().json['gameResult'])
+                    continue
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json['gameResult'], {'winner': winner, 'reason': reason})
                 self.assertFalse(response.json['matchStarted'])
@@ -443,3 +447,41 @@ class ChessMatchTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class XiangqiRoomTests(unittest.TestCase):
+    call = BoardSeatsTests.call
+    start_match = BoardSeatsTests.start_match
+
+    def setUp(self):
+        BoardSeatsTests.setUp(self)
+        self.room['game_id'] = 'xiangqi'
+
+    def test_shared_moves_stale_requests_and_spectators(self):
+        self.start_match()
+        self.cog._user.return_value = ({'id': '1'}, None)
+        data = dict(fromX=0, fromY=6, toX=0, toY=5, boardRevision=0, matchRevision=1)
+        response = self.call('move', **data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['xiangqi']['turn'], 'black')
+        self.assertEqual(self.call('move', **data).status_code, 409)
+        self.cog._user.return_value = ({'id': '3'}, None)
+        self.assertEqual(self.call().json['xiangqi']['board'], response.json['xiangqi']['board'])
+        self.assertEqual(self.call('move', **data).status_code, 403)
+
+    def test_mating_move_ends_game_for_everyone(self):
+        import xiangqi_game
+        self.start_match()
+        state = self.room['xiangqi'] = xiangqi_game.start()
+        state['turn'] = 'black'
+        state['board'] = [dict(type=t, side=side, x=x, y=y) for t,side,x,y in [
+            ('K','red',4,9), ('K','black',3,0), ('R','black',3,5),
+            ('R','black',5,5), ('R','black',0,8), ('R','black',1,7)]]
+        response = self.call('move', fromX=1, fromY=7, toX=1, toY=9, boardRevision=0, matchRevision=1)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['gameResult'], dict(winner='black', reason='checkmate'))
+        self.assertFalse(response.json['matchStarted'])
+        self.assertEqual(response.json['xiangqi']['legalMoves'], [])
+        self.cog._user.return_value = ({'id': '1'}, None)
+        self.assertEqual(self.call().json['gameResult'], response.json['gameResult'])
+        self.assertEqual(self.call('move', fromX=4, fromY=9, toX=4, toY=8, boardRevision=1, matchRevision=1).status_code, 409)
