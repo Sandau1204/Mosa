@@ -6,3 +6,7 @@ data/
 .next/
 out/
 node_modules
+.venv/
+venv/
+*.py[cod]
+.pytest_cache/

@@ -6,7 +6,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 import chess
-import chess_game
+from cogs.engines import chess_game
 
 from cogs.games import Games
 from webserver import app
@@ -431,17 +431,17 @@ class ChessMatchTests(unittest.TestCase):
         self.assertEqual(len(self.call().json['chess']['board']), 32)
 
     def test_server_clock_increment_timeout_and_finished_clock_freeze(self):
-        with patch('chess_game.time.time', return_value=1000):
+        with patch('cogs.engines.chess_game.time.time', return_value=1000):
             self.start_match()
-        with patch('chess_game.time.time', return_value=1010):
+        with patch('cogs.engines.chess_game.time.time', return_value=1010):
             response = self.move('e2e4')
             self.assertEqual(response.json['chess']['remaining']['white'], 895)
-        with patch('chess_game.time.time', return_value=1911):
+        with patch('cogs.engines.chess_game.time.time', return_value=1911):
             response = self.call()
             self.assertEqual(response.json['gameResult'], {'winner': 'red', 'reason': 'timeout'})
             self.assertEqual(response.json['chess']['legalMoves'], [])
             self.assertEqual(self.move('e7e5').status_code, 409)
-        with patch('chess_game.time.time', return_value=2000):
+        with patch('cogs.engines.chess_game.time.time', return_value=2000):
             self.assertEqual(self.call().json['chess']['remaining'], response.json['chess']['remaining'])
 
 
@@ -470,7 +470,7 @@ class XiangqiRoomTests(unittest.TestCase):
         self.assertEqual(self.call('move', **data).status_code, 403)
 
     def test_mating_move_ends_game_for_everyone(self):
-        import xiangqi_game
+        from cogs.engines import xiangqi_game
         self.start_match()
         state = self.room['xiangqi'] = xiangqi_game.start()
         state['turn'] = 'black'

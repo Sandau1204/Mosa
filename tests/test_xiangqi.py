@@ -1,5 +1,5 @@
 import unittest
-import xiangqi_game as game
+from cogs.engines import xiangqi_game as game
 
 
 def piece(t, side, x, y):

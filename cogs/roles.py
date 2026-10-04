@@ -4,7 +4,7 @@ import json
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
-from welcome_settings import load_welcome_settings
+from cogs.services.welcome_settings import load_welcome_settings
 
 # Đường dẫn lưu trữ dữ liệu Role
 load_dotenv()  # Load biến môi trường từ file .env

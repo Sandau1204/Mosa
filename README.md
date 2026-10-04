@@ -1,3 +1,11 @@
+# Mosa
+
+Bot Discord và giao diện quản trị Next.js.
+
+Xem [cấu trúc dự án và hướng dẫn chạy](docs/architecture.md).
+
+---
+
 📜 Mosa – Terms of Service
 Last Updated: [Insert Date]
 1. Acceptance of Terms

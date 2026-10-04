@@ -5,11 +5,11 @@ import threading
 import requests
 import sys
 import logging
+from pathlib import Path
 from typing import Optional
 from discord.ext import commands
 from dotenv import load_dotenv
 from flask import ctx
-from webserver import run_web
 from webserver import run_web, add_log
 from cogs.games import register_games_routes
 
@@ -60,9 +60,11 @@ class MyBot(commands.Bot):
         super().__init__(command_prefix='!', intents=intents, help_command=None)
         self.MY_GUILD = discord.Object(id=908946644819669003)
     async def setup_hook(self):
-        for filename in os.listdir('./cogs'):
-            if filename.endswith('.py'):
-                await self.load_extension(f'cogs.{filename[:-3]}')
+        for path in sorted((Path(__file__).resolve().parent / 'cogs').glob('*.py')):
+            filename = path.name
+            if not filename.startswith('_'):
+                module_name = f'cogs.{filename[:-3]}'
+                await self.load_extension(module_name)
                 print(f'✅ Đã nạp module: {filename}')
     async def on_ready(self):
         user = self.user

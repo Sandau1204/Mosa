@@ -14,9 +14,9 @@ from discord.ext import commands
 from flask import jsonify, request, session
 
 from webserver import app, load_games_auth_ticket, run_coro
-import monopoly
-import chess_game
-import xiangqi_game
+from cogs.engines import monopoly
+from cogs.engines import chess_game
+from cogs.engines import xiangqi_game
 
 
 logger = logging.getLogger(__name__)

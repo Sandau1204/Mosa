@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Building2, Clock, Crown, Dice5, Eye, LogOut, SlidersHorizontal, Swords, Users, Zap } from 'lucide-react';
-import board from './monopoly-board.json';
+import board from '../../shared/monopoly-board.json';
 import styles from './MonopolyRoom.module.css';
 
 const colors = ['bg-red-500', 'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500'];

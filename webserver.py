@@ -11,7 +11,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 import discord
 from typing import Optional
 import datetime
-from welcome_settings import load_welcome_settings, save_welcome_settings
+from cogs.services.welcome_settings import load_welcome_settings, save_welcome_settings
 
 load_dotenv()
 

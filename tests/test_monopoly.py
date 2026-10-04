@@ -3,7 +3,7 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
-import monopoly
+from cogs.engines import monopoly
 from cogs.games import Games
 from webserver import app
 
@@ -22,7 +22,7 @@ class MonopolyRulesTests(unittest.TestCase):
             monopoly.act(self.state, '2', 'roll')
         self.assertEqual(before, self.state)
 
-    @patch('monopoly.secrets.randbelow', side_effect=[0, 1])
+    @patch('cogs.engines.monopoly.secrets.randbelow', side_effect=[0, 1])
     def test_buy_and_advance(self, _):
         monopoly.act(self.state, '1', 'roll')
         self.assertEqual(self.state['players'][0]['position'], 16)
@@ -32,7 +32,7 @@ class MonopolyRulesTests(unittest.TestCase):
         self.assertEqual(self.state['players'][0]['money'], 188)
         self.assertEqual(self.state['turn'], '2')
 
-    @patch('monopoly.secrets.randbelow', side_effect=[0, 1])
+    @patch('cogs.engines.monopoly.secrets.randbelow', side_effect=[0, 1])
     def test_rent_bankruptcy_and_winner(self, _):
         self.state['owners']['16'] = '2'
         self.state['players'][0]['money'] = 1
@@ -41,7 +41,7 @@ class MonopolyRulesTests(unittest.TestCase):
         self.assertEqual(self.state['players'][1]['money'], 201)
         self.assertEqual(self.state['winner'], '2')
 
-    @patch('monopoly.secrets.randbelow', side_effect=[0, 0])
+    @patch('cogs.engines.monopoly.secrets.randbelow', side_effect=[0, 0])
     def test_pass_start_uses_visual_track(self, _):
         self.state['players'][0]['position'] = 12
         monopoly.act(self.state, '1', 'roll')
