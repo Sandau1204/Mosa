@@ -84,6 +84,10 @@ def _create_invite_route():
     return _dispatch_games_api("create_invite")
 
 
+def _tournament_visibility_route(guild_id):
+    return _dispatch_games_api('set_tournament_visibility', guild_id)
+
+
 def register_games_routes():
     global _routes_registered
     if _routes_registered:
@@ -98,6 +102,7 @@ def register_games_routes():
         ("/api/games/rooms/<room_id>/seats", "games_seats", _seats_route, ["GET", "POST"]),
         ("/api/games/tournaments", "games_create_tournament", _create_tournament_route, ["POST"]),
         ("/api/games/tournaments/<guild_id>", "games_delete_tournament", _delete_tournament_route, ["DELETE"]),
+        ("/api/games/tournaments/<guild_id>/visibility", "games_tournament_visibility", _tournament_visibility_route, ["PUT"]),
         ("/api/games/invite", "games_create_invite", _create_invite_route, ["POST"]),
     )
     for rule, endpoint, view, methods in routes:
@@ -433,6 +438,9 @@ class Games(commands.Cog):
             }
             tournament = global_tournament if request.args.get("context") == "global" else self._data["tournaments"].get(guild_id)
             server_tournament = None if request.args.get('context') == 'global' else self._data['tournaments'].get(guild_id)
+            global_visible = self._data.get('tournament_visibility', {}).get(guild_id, True)
+            if request.args.get('context') != 'global' and not global_visible:
+                global_tournament = None
             leaderboard = self._data["leaderboards"].get(guild_id, [])
             active_player_ids = {
                 player["id"]
@@ -485,6 +493,7 @@ class Games(commands.Cog):
             "tournament": tournament,
             "globalTournament": global_tournament,
             "serverTournament": server_tournament,
+            "globalTournamentVisible": global_visible,
             "leaderboard": leaderboard,
             "ping": round(self.bot.latency * 1000) if math.isfinite(self.bot.latency) else None,
         })
@@ -927,12 +936,31 @@ class Games(commands.Cog):
                 return error
             if guild is None or member is None:
                 return jsonify({"error": "Không thể xác minh thành viên server."}), 503
-            if member.id != guild.owner_id:
-                return jsonify({"error": "Chỉ chủ server mới có thể hủy giải đấu."}), 403
+            if member.id != guild.owner_id and not self._is_guild_admin(member):
+                return jsonify({"error": "Chỉ chủ server hoặc Admin mới có thể hủy giải đấu server."}), 403
         with self._lock:
             self._data["tournaments"].pop(str(guild_id), None)
             self._save_data()
         return jsonify({"success": True})
+
+    def set_tournament_visibility(self, guild_id):
+        user, error = self._user()
+        if user is None:
+            return error
+        guild, member, error = self._get_guild_member(guild_id, user['id'])
+        if error:
+            return error
+        if guild is None or member is None:
+            return jsonify({'error': 'Không thể xác minh thành viên server.'}), 503
+        if member.id != guild.owner_id and not self._is_guild_admin(member):
+            return jsonify({'error': 'Chỉ chủ server hoặc Admin mới có thể đổi hiển thị giải Global.'}), 403
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or type(data.get('visible')) is not bool:
+            return jsonify({'error': 'Cấu hình hiển thị không hợp lệ.'}), 400
+        with self._lock:
+            self._data.setdefault('tournament_visibility', {})[str(guild.id)] = data['visible']
+            self._save_data()
+        return jsonify({'globalTournamentVisible': data['visible']})
 
     def create_invite(self):
         user, error = self._user()

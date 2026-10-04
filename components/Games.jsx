@@ -6,7 +6,7 @@ import tournamentStyles from './TournamentCarousel.module.css';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Gamepad2, Trophy, Users, Bot, Sparkles, Volume2, VolumeX, Globe, HelpCircle,
-  Search, Swords, Play, PlusCircle, X, Check, ChevronRight, Crown, MessageSquare,
+  Search, Swords, Play, PlusCircle, X, Check, ChevronLeft, ChevronRight, Crown, MessageSquare,
   ShieldAlert, Flame, Zap, Radio, Signal, UserCheck, RotateCcw,
   Sliders, Share2, Menu, ChevronDown, Lock, Unlock, KeyRound, DoorOpen, LogOut,
   ArrowLeftRight, UserMinus, UserPlus, Send, Settings
@@ -480,8 +480,14 @@ export default function Games() {
     ...(isServerActivity && lobbyData.serverTournament ? [{ ...lobbyData.serverTournament, scope: selectedGuildId }] : [])
   ];
   const [tournamentIndex, setTournamentIndex] = useState(0);
+  const [tournamentManuallySelected, setTournamentManuallySelected] = useState(false);
+  const changeTournament = direction => {
+    setTournamentManuallySelected(true);
+    setTournamentIndex(index => (index + direction + tournaments.length) % tournaments.length);
+  };
   const activeTournament = tournaments[tournamentIndex % Math.max(tournaments.length, 1)];
-  const canDeleteTournament = activeTournament?.scope === 'global' ? discordUser?.isBotOwner === true : isServerOwner;
+  const canDeleteTournament = activeTournament?.scope === 'global' ? discordUser?.isBotOwner === true : (isServerOwner || isServerAdmin);
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
   const ownTournament = isServerActivity ? lobbyData.serverTournament : lobbyData.globalTournament;
   const [isCreateTournamentModalOpen, setIsCreateTournamentModalOpen] = useState(false);
 
@@ -970,6 +976,21 @@ export default function Games() {
     }
   };
 
+  const toggleGlobalTournament = async () => {
+    setVisibilityBusy(true);
+    try {
+      await gamesApiRequest(`${apiBase}/tournaments/${encodeURIComponent(selectedGuildId)}/visibility`, {
+        method: 'PUT',
+        body: JSON.stringify({ visible: lobbyData.globalTournamentVisible === false })
+      });
+      await refreshLobbyAfterAction();
+    } catch (error) {
+      triggerToast(error instanceof Error ? error.message : t.lobbyLoadError);
+    } finally {
+      setVisibilityBusy(false);
+    }
+  };
+
   const handleCreateInvite = async () => {
     if (invitePending.current) return;
     invitePending.current = true;
@@ -1347,10 +1368,37 @@ export default function Games() {
                 {t.noGuilds}
               </div>
             )}
+            {isServerActivity && (isServerOwner || isServerAdmin) && (
+              <div className="flex justify-end shrink-0">
+                <button disabled={visibilityBusy} onClick={toggleGlobalTournament}
+                  aria-pressed={lobbyData.globalTournamentVisible !== false}
+                  className="rounded-xl border-2 border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">
+                  {lobbyData.globalTournamentVisible === false
+                    ? (lang === 'VI' ? 'Hiện giải Global trong server' : 'Show Global tournament in server')
+                    : (lang === 'VI' ? 'Ẩn giải Global trong server' : 'Hide Global tournament in server')}
+                </button>
+              </div>
+            )}
             {activeTournament && (
               <div className={tournamentStyles.viewport}>
+              {tournaments.length > 1 && (
+                <div className="mb-2 flex items-center justify-end gap-2">
+                  <button type="button" onClick={() => changeTournament(-1)}
+                    aria-label={lang === 'VI' ? 'Giải đấu trước' : 'Previous tournament'}
+                    className="rounded-lg border-2 border-slate-700 bg-slate-800 p-2 text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-yellow-400">
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <span className="text-xs font-bold text-slate-300">{tournamentIndex % tournaments.length + 1}/{tournaments.length}</span>
+                  <button type="button" onClick={() => changeTournament(1)}
+                    aria-label={lang === 'VI' ? 'Giải đấu tiếp theo' : 'Next tournament'}
+                    className="rounded-lg border-2 border-slate-700 bg-slate-800 p-2 text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-yellow-400">
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
               <div key={`${activeTournament.scope}:${activeTournament.id}`} className={tournaments.length > 1 ? tournamentStyles.slide : undefined}
-                onAnimationEnd={event => { if (event.target === event.currentTarget) setTournamentIndex(index => index + 1); }}>
+                style={tournamentManuallySelected ? { animationDelay: '-0.48s' } : undefined}
+                onAnimationEnd={event => { if (event.target === event.currentTarget) { setTournamentManuallySelected(false); setTournamentIndex(index => index + 1); } }}>
               <div className="relative rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-orange-500 border-4 border-slate-950 p-4 sm:p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-hidden shrink-0">
                 <div className="absolute -right-6 -bottom-6 opacity-20 text-slate-950 text-9xl font-black italic pointer-events-none">VS</div>
                 <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

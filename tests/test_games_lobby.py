@@ -51,6 +51,39 @@ class GamesLobbyTests(unittest.TestCase):
         self.assertEqual(response.json['guild']['id'], '2')
         self.assertEqual(response.json['currentVoiceChannel']['id'], '30')
 
+    def test_server_admin_can_delete_server_but_not_global_tournament(self):
+        guild, member = self.guilds[1]
+        member.id = 7
+        member.guild_permissions = discord.Permissions(manage_guild=True)
+        self.cog._get_guild_member = Mock(return_value=(guild, member, None))
+        self.cog._data['tournaments'] = {'2': {'title': 'Server'}, 'global': {'title': 'Global'}}
+        self.assertEqual(self.room_request('delete_tournament', '2').status_code, 200)
+        with patch.dict('os.environ', {'OWNER_ID': '99'}):
+            self.assertEqual(self.room_request('delete_tournament', 'global').status_code, 403)
+        self.assertIn('global', self.cog._data['tournaments'])
+
+    def test_visibility_is_shared_with_members_scoped_to_server_and_reversible(self):
+        guild, member = self.guilds[1]
+        member.id = 7
+        member.guild_permissions = discord.Permissions(manage_guild=True)
+        self.cog._get_guild_member = Mock(return_value=(guild, member, None))
+        self.cog._data['tournaments']['global'] = {'title': 'Global'}
+        for visible in (False, True):
+            response = self.room_request('set_tournament_visibility', '2', {'visible': visible})
+            self.assertEqual(response.status_code, 200)
+            self.cog._user.return_value = ({'id': '8'}, None)
+            lobby = self.lobby('?guild_id=2').json
+            self.assertEqual(lobby['globalTournamentVisible'], visible)
+            self.assertEqual(lobby['globalTournament'] is not None, visible)
+            self.assertIsNotNone(self.lobby('?guild_id=1').json['globalTournament'])
+            self.assertIsNotNone(self.lobby('?context=global').json['globalTournament'])
+        self.cog._save_data.assert_called()
+        member.guild_permissions = discord.Permissions.none()
+        self.assertEqual(self.room_request('set_tournament_visibility', '2', {'visible': False}).status_code, 403)
+        member.id = guild.owner_id
+        self.assertEqual(self.room_request('set_tournament_visibility', '2', {'visible': False}).status_code, 200)
+        self.assertEqual(self.room_request('set_tournament_visibility', '2', {'visible': 'false'}).status_code, 400)
+
     def test_global_tournament_requires_bot_owner_and_is_separate_from_server(self):
         self.cog._get_guild_member = Mock(side_effect=AssertionError('Global needs no guild'))
         self.cog._data['tournaments']['2'] = {'title': 'Server Cup'}
