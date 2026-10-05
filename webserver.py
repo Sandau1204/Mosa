@@ -6,7 +6,7 @@ import secrets
 import uuid
 from urllib.parse import urlencode
 from functools import wraps
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, send_from_directory
+from flask import Flask, Response, render_template, request, jsonify, session, redirect, url_for, send_from_directory
 from dotenv import load_dotenv
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 import discord
@@ -55,6 +55,41 @@ def discord_avatar_url(user_data):
     except (TypeError, ValueError):
         default_avatar = 0
     return f"https://cdn.discordapp.com/embed/avatars/{default_avatar}.png"
+
+
+@app.route('/api/games/avatars/<path:avatar_path>')
+@app.route('/.proxy/api/games/avatars/<path:avatar_path>')
+def games_avatar(avatar_path):
+    # Accept only Discord avatar paths, never arbitrary URLs or redirects.
+    if not re.fullmatch(
+        r'(?:avatars/[0-9]+/(?:a_)?[a-fA-F0-9]+\.(?:png|gif|webp)'
+        r'|guilds/[0-9]+/users/[0-9]+/avatars/(?:a_)?[a-fA-F0-9]+\.(?:png|gif|webp)'
+        r'|embed/avatars/[0-5]\.png)', avatar_path
+    ):
+        return jsonify({'error': 'Invalid avatar path.'}), 400
+    import requests
+    try:
+        with requests.get(f'https://cdn.discordapp.com/{avatar_path}', params={'size': 256},
+                          timeout=(5, 10), allow_redirects=False, stream=True) as upstream:
+            if upstream.status_code != 200:
+                return jsonify({'error': 'Discord avatar unavailable.'}), 502
+            content_type = upstream.headers.get('Content-Type', '').split(';')[0].strip().lower()
+            if content_type not in ('image/png', 'image/gif', 'image/webp'):
+                return jsonify({'error': 'Invalid avatar response.'}), 502
+            chunks = []
+            size = 0
+            for chunk in upstream.iter_content(65536):
+                size += len(chunk)
+                if size > 2 * 1024 * 1024:
+                    return jsonify({'error': 'Avatar exceeds size limit.'}), 502
+                chunks.append(chunk)
+            return Response(b''.join(chunks), content_type=content_type, headers={
+                'Cache-Control': 'public, max-age=3600',
+                'X-Content-Type-Options': 'nosniff',
+            })
+    except requests.RequestException:
+        app.logger.warning('Discord avatar download failed for %s.', avatar_path)
+        return jsonify({'error': 'Avatar temporarily unavailable.'}), 502
 
 
 def is_bot_owner(user_id):
