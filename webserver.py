@@ -384,6 +384,10 @@ def games_auth_session():
 @app.route('/logout')
 def logout():
     session.pop('user', None)
+    if request.args.get('next') == '/games':
+        session.pop('oauth_state', None)
+        session.pop('next_url', None)
+        return redirect(url_for('games'))
     # Đăng xuất xong thì chuyển hướng về /panel (nơi sẽ hiện lại nút Login)
     return redirect(url_for('panel'))
 @app.route('/api/user')

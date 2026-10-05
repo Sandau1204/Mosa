@@ -1252,6 +1252,13 @@ export default function Games() {
                 </div>
               </div>
             </div>
+            {!isDiscordEmbedded && (
+              <a href="/logout?next=%2Fgames" title={lang === 'VI' ? 'Đăng xuất' : 'Sign out'}
+                aria-label={lang === 'VI' ? 'Đăng xuất' : 'Sign out'}
+                className="flex items-center gap-1.5 p-2 bg-rose-950 hover:bg-rose-900 text-rose-200 rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-xs font-bold">
+                <LogOut className="w-4 h-4" /><span className="hidden sm:inline">{lang === 'VI' ? 'Đăng xuất' : 'Sign out'}</span>
+              </a>
+            )}
             <button onClick={() => setIsSettingsModalOpen(true)} className="p-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all active:translate-y-0.5" title={t.settingsTitle}><Sliders className="w-4 h-4" /></button>
             <button onClick={() => setIsRulesModalOpen(true)} className="p-2 bg-yellow-400 hover:bg-yellow-300 text-slate-950 rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all"><HelpCircle className="w-4 h-4" /></button>
             <button onClick={() => setIsSidebarOpenMobile(!isSidebarOpenMobile)} className="lg:hidden p-2 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"><Menu className="w-4 h-4" /></button>

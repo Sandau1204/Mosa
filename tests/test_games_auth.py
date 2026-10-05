@@ -20,6 +20,18 @@ class GamesAuthTests(unittest.TestCase):
         self.assertEqual(query['redirect_uri'], ['https://mosa.test/callback'])
         return query['state'][0]
 
+    def test_games_logout_clears_session_and_returns_to_games(self):
+        with self.client.session_transaction() as session:
+            session['user'] = {'id': '7', 'username': 'Player'}
+            session['oauth_state'] = 'old-state'
+        response = self.client.get('/logout?next=%2Fgames')
+        self.assertEqual(response.location, '/games')
+        self.assertEqual(self.client.get('/api/games/auth/session').status_code, 401)
+        with self.client.session_transaction() as session:
+            self.assertNotIn('oauth_state', session)
+        self.assertEqual(self.client.get('/logout').location, '/panel')
+        self.assertEqual(self.client.get('/logout?next=https://example.com').location, '/panel')
+
     def test_web_owner_badge_uses_configured_id_not_session_flag(self):
         with self.client.session_transaction() as session:
             session['user'] = {'id': '7', 'username': 'Player', 'isBotOwner': True}
