@@ -1,4 +1,5 @@
 import hashlib
+import copy
 import hmac
 import json
 import logging
@@ -18,6 +19,7 @@ from webserver import app, is_bot_owner, load_games_auth_ticket, run_coro
 from cogs.engines import monopoly
 from cogs.engines import chess_game
 from cogs.engines import xiangqi_game
+from cogs.engines import board_ai
 
 
 logger = logging.getLogger(__name__)
@@ -151,7 +153,7 @@ class Games(commands.Cog):
             changed = True
             room['players'] = [p for p in room['players'] if p['id'] not in departed_ids]
             room['spectators'] = [p for p in room.get('spectators', []) if p['id'] not in departed_ids]
-            remaining = room['players'] + room['spectators']
+            remaining = [p for p in room['players'] + room['spectators'] if not p.get('isBot')]
             if not remaining:
                 del self._data['rooms'][room_id]
                 continue
@@ -525,6 +527,8 @@ class Games(commands.Cog):
             return jsonify({"error": "Chế độ chơi không hợp lệ."}), 400
         if game_id == "monopoly" and mode != "pvp":
             return jsonify({"error": "Cờ tỷ phú hỗ trợ 2–6 người chơi PvP."}), 400
+        if mode == 'pve' and game_id not in ('chess', 'xiangqi'):
+            return jsonify({'error': 'PvE hiện hỗ trợ cờ vua và cờ tướng.'}), 400
         if data.get("bot_elo", 1200) not in (500, 1200, 2000):
             return jsonify({"error": "Độ khó bot không hợp lệ."}), 400
         if not isinstance(data.get("is_timer_enabled", True), bool):
@@ -561,6 +565,8 @@ class Games(commands.Cog):
         }
         with self._lock:
             self._clean_expired_rooms()
+            if game_id in ('chess', 'xiangqi'):
+                self._ensure_board_seats(room)
             self._data["rooms"][room["id"]] = room
             self._save_data()
         return jsonify({"room": self._public_room(room, user["id"])}), 201
@@ -635,11 +641,12 @@ class Games(commands.Cog):
             room["players"] = [
                 player for player in room["players"] if player["id"] != str(user["id"])
             ]
-            if not (room["players"] or room['spectators']):
+            humans = [p for p in room['players'] + room['spectators'] if not p.get('isBot')]
+            if not humans:
                 del self._data["rooms"][room_id]
             else:
                 if room['host']['id'] == str(user['id']):
-                    successor = (room['players'] or room['spectators'])[0]
+                    successor = humans[0]
                     room['host'] = {key: successor[key] for key in ('id', 'name', 'avatar') if key in successor}
                 if was_seated and room['game_id'] in ('chess', 'xiangqi'):
                     self._reset_board_seats(room)
@@ -660,17 +667,61 @@ class Games(commands.Cog):
                 player['side'] = next(side for side in ('red', 'black') if side not in used)
                 used.add(player['side'])
             player.setdefault('isReady', False)
+        if room.get('mode') == 'pve' and not any(p.get('isBot') for p in room['players']):
+            side = next((s for s in ('red', 'black') if s not in used), None)
+            if side:
+                level = room.get('bot_elo', 1200)
+                room['players'].append(dict(id='bot:' + room['id'], name='Mosa AI · ' +
+                    {500: 'Dễ', 1200: 'Vừa', 2000: 'Khó'}.get(level, 'Vừa'),
+                    avatar=None, side=side, isBot=True, isReady=True))
 
     @staticmethod
     def _reset_board_seats(room):
         for player in room['players']:
-            player['isReady'] = False
+            player['isReady'] = bool(player.get('isBot'))
         room['status'] = 'waiting'
         room['seatRevision'] = room.get('seatRevision', 0) + 1
         room.pop('drawOffer', None)
         room.pop('gameResult', None)
         room.pop('chess', None)
         room.pop('xiangqi', None)
+
+    def _play_board_bot(self, room, engine):
+        key = room['game_id']
+        state = room.get(key)
+        if room.get('mode') != 'pve' or room['status'] != 'in-game' or room.get('gameResult') or not state:
+            return
+        board = engine.load_board(state)
+        side = chess_game.seat_name(board.turn) if key == 'chess' else state['turn']
+        if not any(p.get('isBot') and p['side'] == side for p in room['players']):
+            return
+        pending = getattr(self, '_ai_pending', None)
+        if pending is None:
+            pending = set()
+            self._ai_pending = pending
+        if room['id'] in pending:
+            return
+        pending.add(room['id'])
+        revision = state['revision']
+        snapshot = copy.deepcopy(state)
+        # Search never holds the shared room lock; other games remain responsive.
+        self._lock.release()
+        try:
+            move = board_ai.choose_move(key, snapshot, room.get('bot_elo', 1200))
+        finally:
+            self._lock.acquire()
+            pending.discard(room['id'])
+        if (self._data['rooms'].get(room['id']) is not room or room.get(key) is not state
+                or state['revision'] != revision or room.get('gameResult') or room['status'] != 'in-game'):
+            return
+        terminal = engine.expire(state, board)
+        if not terminal and move:
+            terminal = engine.move(state, board, side, move)
+        room['gameResult'] = terminal
+        if terminal:
+            room['drawOffer'] = None
+            engine.stop_clock(state, board)
+        self._save_data()
 
     def room_seats(self, room_id):
         user, error = self._user()
@@ -733,7 +784,7 @@ class Games(commands.Cog):
                         room['gameResult'] = None
                         room.pop(game_key, None)
                         for seated_player in room['players']:
-                            seated_player['isReady'] = False
+                            seated_player['isReady'] = bool(seated_player.get('isBot'))
                     elif room['status'] == 'in-game':
                         return jsonify({'error': 'Bạn không thể sẵn sàng lúc này.'}), 409
                     player['isReady'] = not player['isReady']
@@ -773,6 +824,8 @@ class Games(commands.Cog):
                             or not all(p['isReady'] for p in room['players']) or room.get('gameResult')):
                         return jsonify({'error': 'Trận đấu không còn diễn ra.'}), 409
                     if action == 'draw_offer':
+                        if room.get('mode') == 'pve':
+                            return jsonify({'error': 'Máy không nhận đề nghị hòa; ván đấu hòa theo luật cờ.'}), 409
                         if room.get('drawOffer'):
                             return jsonify({'error': 'Đã có yêu cầu hòa đang chờ phản hồi.'}), 409
                         room['drawOffer'] = {
@@ -803,6 +856,7 @@ class Games(commands.Cog):
                     engine.stop_clock(room[game_key], engine.load_board(room[game_key]))
                 room['updated_at'] = time.time()
                 self._save_data()
+            self._play_board_bot(room, engine)
             match_started = (room['status'] == 'in-game' and len(room['players']) == 2
                              and all(p['isReady'] for p in room['players']) and not room.get('gameResult'))
             chess_snapshot = None

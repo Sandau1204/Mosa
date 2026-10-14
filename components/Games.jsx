@@ -49,10 +49,10 @@ const TRANSLATIONS = {
     gameMode: "Chế Độ Chơi",
     pvpMode: "Đấu Người (PvP)",
     pveMode: "Chơi Với Bot AI (PvE)",
-    botElo: "Độ Khó Bot (ELO)",
-    easy: "Tập Sự (500)",
-    medium: "Thách Thức (1200)",
-    hard: "Kiện Tướng (2000)",
+    botElo: "Độ Khó Bot",
+    easy: "Dễ",
+    medium: "Vừa",
+    hard: "Khó",
     matchRules: "Cài Đặt Luật Đấu",
     timePerTurn: "Thời Gian Nước Đi",
     allowSpectator: "Cho Phép Khán Giả Xem",
@@ -171,10 +171,10 @@ const TRANSLATIONS = {
     gameMode: "Game Mode",
     pvpMode: "Player vs Player (PvP)",
     pveMode: "Player vs Bot AI (PvE)",
-    botElo: "Bot Difficulty (ELO)",
-    easy: "Novice (500)",
-    medium: "Challenger (1200)",
-    hard: "Grandmaster (2000)",
+    botElo: "Bot Difficulty",
+    easy: "Easy",
+    medium: "Medium",
+    hard: "Hard",
     matchRules: "Match Rules",
     timePerTurn: "Time per Turn",
     allowSpectator: "Allow Spectators",
@@ -266,8 +266,8 @@ const TRANSLATIONS = {
 };
 
 const GAMES_DATA = [
-  { id: 'xiangqi', isAvailable: true, title: 'Cờ Tướng (Xiangqi)', desc: 'Cờ Tướng truyền thống đỉnh cao, đấu 1v1 hoặc tập luyện với AI Kiện Tướng.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '300 - 2400 ELO', badge: 'HOT 🔥', badgeColor: 'bg-rose-500 text-white', bgGradient: 'from-amber-500 to-red-600', icon: '♟️' },
-  { id: 'chess', isAvailable: true, title: 'Cờ Vua (Chess)', desc: 'Thách đấu Cờ Vua chuẩn quốc tế với bảng phân tích nước đi và Replay.', category: '1v1', isStrategy: true, players: '1v1', aiElo: '400 - 2800 ELO', badge: 'POPULAR 🏆', badgeColor: 'bg-indigo-600 text-white', bgGradient: 'from-blue-600 to-indigo-800', icon: '♚' },
+  { id: 'xiangqi', isAvailable: true, title: 'Cờ Tướng (Xiangqi)', desc: 'Cờ Tướng truyền thống đỉnh cao, đấu 1v1 hoặc tập luyện với AI ba mức khó.', category: '1v1', isStrategy: true, players: '1v1', aiElo: 'AI: Easy / Medium / Hard', badge: 'HOT 🔥', badgeColor: 'bg-rose-500 text-white', bgGradient: 'from-amber-500 to-red-600', icon: '♟️' },
+  { id: 'chess', isAvailable: true, title: 'Cờ Vua (Chess)', desc: 'Thách đấu Cờ Vua chuẩn quốc tế với bảng phân tích nước đi và Replay.', category: '1v1', isStrategy: true, players: '1v1', aiElo: 'AI: Easy / Medium / Hard', badge: 'POPULAR 🏆', badgeColor: 'bg-indigo-600 text-white', bgGradient: 'from-blue-600 to-indigo-800', icon: '♚' },
   { id: 'monopoly', title: 'Cờ Tỷ Phú Sài Gòn', desc: 'Khám phá Sài Gòn, đổ xúc xắc, mua đất và thu tiền thuê cùng bạn bè!', category: 'Party', isStrategy: false, players: '2 - 6 Người', aiElo: 'Chỉ đấu người', badge: 'PARTY 🎉', badgeColor: 'bg-emerald-500 text-slate-900', bgGradient: 'from-emerald-400 to-teal-700', icon: '🪙' },
   { id: 'uno', title: 'Bài UNO Crazy', desc: 'Trận chiến bài UNO siêu tốc với các lá +4, Đổi Hướng vô cùng cay đắng!', category: 'Party', isStrategy: false, players: '2 - 8 Người', aiElo: 'Fast Bot', badge: 'NEW ⚡', badgeColor: 'bg-yellow-400 text-slate-900', bgGradient: 'from-yellow-400 to-orange-600', icon: '🎴' },
   { id: 'ludo', title: 'Cờ Cá Ngựa (Ludo Pop)', desc: 'Đua ngựa về chuồng cực hài hước, đá ngựa đối thủ về vạch xuất phát.', category: 'Party', isStrategy: false, players: '2 - 4 Người', aiElo: 'Easy / Hard', badge: 'FUN 🎲', badgeColor: 'bg-cyan-400 text-slate-900', bgGradient: 'from-cyan-400 to-blue-600', icon: '🎲' },
@@ -835,7 +835,7 @@ export default function Games() {
   const handleOpenCreateRoom = (game) => {
     if (!game.isAvailable) return;
     setSelectedGame(game);
-    if (game.id === 'monopoly') setLobbyMode('pvp');
+    if (!['chess', 'xiangqi'].includes(game.id)) setLobbyMode('pvp');
     setRoomName(lang === 'VI' ? `Phòng của ${discordUser.username}` : `${discordUser.username}'s room`);
     setIsRoomLocked(false);
     setRoomPassword('');
@@ -1701,13 +1701,14 @@ export default function Games() {
                 <label className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-2">2. {t.gameMode}</label>
                 <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl border-2 border-slate-800">
                   <button onClick={() => setLobbyMode('pvp')} className={`py-2 px-3 rounded-xl border-2 font-black text-xs transition-all flex flex-col items-center gap-1 ${lobbyMode === 'pvp' ? 'bg-cyan-400 border-slate-950 text-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-transparent border-transparent text-slate-400 hover:text-white'}`}><Users className="w-4 h-4" /> {t.pvpMode}</button>
-                  <button disabled={selectedGame.id === 'monopoly'} onClick={() => setLobbyMode('pve')} className={`py-2 px-3 rounded-xl border-2 font-black text-xs transition-all flex flex-col items-center gap-1 ${lobbyMode === 'pve' ? 'bg-yellow-400 border-slate-950 text-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-transparent border-transparent text-slate-400 hover:text-white'}`}><Bot className="w-4 h-4" /> {t.pveMode}</button>
+                  <button disabled={!['chess', 'xiangqi'].includes(selectedGame.id)} onClick={() => setLobbyMode('pve')} className={`py-2 px-3 rounded-xl border-2 font-black text-xs transition-all flex flex-col items-center gap-1 ${lobbyMode === 'pve' ? 'bg-yellow-400 border-slate-950 text-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-transparent border-transparent text-slate-400 hover:text-white'}`}><Bot className="w-4 h-4" /> {t.pveMode}</button>
                 </div>
               </div>
 
-              {lobbyMode === 'pve' && selectedGame.id !== 'monopoly' && (
+              {lobbyMode === 'pve' && ['chess', 'xiangqi'].includes(selectedGame.id) && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-200">
                   <label className="text-xs font-black text-slate-400 uppercase tracking-wider block mb-2">{t.botElo}</label>
+                  <p className="text-xs text-slate-300 mb-2">{lang === 'VI' ? 'Dễ: xét nước trước mắt · Vừa: xét phản công · Khó: tìm sâu hơn. Các mức không phải ELO được xếp hạng.' : 'Easy: immediate gains · Medium: considers replies · Hard: deeper search. These are not rated Elo levels.'}</p>
                   <div className="grid grid-cols-3 gap-2">
                     {[ { level: 500, label: t.easy, color: 'text-emerald-400' }, { level: 1200, label: t.medium, color: 'text-yellow-400' }, { level: 2000, label: t.hard, color: 'text-rose-400' } ].map((bot) => (
                       <button key={bot.level} onClick={() => setBotEloLevel(bot.level)} className={`py-2 px-1 rounded-xl border-2 font-black text-[10px] transition-all flex flex-col items-center gap-1 text-center ${botEloLevel === bot.level ? 'bg-slate-800 border-slate-600 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'}`}>

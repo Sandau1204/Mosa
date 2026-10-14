@@ -25,30 +25,38 @@ def pseudo(board, p):
     x, y, side, kind = p['x'], p['y'], p['side'], p['type']
     def palace(tx, ty):
         return 3 <= tx <= 5 and (7 <= ty <= 9 if side == 'red' else 0 <= ty <= 2)
-    for tx in range(9):
-        for ty in range(10):
-            dx, dy = tx - x, ty - y
-            target = occupied.get((tx, ty))
-            if (dx == 0 and dy == 0) or (target and target['side'] == side):
-                continue
-            valid = False
-            if kind in ('R', 'C') and (dx == 0 or dy == 0):
-                step_x, step_y = (0 if dx == 0 else (1 if dx > 0 else -1)), (0 if dy == 0 else (1 if dy > 0 else -1))
-                count = sum((x + step_x * i, y + step_y * i) in occupied for i in range(1, max(abs(dx), abs(dy))))
-                valid = count == (1 if kind == 'C' and target else 0)
-            elif kind == 'H' and sorted((abs(dx), abs(dy))) == [1, 2]:
-                leg = (x + (dx // 2 if abs(dx) == 2 else 0), y + (dy // 2 if abs(dy) == 2 else 0))
-                valid = leg not in occupied
-            elif kind == 'E':
-                valid = abs(dx) == abs(dy) == 2 and (ty >= 5 if side == 'red' else ty <= 4) and (x + dx // 2, y + dy // 2) not in occupied
-            elif kind == 'A':
-                valid = abs(dx) == abs(dy) == 1 and palace(tx, ty)
-            elif kind == 'K':
-                valid = abs(dx) + abs(dy) == 1 and palace(tx, ty)
-            elif kind == 'P':
-                valid = (dx == 0 and dy == (-1 if side == 'red' else 1)) or (dy == 0 and abs(dx) == 1 and (y <= 4 if side == 'red' else y >= 5))
-            if valid:
-                yield (tx, ty)
+    if kind in ('R', 'C'):
+        targets = [(tx, y) for tx in range(9)] + [(x, ty) for ty in range(10) if ty != y]
+    else:
+        offsets = { 'H': [(a, b) for a, b in ((1, 2), (2, 1), (-1, 2), (-2, 1), (1, -2), (2, -1), (-1, -2), (-2, -1))],
+                    'E': [(a, b) for a in (-2, 2) for b in (-2, 2)],
+                    'A': [(a, b) for a in (-1, 1) for b in (-1, 1)],
+                    'K': [(1, 0), (-1, 0), (0, 1), (0, -1)],
+                    'P': [(1, 0), (-1, 0), (0, -1 if side == 'red' else 1)]}
+        targets = [(x+dx, y+dy) for dx, dy in offsets.get(kind, []) if 0 <= x+dx < 9 and 0 <= y+dy < 10]
+    for tx, ty in targets:
+        dx, dy = tx - x, ty - y
+        target = occupied.get((tx, ty))
+        if (dx == 0 and dy == 0) or (target and target['side'] == side):
+            continue
+        valid = False
+        if kind in ('R', 'C') and (dx == 0 or dy == 0):
+            step_x, step_y = (0 if dx == 0 else (1 if dx > 0 else -1)), (0 if dy == 0 else (1 if dy > 0 else -1))
+            count = sum((x + step_x * i, y + step_y * i) in occupied for i in range(1, max(abs(dx), abs(dy))))
+            valid = count == (1 if kind == 'C' and target else 0)
+        elif kind == 'H' and sorted((abs(dx), abs(dy))) == [1, 2]:
+            leg = (x + (dx // 2 if abs(dx) == 2 else 0), y + (dy // 2 if abs(dy) == 2 else 0))
+            valid = leg not in occupied
+        elif kind == 'E':
+            valid = abs(dx) == abs(dy) == 2 and (ty >= 5 if side == 'red' else ty <= 4) and (x + dx // 2, y + dy // 2) not in occupied
+        elif kind == 'A':
+            valid = abs(dx) == abs(dy) == 1 and palace(tx, ty)
+        elif kind == 'K':
+            valid = abs(dx) + abs(dy) == 1 and palace(tx, ty)
+        elif kind == 'P':
+            valid = (dx == 0 and dy == (-1 if side == 'red' else 1)) or (dy == 0 and abs(dx) == 1 and (y <= 4 if side == 'red' else y >= 5))
+        if valid:
+            yield (tx, ty)
 
 
 def in_check(board, side):

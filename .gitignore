@@ -10,3 +10,4 @@ node_modules
 venv/
 *.py[cod]
 .pytest_cache/
+.test-deps/
