@@ -15,6 +15,7 @@ import GameRoomShell from './GameRoomShell';
 import DiscordIcon from './DiscordIcon';
 import { isDiscordActivity, waitForDiscordReady } from '../shared/games-auth';
 import ChessRoom from './games/ChessRoom';
+import useGameAudio from './games/useGameAudio';
 import MonopolyRoom from './games/MonopolyRoom';
 import XiangqiRoom from './games/XiangqiRoom';
 
@@ -433,6 +434,7 @@ export default function Games() {
   const discordClientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
 
   const [bgmMuted, setBgmMuted] = useState(false);
+  const { play: playSound, toggle: toggleSound } = useGameAudio(bgmMuted, setBgmMuted);
   const [ping, setPing] = useState(null);
   const [lobbyData, setLobbyData] = useState({
     guilds: [],
@@ -533,6 +535,17 @@ export default function Games() {
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const [isSidebarOpenMobile, setIsSidebarOpenMobile] = useState(false);
   const apiBase = isDiscordEmbedded ? '/.proxy/api/games' : '/api/games';
+
+  const audioSnapshot = useRef(null);
+  useEffect(() => {
+    const next = { room: inGameRoom?.id, ready: seatsLoaded, board: JSON.stringify(boardState), count: boardState.length, started: matchStarted, result: JSON.stringify(gameResult) };
+    const previous = audioSnapshot.current;
+    audioSnapshot.current = next;
+    if (!previous || previous.room !== next.room || !previous.ready || !next.ready) return;
+    if (gameResult && previous.result !== next.result) playSound('finish');
+    else if (matchStarted && !previous.started) playSound('start');
+    else if (matchStarted && previous.started && previous.board !== next.board) playSound(checkSide ? 'check' : next.count < previous.count ? 'capture' : 'move');
+  }, [inGameRoom?.id, seatsLoaded, boardState, matchStarted, gameResult, checkSide, playSound]);
 
   const applySeats = useCallback(snapshot => {
     setRedPlayer(snapshot.players.find(p => p.side === 'red') || null);
@@ -1052,6 +1065,7 @@ export default function Games() {
         const moves = chessLegalMoves.filter(move => move.fromX === x && move.fromY === y);
         if (!moves.length) return;
         setSelectedPiece({ x, y });
+        playSound('select');
         setLegalMoves(moves);
         return;
       }
@@ -1213,8 +1227,11 @@ export default function Games() {
   }
 
   return (
-    <div className="w-full h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
+    <div onClickCapture={event => { if (event.target.closest('button:not(:disabled)')) playSound('click'); }} className="w-full h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
 
+      <button type="button" onClick={toggleSound} aria-label={t.soundSetting} title={t.soundSetting} aria-pressed={!bgmMuted} className="fixed bottom-3 right-3 z-[70] rounded-full border-2 border-slate-600 bg-slate-900 p-2 text-white shadow-lg">
+        {bgmMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+      </button>
       {!inGameRoom && (
         <header className="h-16 bg-slate-900 border-b-4 border-slate-950 px-4 flex items-center justify-between z-30 shrink-0 shadow-md">
           <div className="flex items-center gap-3">
@@ -1268,7 +1285,7 @@ export default function Games() {
 
       <div className="flex-1 min-w-0 min-h-0 flex overflow-hidden relative">
         {inGameRoom?.gameType === 'monopoly' ? (
-          <MonopolyRoom key={inGameRoom.id} room={inGameRoom} userId={discordUser.id} apiBase={apiBase} request={gamesApiRequest} onExit={handleExitGameRoom} />
+          <MonopolyRoom key={inGameRoom.id} room={inGameRoom} userId={discordUser.id} apiBase={apiBase} request={gamesApiRequest} onExit={handleExitGameRoom} playSound={playSound} />
         ) : inGameRoom ? (
           <GameRoomShell
             room={inGameRoom}
@@ -1552,7 +1569,7 @@ export default function Games() {
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border-2 border-slate-800">
                 <span className="text-xs font-bold text-white flex items-center gap-2">{bgmMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />} {t.soundSetting}</span>
-                <button onClick={() => setBgmMuted(!bgmMuted)} aria-label={t.soundSetting} aria-pressed={!bgmMuted} className={`w-10 h-6 rounded-full p-1 border-2 border-slate-950 transition-colors ${!bgmMuted ? 'bg-emerald-500' : 'bg-slate-800'}`}><div className={`w-3.5 h-3.5 rounded-full bg-slate-950 transition-transform ${!bgmMuted ? 'translate-x-4' : 'translate-x-0'}`}></div></button>
+                <button onClick={toggleSound} aria-label={t.soundSetting} aria-pressed={!bgmMuted} className={`w-10 h-6 rounded-full p-1 border-2 border-slate-950 transition-colors ${!bgmMuted ? 'bg-emerald-500' : 'bg-slate-800'}`}><div className={`w-3.5 h-3.5 rounded-full bg-slate-950 transition-transform ${!bgmMuted ? 'translate-x-4' : 'translate-x-0'}`}></div></button>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border-2 border-slate-800">
                 <span className="text-xs font-bold text-white flex items-center gap-2"><Globe className="w-4 h-4 text-cyan-400" /> {t.languageSetting}</span>

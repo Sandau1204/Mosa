@@ -10,7 +10,7 @@ import styles from './MonopolyRoom.module.css';
 const colors = ['bg-red-500', 'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500'];
 const money = value => `${(value / 10).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} TR`;
 
-export default function MonopolyRoom({ room, userId, apiBase, request, onExit }) {
+export default function MonopolyRoom({ room, userId, apiBase, request, onExit, playSound }) {
   const [snapshot, setSnapshot] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -53,10 +53,20 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
     try {
       const result = await request(endpoint, { method: 'POST', body: JSON.stringify({ action: name, revision: snapshot?.state?.revision }) });
       setSnapshot(result);
-    } catch (err) { setError(err.message); }
+    } catch (err) { setError(err.message); playSound?.('error'); }
     finally { pending.current = false; setBusy(false); }
   };
   const state = snapshot?.state;
+  const previousAudioState = useRef(null);
+  useEffect(() => {
+    const previous = previousAudioState.current;
+    previousAudioState.current = state;
+    if (!state || !previous || state.revision === previous.revision) return;
+    if (state.phase === 'finished' && previous.phase !== 'finished') playSound?.('finish');
+    else if (JSON.stringify(state.owners) !== JSON.stringify(previous.owners)) playSound?.('buy');
+    else if (JSON.stringify(state.players?.map(p => p.position)) !== JSON.stringify(previous.players?.map(p => p.position))) playSound?.('roll');
+    else playSound?.('move');
+  }, [state, playSound]);
   const players = state?.players || (snapshot?.players || []).map(p => ({ ...p, position: 13, money: 200 }));
   const active = players.find(p => p.id === state?.turn);
   const myTurn = state?.turn === String(userId) && state?.phase !== 'finished';
@@ -103,7 +113,7 @@ export default function MonopolyRoom({ room, userId, apiBase, request, onExit })
 
   return <main className={`${styles.room} bg-slate-950`}>
     <header className={styles.header}>
-      <button disabled={busy} onClick={async () => { setBusy(true); try { await onExit(); } catch (err) { setError(err.message); } finally { setBusy(false); } }} className={styles.exit}><LogOut size={16} /> THOÁT</button>
+      <button disabled={busy} onClick={async () => { setBusy(true); try { await onExit(); } catch (err) { setError(err.message); playSound?.('error'); } finally { setBusy(false); } }} className={styles.exit}><LogOut size={16} /> THOÁT</button>
       <details className={styles.rules}><summary aria-label="Luật chơi" title="Luật chơi"><SlidersHorizontal size={18} /></summary><div><strong>Luật chơi Cờ Tỷ Phú</strong><p>Mỗi người có 20 TR. Qua PHÁT nhận 2 TR. Mua đất khi đến ô chưa có chủ; tiền thuê bằng 20% giá đất. Thuế 1,5 TR; vượt đèn đỏ phạt 1 TR và đến bót cảnh sát. Thẻ ngẫu nhiên cộng hoặc trừ tiền. Không đủ tiền trả thì phá sản; người cuối cùng còn lại thắng. Chưa áp dụng xây nhà, thế chấp, trao đổi đất hoặc lượt thêm khi đổ đôi. Rời trận tính là phá sản; chủ phòng thoát sẽ chuyển quyền cho người còn lại. Phòng tự xóa khi không còn người chơi và khán giả.</p></div></details>
       <h1 title={room.name}>{room.name || 'Phòng Cờ Tỷ Phú'}</h1><span className={styles.badge}>Party 2–6</span>
     </header>
