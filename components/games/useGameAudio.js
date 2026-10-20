@@ -16,13 +16,14 @@ export default function useGameAudio(muted, setMuted) {
     try { saved = localStorage.getItem('mosa-games-muted') === 'true'; } catch {}
     engine.setMuted(saved);
     setMuted(saved);
-    let interacted = false;
     const visibility = () => {
       engine.setHidden(document.hidden);
-      if (!document.hidden && interacted) engine.unlock();
+      if (!document.hidden) engine.unlock();
     };
-    const unlock = () => { interacted = true; engine.unlock(); };
+    const unlock = () => { engine.unlock(); };
     engine.setHidden(document.hidden);
+    // Try immediately; browsers that block audible autoplay retry on interaction.
+    engine.unlock();
     document.addEventListener('pointerdown', unlock);
     document.addEventListener('keydown', unlock);
     document.addEventListener('visibilitychange', visibility);
