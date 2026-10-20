@@ -36,11 +36,44 @@ test('audio waits for interaction, respects mute/visibility and releases resourc
     audio.play('finish');
     assert.equal(notes, mutedNotes);
     audio.setHidden(false);
-    assert.ok(notes > mutedNotes);
+    assert.equal(notes, mutedNotes);
+    audio.play('move');
+    assert.equal(notes, mutedNotes + 2);
   } finally { audio.dispose(); }
   assert.equal(closed, true);
   await audio.unlock();
   assert.equal(created, 1);
+});
+
+test('MP3 loops after interaction, pauses on mute/hidden and is released', async () => {
+  let music;
+  class Music {
+    constructor(src) { this.src = src; this.paused = true; music = this; }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+    removeAttribute(name) { delete this[name]; }
+    load() { this.released = true; }
+  }
+  const audio = createGameAudio(undefined, Music, '/audio/test.mp3');
+  assert.equal(music, undefined);
+  await audio.unlock();
+  assert.equal(music.src, '/audio/test.mp3');
+  assert.equal(music.loop, true);
+  assert.equal(music.volume, 0.2);
+  assert.equal(music.paused, false);
+  audio.setMuted(true);
+  assert.equal(music.paused, true);
+  audio.setHidden(true);
+  audio.setMuted(false);
+  assert.equal(music.paused, true);
+  audio.setHidden(false);
+  assert.equal(music.paused, false);
+  audio.dispose();
+  assert.equal(music.paused, true);
+  assert.equal(music.src, undefined);
+  assert.equal(music.released, true);
+  await audio.unlock();
+  assert.equal(music.paused, true);
 });
 
 test('unsupported audio APIs do not break games', async () => {

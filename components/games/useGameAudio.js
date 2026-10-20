@@ -6,7 +6,11 @@ import { createGameAudio } from '../../shared/game-audio';
 export default function useGameAudio(muted, setMuted) {
   const audio = useRef(null);
   useEffect(() => {
-    const engine = createGameAudio(window.AudioContext || window.webkitAudioContext);
+    const engine = createGameAudio(
+      window.AudioContext || window.webkitAudioContext,
+      window.Audio,
+      process.env.NEXT_PUBLIC_GAMES_BGM_URL || '/audio/zephiramusic-lofi-gaming-606302.mp3',
+    );
     audio.current = engine;
     let saved = false;
     try { saved = localStorage.getItem('mosa-games-muted') === 'true'; } catch {}
