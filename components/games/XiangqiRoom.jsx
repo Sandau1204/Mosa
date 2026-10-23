@@ -9,9 +9,6 @@ const XiangqiRoom = ({ pieceLabels, board, lastMove, isFlipped = false, isPlayin
 
   return (
     <>
-    {isPlaying && checkSide && <div role="alert" aria-live="assertive" className="rounded-xl bg-rose-950 px-4 py-2 text-center font-bold text-rose-100">
-      {lang === 'VI' ? `${checkSide === playerSide ? 'Bạn' : checkSide === 'red' ? 'Bên đỏ' : 'Bên đen'} đang bị chiếu tướng! Chỉ được đi nước cứu tướng.` : `${checkSide === playerSide ? 'You are' : checkSide === 'red' ? 'Red is' : 'Black is'} in check! Only moves that save the general are allowed.`}
-    </div>}
     <div className={`@container relative w-[min(100%,66.6667vh)] max-w-[600px] aspect-[8/9] bg-amber-100/95 border-2 sm:border-4 border-amber-900 rounded-xl sm:rounded-2xl p-2 sm:p-3 md:p-4 lg:p-5 shadow-[inset_0_0_20px_rgba(120,53,15,0.4),0_10px_30px_rgba(0,0,0,0.5)] transition-transform duration-500 flex flex-col justify-center items-center ${isFlipped ? 'rotate-180' : ''}`}>
       <div className="relative w-full h-full border-2 border-amber-950 shrink-0">
         {[lastMove && { x: lastMove.fromX, y: lastMove.fromY }, lastMove && { x: lastMove.x, y: lastMove.y }].filter(Boolean).map((position, index) => (
