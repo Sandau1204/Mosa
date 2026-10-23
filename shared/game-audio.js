@@ -34,6 +34,45 @@ export function createGameAudio(AudioContextClass, AudioClass, musicSrc = '/audi
     oscillator.start(start);
     oscillator.stop(start + duration + 0.02);
   };
+  const woodTap = (isCapture = false) => {
+    const start = context.currentTime;
+    const body = context.createOscillator();
+    const bodyGain = context.createGain();
+    const bodyFrequency = isCapture ? 155 : 190;
+    body.type = 'triangle';
+    body.frequency.setValueAtTime(bodyFrequency, start);
+    body.frequency.exponentialRampToValueAtTime(bodyFrequency * 0.55, start + 0.12);
+    bodyGain.gain.setValueAtTime(0, start);
+    bodyGain.gain.linearRampToValueAtTime(isCapture ? 0.24 : 0.19, start + 0.004);
+    bodyGain.gain.exponentialRampToValueAtTime(0.001, start + 0.14);
+    body.connect(bodyGain).connect(output);
+    voices.add(body);
+    body.onended = () => { voices.delete(body); body.disconnect(); bodyGain.disconnect(); };
+    body.start(start);
+    body.stop(start + 0.16);
+
+    const sampleRate = context.sampleRate || 44100;
+    const length = Math.floor(sampleRate * 0.04);
+    const buffer = context.createBuffer(1, length, sampleRate);
+    const samples = buffer.getChannelData(0);
+    for (let index = 0; index < length; index++) {
+      const decay = 1 - index / length;
+      samples[index] = (Math.random() * 2 - 1) * decay * decay;
+    }
+    const noise = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const noiseGain = context.createGain();
+    noise.buffer = buffer;
+    filter.type = 'lowpass';
+    filter.frequency.value = isCapture ? 1100 : 1500;
+    noiseGain.gain.setValueAtTime(isCapture ? 0.22 : 0.17, start);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, start + 0.04);
+    noise.connect(filter).connect(noiseGain).connect(output);
+    voices.add(noise);
+    noise.onended = () => { voices.delete(noise); noise.disconnect(); filter.disconnect(); noiseGain.disconnect(); };
+    noise.start(start);
+    noise.stop(start + 0.045);
+  };
   const stop = () => {
     for (const voice of voices) { try { voice.stop(); } catch {} }
     voices.clear();
@@ -89,6 +128,10 @@ export function createGameAudio(AudioContextClass, AudioClass, musicSrc = '/audi
     setHidden(value) { hidden = value; sync(); },
     play(name) {
       if (!context || context.state !== 'running' || effectsMuted || hidden || disposed) return;
+      if (name === 'boardSelect' || name === 'boardMove' || name === 'boardCapture') {
+        woodTap(name === 'boardCapture');
+        return;
+      }
       const notes = { click: [76], select: [81], move: [60, 67], capture: [55, 67, 72], check: [78, 74, 78], start: [60, 64, 67], finish: [72, 67, 76, 79], roll: [48, 55, 50, 60], buy: [72, 76, 84], error: [48, 46] }[name] || [64, 67];
       notes.forEach((note, index) => tone(note, index * 0.075, 0.18, 0.16, 'triangle'));
     },

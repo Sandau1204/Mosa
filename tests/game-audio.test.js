@@ -12,8 +12,11 @@ test('audio waits for interaction, respects mute/visibility and releases resourc
       return { gain: { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} };
     }
     createOscillator() {
-      return { frequency: {}, connect: gain => gain, disconnect() {}, start() { notes++; }, stop() {} };
+      return { frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: gain => gain, disconnect() {}, start() { notes++; }, stop() {} };
     }
+    createBuffer(_channels, length) { return { getChannelData: () => new Float32Array(length) }; }
+    createBufferSource() { return { connect: node => node, disconnect() {}, start() { notes++; }, stop() {} }; }
+    createBiquadFilter() { return { frequency: {}, connect: node => node, disconnect() {} }; }
     async resume() { this.state = 'running'; }
     async close() { closed = true; }
   }
@@ -26,9 +29,12 @@ test('audio waits for interaction, respects mute/visibility and releases resourc
     const before = notes;
     audio.play('capture');
     assert.equal(notes, before + 3);
+    audio.play('boardSelect');
+    assert.equal(notes, before + 5);
     audio.setMuted(true);
     const mutedNotes = notes;
     audio.play('move');
+    audio.play('boardCapture');
     await audio.unlock();
     assert.equal(notes, mutedNotes);
     audio.setHidden(true);
@@ -39,6 +45,8 @@ test('audio waits for interaction, respects mute/visibility and releases resourc
     assert.equal(notes, mutedNotes);
     audio.play('move');
     assert.equal(notes, mutedNotes + 2);
+    audio.play('boardMove');
+    assert.equal(notes, mutedNotes + 4);
   } finally { audio.dispose(); }
   assert.equal(closed, true);
   await audio.unlock();

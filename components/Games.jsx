@@ -560,7 +560,7 @@ export default function Games() {
     if (!previous || previous.room !== next.room || !previous.ready || !next.ready) return;
     if (gameResult && previous.result !== next.result) playSound('finish');
     else if (matchStarted && !previous.started) playSound('start');
-    else if (matchStarted && previous.started && previous.board !== next.board) playSound(checkSide ? 'check' : next.count < previous.count ? 'capture' : 'move');
+    else if (matchStarted && previous.started && previous.board !== next.board) playSound(next.count < previous.count ? 'boardCapture' : 'boardMove');
   }, [inGameRoom?.id, seatsLoaded, boardState, matchStarted, gameResult, checkSide, playSound]);
 
   const applySeats = useCallback(snapshot => {
@@ -1085,7 +1085,7 @@ export default function Games() {
         const moves = chessLegalMoves.filter(move => move.fromX === x && move.fromY === y);
         if (!moves.length) return;
         setSelectedPiece({ x, y });
-        playSound('select');
+        playSound('boardSelect');
         setLegalMoves(moves);
         return;
       }
@@ -1247,7 +1247,7 @@ export default function Games() {
   }
 
   return (
-    <div onClickCapture={event => { if (event.target.closest('button:not(:disabled)')) playSound('click'); }} className="w-full h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
+    <div onClickCapture={event => { if (event.target.closest('button:not(:disabled):not([data-board-interaction])')) playSound('click'); }} className="w-full h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
 
       <button type="button" onClick={toggleActiveAudio} aria-label={activeAudioLabel} title={activeAudioLabel} aria-pressed={!activeAudioMuted} className="fixed bottom-3 right-3 z-[70] rounded-full border-2 border-slate-600 bg-slate-900 p-2 text-white shadow-lg">
         {activeAudioMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}

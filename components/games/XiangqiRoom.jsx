@@ -53,6 +53,7 @@ const XiangqiRoom = ({ pieceLabels, board, lastMove, isFlipped = false, isPlayin
               return (
                 <button
                   key={`move-${x}-${y}`}
+                  data-board-interaction
                   aria-label={`Move to ${x}, ${y}`}
                   onClick={() => onMove(selectedPiece.x, selectedPiece.y, x, y)}
                   className={`absolute z-20 h-[clamp(8px,3.8cqw,16px)] w-[clamp(8px,3.8cqw,16px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-800/80 bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.8)] hover:scale-125 transition-transform`}
@@ -67,6 +68,7 @@ const XiangqiRoom = ({ pieceLabels, board, lastMove, isFlipped = false, isPlayin
             return (
               <button
                 key={`piece-${x}-${y}`}
+                data-board-interaction
                 onClick={() => { if (isDestination) onMove(selectedPiece.x, selectedPiece.y, x, y); else if (isSelectable) onSelectPiece(x, y); }}
                 disabled={!isSelectable && !isDestination}
                 className={`absolute z-20 flex aspect-square w-[clamp(24px,8cqw,48px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 font-serif text-[clamp(14px,4cqw,24px)] font-black shadow-[3px_3px_0px_rgba(0,0,0,0.6)] transition-all
