@@ -513,6 +513,7 @@ export default function Games() {
   const [blackTurnTime, setBlackTurnTime] = useState(900); // 15 mins
   const [currentTurn, setCurrentTurn] = useState('r');
   const [boardState, setBoardState] = useState(INITIAL_XIANGQI_BOARD);
+  const [lastMove, setLastMove] = useState(null);
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [legalMoves, setLegalMoves] = useState([]);
   const [chessLegalMoves, setChessLegalMoves] = useState([]);
@@ -562,6 +563,7 @@ export default function Games() {
       setLegalMoves([]);
       setCheckSide(null);
       setBoardState(inGameRoom?.gameType === 'chess' ? INITIAL_CHESS_BOARD : INITIAL_XIANGQI_BOARD);
+      setLastMove(null);
       setMovesLog([]);
       setCurrentTurn('r');
       setRedTurnTime(900);
@@ -574,6 +576,7 @@ export default function Games() {
       setLegalMoves([]);
       setCheckSide(null);
       setBoardState(inGameRoom?.gameType === 'chess' ? INITIAL_CHESS_BOARD : INITIAL_XIANGQI_BOARD);
+      setLastMove(null);
       setMovesLog([]);
       setCurrentTurn('r');
       setRedTurnTime(900);
@@ -590,6 +593,7 @@ export default function Games() {
       if (chessSnapshotKey.current !== key) {
         chessSnapshotKey.current = key;
         setBoardState(state.board);
+        setLastMove(state.lastMove || null);
         setChessLegalMoves(state.legalMoves);
         setCurrentTurn(state.turn === 'black' ? 'b' : 'r');
         setCheckSide(state.checkSide);
@@ -867,6 +871,7 @@ export default function Games() {
     setRedPlayer(null); setBlackPlayer(null); setMatchStarted(false); setIsBoardFlipped(false);
     setRedTurnTime(900); setBlackTurnTime(900); setCurrentTurn('r');
     setBoardState(gameType === 'chess' ? INITIAL_CHESS_BOARD : INITIAL_XIANGQI_BOARD);
+    setLastMove(null);
     setMovesLog([]);
   };
 
@@ -1109,7 +1114,7 @@ export default function Games() {
             <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-3 w-full text-center sm:text-left">
               <div className="relative group/avatar shrink-0">
                 <DiscordAvatar src={player.avatar} alt={player.name} className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full border-3 border-slate-950 object-cover shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ring-2 ${ringColor}`} />
-                {player.id === myPlayerId && (
+                {player.id === myPlayerId && !matchStarted && !gameResult && (
                   <button disabled={seatBusy || !seatsLoaded} aria-label={t.leaveSeat} onClick={() => handleLeaveSeat(side)} className="absolute -top-1 -right-1 bg-rose-500 hover:bg-rose-400 text-white rounded-full p-0.5 border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:scale-110 z-30" title="Rời ghế"><X className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></button>
                 )}
               </div>
@@ -1119,9 +1124,9 @@ export default function Games() {
               </div>
             </div>
             {!matchStarted ? (
-              <button disabled={seatBusy || !seatsLoaded || player.id !== myPlayerId} onClick={() => toggleReady(side)} className={`w-full xl:w-auto px-2 py-1.5 rounded-xl font-black text-[10px] sm:text-xs border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all shrink-0 ${player.isReady ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
-                {player.isReady ? 'SẴN SÀNG' : (player.id === myPlayerId ? 'SẴN SÀNG?' : 'ĐANG CHỜ')}
-              </button>
+              <span className={`w-full xl:w-auto px-2 py-1.5 text-center rounded-xl font-black text-[10px] sm:text-xs border-2 border-slate-950 shrink-0 ${player.isReady ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                {player.isReady ? 'SẴN SÀNG' : 'ĐANG CHỜ'}
+              </span>
             ) : (
               inGameRoom?.isTimerEnabled && (
                 <div className={`w-full xl:w-auto px-2 py-1 text-center rounded-xl font-mono font-black text-xs border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0 ${isMyTurn ? `${timeBg} animate-pulse` : 'bg-slate-950 text-slate-400'}`}>{formatTime(time)}</div>
@@ -1291,6 +1296,32 @@ export default function Games() {
             room={inGameRoom}
             t={t}
             matchStarted={matchStarted}
+            readyPlayers={[
+              {
+                side: 'red',
+                sideLabel: inGameRoom.gameType === 'chess' ? (lang === 'VI' ? 'Trắng' : 'White') : (lang === 'VI' ? 'Đỏ' : 'Red'),
+                name: redPlayer?.name,
+                id: redPlayer?.id,
+                isReady: Boolean(redPlayer?.isReady),
+                isMe: redPlayer?.id === myPlayerId,
+                emptyLabel: lang === 'VI' ? 'Chờ người chơi' : 'Waiting for player'
+              },
+              {
+                side: 'black',
+                sideLabel: lang === 'VI' ? 'Đen' : 'Black',
+                name: blackPlayer?.name,
+                id: blackPlayer?.id,
+                isReady: Boolean(blackPlayer?.isReady),
+                isMe: blackPlayer?.id === myPlayerId,
+                emptyLabel: lang === 'VI' ? 'Chờ người chơi' : 'Waiting for player'
+              }
+            ]}
+            onToggleReady={toggleReady}
+            readyBusy={seatBusy || !seatsLoaded}
+            readyActionLabel={lang === 'VI' ? 'SẴN SÀNG CHƠI' : "I'M READY"}
+            readyCancelLabel={lang === 'VI' ? 'HỦY SẴN SÀNG' : 'CANCEL READY'}
+            readyStatusLabel={lang === 'VI' ? 'SẴN SÀNG' : 'READY'}
+            readyWaitingLabel={lang === 'VI' ? 'ĐANG CHỜ' : 'WAITING'}
             canControlMatch={redPlayer?.id === myPlayerId || blackPlayer?.id === myPlayerId}
             movesLog={movesLog}
             spectatorsList={spectatorsList}
@@ -1334,6 +1365,7 @@ export default function Games() {
             {inGameRoom.gameType === 'chess' ? (
               <ChessRoom
                 board={boardState}
+                lastMove={lastMove}
                 isFlipped={isBoardFlipped}
                 isPlaying={matchStarted && seatsLoaded && !seatBusy}
                 activeSide={currentTurn === 'r' ? 'white' : 'black'}
@@ -1359,6 +1391,7 @@ export default function Games() {
               <XiangqiRoom
                 pieceLabels={PIECE_LABELS}
                 board={boardState}
+                lastMove={lastMove}
                 isFlipped={isBoardFlipped}
                 isPlaying={matchStarted && seatsLoaded && !seatBusy}
                 selectablePieces={chessLegalMoves.map(move => ({ x: move.fromX, y: move.fromY }))}

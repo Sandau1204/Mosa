@@ -99,6 +99,15 @@ def snapshot(state, board, running):
         if entry['side'] == 'red' or not history:
             history.append({'id': len(history) + 1, 'red': '', 'black': '...'})
         history[-1][entry['side']] = entry['san']
+    last_move = None
+    if state['moves']:
+        move = chess.Move.from_uci(state['moves'][-1])
+        last_move = {
+            'fromX': chess.square_file(move.from_square),
+            'fromY': 7 - chess.square_rank(move.from_square),
+            'x': chess.square_file(move.to_square),
+            'y': 7 - chess.square_rank(move.to_square),
+        }
     return {
         'revision': state['revision'],
         'board': [{'x': chess.square_file(square), 'y': 7 - chess.square_rank(square),
@@ -113,5 +122,6 @@ def snapshot(state, board, running):
                         'promotion': chess.piece_symbol(move.promotion) if move.promotion else None}
                        for move in board.legal_moves] if running else [],
         'movesLog': history,
+        'lastMove': last_move,
         'remaining': clocks(state, board, running),
     }

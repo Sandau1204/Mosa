@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-const XiangqiRoom = ({ pieceLabels, board, isFlipped = false, isPlaying = false, activeSide, playerSide, selectablePieces = [], selectedPiece, legalMoves, checkSide, lang = 'VI', onSelectPiece, onMove }) => {
+const XiangqiRoom = ({ pieceLabels, board, lastMove, isFlipped = false, isPlaying = false, activeSide, playerSide, selectablePieces = [], selectedPiece, legalMoves, checkSide, lang = 'VI', onSelectPiece, onMove }) => {
   const findPiece = (x, y) => board.find(piece => piece.x === x && piece.y === y);
   const canMove = isPlaying && playerSide === activeSide;
   const isLegalDestination = (x, y) => canMove && selectedPiece && legalMoves.some(move => move.x === x && move.y === y);
@@ -14,6 +14,14 @@ const XiangqiRoom = ({ pieceLabels, board, isFlipped = false, isPlaying = false,
     </div>}
     <div className={`@container relative w-[min(100%,66.6667vh)] max-w-[600px] aspect-[8/9] bg-amber-100/95 border-2 sm:border-4 border-amber-900 rounded-xl sm:rounded-2xl p-2 sm:p-3 md:p-4 lg:p-5 shadow-[inset_0_0_20px_rgba(120,53,15,0.4),0_10px_30px_rgba(0,0,0,0.5)] transition-transform duration-500 flex flex-col justify-center items-center ${isFlipped ? 'rotate-180' : ''}`}>
       <div className="relative w-full h-full border-2 border-amber-950 shrink-0">
+        {[lastMove && { x: lastMove.fromX, y: lastMove.fromY }, lastMove && { x: lastMove.x, y: lastMove.y }].filter(Boolean).map((position, index) => (
+          <div
+            key={`last-move-${index}`}
+            aria-hidden="true"
+            className="absolute z-10 h-[clamp(28px,10cqw,60px)] w-[clamp(28px,10cqw,60px)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent ring-2 ring-amber-500/90 pointer-events-none"
+            style={{ left: `${(position.x / 8) * 100}%`, top: `${(position.y / 9) * 100}%` }}
+          />
+        ))}
         {Array.from({ length: 10 }).map((_, i) => (
           <div key={`h-${i}`} className="absolute w-full h-[1px] bg-amber-950/80" style={{ top: `${(i / 9) * 100}%` }} />
         ))}

@@ -132,7 +132,8 @@ def move(state, board, side, data):
         state['remaining'][side] += 5
         state['turnStartedAt'] = now
     state['board'] = after(state['board'], p, x, y)
-    state['history'].append(dict(side=side, san=f"{p['type']} ({fx+1},{fy+1}) → ({x+1},{y+1})"))
+    state['history'].append(dict(side=side, san=f"{p['type']} ({fx+1},{fy+1}) → ({x+1},{y+1})",
+                                 fromX=fx, fromY=fy, x=x, y=y))
     state['turn'] = other(side)
     state['revision'] += 1
     return result(state)
@@ -148,4 +149,6 @@ def snapshot(state, board, running):
     return dict(revision=state['revision'], board=state['board'], turn=state['turn'],
                 checkSide=state['turn'] if in_check(state['board'], state['turn']) else None,
                 legalMoves=list(legal_moves(state)) if running else [], movesLog=history,
+                lastMove={key: state['history'][-1][key] for key in ('fromX', 'fromY', 'x', 'y')}
+                if state['history'] and 'fromX' in state['history'][-1] else None,
                 remaining=dict(white=remaining['red'], black=remaining['black']))

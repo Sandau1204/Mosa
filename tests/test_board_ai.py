@@ -71,6 +71,8 @@ class PveTests(unittest.TestCase):
         engine = chess_game
         state = self.room['chess']
         engine.move(state, engine.load_board(state), 'red', dict(fromX=4, fromY=6, toX=4, toY=4))
+        self.assertEqual(engine.snapshot(state, engine.load_board(state), True)['lastMove'],
+                         dict(fromX=4, fromY=6, x=4, y=4))
         def reset(*args):
             self.cog._reset_board_seats(self.room)
             return dict(fromX=4, fromY=1, toX=4, toY=3)

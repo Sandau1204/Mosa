@@ -58,5 +58,7 @@ class XiangqiTests(unittest.TestCase):
         self.assertIsNone(game.move(state,state,'red',dict(fromX=0,fromY=6,toX=0,toY=5)))
         self.assertEqual(state['turn'],'black')
         self.assertEqual(state['revision'],1)
+        self.assertEqual(game.snapshot(state,state,True)['lastMove'],
+                         dict(fromX=0,fromY=6,x=0,y=5))
         with self.assertRaises(ValueError):
             game.move(state,state,'red',dict(fromX=2,fromY=6,toX=2,toY=5))

@@ -9,6 +9,13 @@ export default function GameRoomShell({
   room,
   t,
   matchStarted,
+  readyPlayers,
+  onToggleReady,
+  readyBusy,
+  readyActionLabel,
+  readyCancelLabel,
+  readyStatusLabel,
+  readyWaitingLabel,
   movesLog,
   spectatorsList,
   renderPlayerProfile,
@@ -46,6 +53,30 @@ export default function GameRoomShell({
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[auto_1fr_auto] gap-3 lg:gap-4 min-h-0 relative z-10 pb-6 lg:pb-0">
         <div className="order-1 lg:order-none lg:col-start-4 lg:col-span-6 lg:row-start-1 lg:row-span-3 flex flex-col items-center justify-center bg-slate-900 border-4 border-slate-950 rounded-2xl p-2 sm:p-4 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative w-full lg:min-h-0">
           <div className={`w-full h-full max-h-[75vh] min-w-0 min-h-0 flex items-center justify-center ${room.gameType === 'chess' ? 'lg:[container-type:size]' : ''} ${gameResult ? 'blur-sm' : ''}`}>{children}</div>
+          {!matchStarted && !gameResult && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-slate-950/45 p-3 sm:p-5">
+              <section aria-label={readyActionLabel} className="w-full max-w-xs rounded-2xl border-4 border-slate-950 bg-slate-900/95 p-3 sm:p-4 text-center shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                <h3 className="mb-3 text-xs sm:text-sm font-black uppercase tracking-wide text-yellow-300">{readyActionLabel}</h3>
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  {readyPlayers.map(player => (
+                    <div key={player.side} className="min-w-0 rounded-xl border-2 border-slate-950 bg-slate-800 px-2 py-2">
+                      <div className="truncate text-[10px] sm:text-xs font-bold text-white">{player.name || player.sideLabel}</div>
+                      <div className={`mt-1 text-[9px] sm:text-[10px] font-black ${player.isReady ? 'text-emerald-400' : 'text-slate-400'}`}>
+                        {player.isReady ? readyStatusLabel : player.id ? readyWaitingLabel : player.emptyLabel}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  disabled={readyBusy || !readyPlayers.some(player => player.isMe)}
+                  onClick={onToggleReady}
+                  className="w-full rounded-xl border-2 border-slate-950 bg-emerald-500 px-3 py-2.5 text-xs sm:text-sm font-black text-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                >
+                  {readyPlayers.some(player => player.isMe && player.isReady) ? readyCancelLabel : readyActionLabel}
+                </button>
+              </section>
+            </div>
+          )}
           {drawOffer && isDrawOfferRecipient && (
             <div className="absolute inset-0 z-30 flex items-center justify-center rounded-xl bg-slate-950/65 p-4 backdrop-blur-sm">
               <section role="dialog" aria-modal="true" aria-labelledby="draw-offer-title" className="w-full max-w-sm rounded-2xl border-4 border-slate-950 bg-slate-900 p-5 text-center shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">

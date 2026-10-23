@@ -3,7 +3,7 @@
 import React from 'react';
 import ChessPiece from './ChessPiece';
 
-const ChessRoom = ({ board, isFlipped = false, isPlaying = false, activeSide, playerSide, selectedPiece, legalMoves, allLegalMoves = [], checkSide, pendingPromotion, lang = 'VI', onPromote, onCancelPromotion, onSelectPiece, onMove }) => {
+const ChessRoom = ({ board, lastMove, isFlipped = false, isPlaying = false, activeSide, playerSide, selectedPiece, legalMoves, allLegalMoves = [], checkSide, pendingPromotion, lang = 'VI', onPromote, onCancelPromotion, onSelectPiece, onMove }) => {
   const findPiece = (x, y) => board.find(piece => piece.x === x && piece.y === y);
   const canMove = isPlaying && playerSide === activeSide && !pendingPromotion;
   const isLegalDestination = (x, y) => legalMoves.some(move => move.x === x && move.y === y);
@@ -20,6 +20,7 @@ const ChessRoom = ({ board, isFlipped = false, isPlaying = false, activeSide, pl
           const isDestination = isLegalDestination(x, y);
           const isSelectable = canMove && piece?.side === playerSide && allLegalMoves.some(move => move.fromX === x && move.fromY === y);
           const isSelected = selectedPiece?.x === x && selectedPiece?.y === y;
+          const isLastMove = lastMove && ((lastMove.fromX === x && lastMove.fromY === y) || (lastMove.x === x && lastMove.y === y));
 
           return (
             <div
@@ -27,6 +28,7 @@ const ChessRoom = ({ board, isFlipped = false, isPlaying = false, activeSide, pl
               onClick={() => { if (canMove && isDestination && selectedPiece) onMove(selectedPiece.x, selectedPiece.y, x, y); else if (isSelectable && piece) onSelectPiece(x, y); }}
               className={`relative flex items-center justify-center ${isDark ? 'bg-[#C36F5A]' : 'bg-[#F3D7B6]'} ${isSelectable ? 'cursor-pointer' : ''}`}
             >
+              {isLastMove && <div className="absolute inset-0 bg-amber-300/40 ring-2 ring-inset ring-amber-500/80 z-10" />}
               {piece?.type === 'k' && piece.side === checkSide && <div className="absolute inset-0 bg-red-600/60 ring-2 ring-inset ring-red-500 z-10" />}
               {isSelected && <div className="absolute inset-0 bg-yellow-400/50 z-10" />}
               {isDestination && ( <div className={`absolute z-20 rounded-full ${piece ? 'w-[80%] h-[80%] border-[6px] border-emerald-500/80 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : 'w-[30%] h-[30%] bg-emerald-500/80 shadow-[0_0_10px_rgba(16,185,129,0.8)]'}`} /> )}
