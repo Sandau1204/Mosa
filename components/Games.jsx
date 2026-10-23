@@ -110,7 +110,8 @@ const TRANSLATIONS = {
     submitPasswordBtn: "Xác Nhận Vào Phòng",
     invalidPasswordMsg: "Mật khẩu không chính xác, vui lòng thử lại!",
     settingsTitle: "CÀI ĐẶT",
-    soundSetting: "Âm Thanh",
+    musicSetting: "Nhạc Nền",
+    effectsSetting: "Âm Thanh Thao Tác",
     languageSetting: "Ngôn Ngữ",
 
     // In-game Room Translations
@@ -232,7 +233,8 @@ const TRANSLATIONS = {
     submitPasswordBtn: "Confirm & Join",
     invalidPasswordMsg: "Incorrect password, please try again!",
     settingsTitle: "SETTINGS",
-    soundSetting: "Sound",
+    musicSetting: "Background Music",
+    effectsSetting: "Sound Effects",
     languageSetting: "Language",
 
     // In-game Room Translations
@@ -433,8 +435,6 @@ export default function Games() {
   const discordSdkRef = useRef(null);
   const discordClientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
 
-  const [bgmMuted, setBgmMuted] = useState(false);
-  const { play: playSound, toggle: toggleSound } = useGameAudio(bgmMuted, setBgmMuted);
   const [ping, setPing] = useState(null);
   const [lobbyData, setLobbyData] = useState({
     guilds: [],
@@ -503,6 +503,21 @@ export default function Games() {
 
   // In-Game Room View State
   const [inGameRoom, setInGameRoom] = useState(null);
+  const activeMusic = !inGameRoom
+    ? 'menu'
+    : ['chess', 'xiangqi'].includes(inGameRoom.gameType)
+      ? null
+      : 'game';
+  const {
+    effectsMuted,
+    musicMuted,
+    play: playSound,
+    toggleEffects,
+    toggleMusic,
+    toggleActiveAudio,
+  } = useGameAudio(activeMusic);
+  const activeAudioMuted = activeMusic ? musicMuted : effectsMuted;
+  const activeAudioLabel = activeMusic ? t.musicSetting : t.effectsSetting;
   const [redPlayer, setRedPlayer] = useState(null);
   const [blackPlayer, setBlackPlayer] = useState(null);
   const [matchStarted, setMatchStarted] = useState(false);
@@ -1234,8 +1249,8 @@ export default function Games() {
   return (
     <div onClickCapture={event => { if (event.target.closest('button:not(:disabled)')) playSound('click'); }} className="w-full h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
 
-      <button type="button" onClick={toggleSound} aria-label={t.soundSetting} title={t.soundSetting} aria-pressed={!bgmMuted} className="fixed bottom-3 right-3 z-[70] rounded-full border-2 border-slate-600 bg-slate-900 p-2 text-white shadow-lg">
-        {bgmMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+      <button type="button" onClick={toggleActiveAudio} aria-label={activeAudioLabel} title={activeAudioLabel} aria-pressed={!activeAudioMuted} className="fixed bottom-3 right-3 z-[70] rounded-full border-2 border-slate-600 bg-slate-900 p-2 text-white shadow-lg">
+        {activeAudioMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
       </button>
       {!inGameRoom && (
         <header className="h-16 bg-slate-900 border-b-4 border-slate-950 px-4 flex items-center justify-between z-30 shrink-0 shadow-md">
@@ -1601,8 +1616,12 @@ export default function Games() {
             <div className="flex items-center justify-between border-b-2 border-slate-800 pb-3"><h3 className="font-black text-sm text-yellow-400 flex items-center gap-2"><Sliders className="w-4 h-4 text-yellow-400" /> {t.settingsTitle}</h3><button onClick={() => setIsSettingsModalOpen(false)} className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors"><X className="w-4 h-4" /></button></div>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border-2 border-slate-800">
-                <span className="text-xs font-bold text-white flex items-center gap-2">{bgmMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />} {t.soundSetting}</span>
-                <button onClick={toggleSound} aria-label={t.soundSetting} aria-pressed={!bgmMuted} className={`w-10 h-6 rounded-full p-1 border-2 border-slate-950 transition-colors ${!bgmMuted ? 'bg-emerald-500' : 'bg-slate-800'}`}><div className={`w-3.5 h-3.5 rounded-full bg-slate-950 transition-transform ${!bgmMuted ? 'translate-x-4' : 'translate-x-0'}`}></div></button>
+                <span className="text-xs font-bold text-white flex items-center gap-2">{musicMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />} {t.musicSetting}</span>
+                <button onClick={toggleMusic} aria-label={t.musicSetting} aria-pressed={!musicMuted} className={`w-10 h-6 rounded-full p-1 border-2 border-slate-950 transition-colors ${!musicMuted ? 'bg-emerald-500' : 'bg-slate-800'}`}><div className={`w-3.5 h-3.5 rounded-full bg-slate-950 transition-transform ${!musicMuted ? 'translate-x-4' : 'translate-x-0'}`}></div></button>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border-2 border-slate-800">
+                <span className="text-xs font-bold text-white flex items-center gap-2">{effectsMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />} {t.effectsSetting}</span>
+                <button onClick={toggleEffects} aria-label={t.effectsSetting} aria-pressed={!effectsMuted} className={`w-10 h-6 rounded-full p-1 border-2 border-slate-950 transition-colors ${!effectsMuted ? 'bg-emerald-500' : 'bg-slate-800'}`}><div className={`w-3.5 h-3.5 rounded-full bg-slate-950 transition-transform ${!effectsMuted ? 'translate-x-4' : 'translate-x-0'}`}></div></button>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border-2 border-slate-800">
                 <span className="text-xs font-bold text-white flex items-center gap-2"><Globe className="w-4 h-4 text-cyan-400" /> {t.languageSetting}</span>

@@ -76,6 +76,47 @@ test('MP3 loops after interaction, pauses on mute/hidden and is released', async
   assert.equal(music.paused, true);
 });
 
+test('background music and interaction effects mute independently', async () => {
+  let music;
+  let notes = 0;
+  class Music {
+    constructor(src) { this.src = src; this.paused = true; music = this; }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+    removeAttribute(name) { delete this[name]; }
+    load() {}
+  }
+  class Context {
+    constructor() { this.currentTime = 0; this.state = 'suspended'; }
+    createGain() { return { gain: { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} }; }
+    createOscillator() { return { frequency: {}, connect: gain => gain, disconnect() {}, start() { notes++; }, stop() {} }; }
+    async resume() { this.state = 'running'; }
+    async close() {}
+  }
+  const audio = createGameAudio(Context, Music, '/audio/menu.mp3');
+  await audio.unlock();
+  assert.equal(music.paused, false);
+
+  audio.setEffectsMuted(true);
+  const beforeMutedEffect = notes;
+  audio.play('move');
+  assert.equal(notes, beforeMutedEffect);
+  assert.equal(music.paused, false);
+
+  audio.setMusicEnabled(false);
+  assert.equal(music.paused, true);
+  audio.setEffectsMuted(false);
+  audio.play('move');
+  assert.equal(notes, beforeMutedEffect + 2);
+  assert.equal(music.paused, true);
+
+  audio.setMusicSource('/audio/game.mp3');
+  assert.equal(music.src, '/audio/game.mp3');
+  audio.setMusicEnabled(true);
+  assert.equal(music.paused, false);
+  audio.dispose();
+});
+
 test('unsupported audio APIs do not break games', async () => {
   const audio = createGameAudio(undefined);
   await audio.unlock();
