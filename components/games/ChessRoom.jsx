@@ -10,7 +10,7 @@ const ChessRoom = ({ board, lastMove, isFlipped = false, isPlaying = false, acti
 
   return (
     <>
-    <div className={`relative w-[min(100%,600px,75vh)] lg:w-[min(100%,600px,100cqh)] aspect-square shrink-0 bg-[#F3D7B6] border-[8px] sm:border-[12px] md:border-[16px] border-[#C36F5A] rounded-sm shadow-2xl ${isFlipped ? 'rotate-180' : ''}`}>
+    <div data-board-interaction className={`relative w-[min(100%,600px,75vh)] lg:w-[min(100%,600px,100cqh)] aspect-square shrink-0 bg-[#F3D7B6] border-[8px] sm:border-[12px] md:border-[16px] border-[#C36F5A] rounded-sm shadow-2xl ${isFlipped ? 'rotate-180' : ''}`}>
       <div className="absolute inset-0 border-2 border-[#8A3A2B] grid grid-cols-8 grid-rows-8 shadow-[inset_0_0_15px_rgba(0,0,0,0.3)]">
         {Array.from({ length: 64 }).map((_, i) => {
           const x = i % 8;

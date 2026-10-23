@@ -30,7 +30,7 @@ test('audio waits for interaction, respects mute/visibility and releases resourc
     audio.play('capture');
     assert.equal(notes, before + 3);
     audio.play('boardSelect');
-    assert.equal(notes, before + 5);
+    assert.equal(notes, before + 6);
     audio.setMuted(true);
     const mutedNotes = notes;
     audio.play('move');
@@ -46,11 +46,33 @@ test('audio waits for interaction, respects mute/visibility and releases resourc
     audio.play('move');
     assert.equal(notes, mutedNotes + 2);
     audio.play('boardMove');
-    assert.equal(notes, mutedNotes + 4);
+    assert.equal(notes, mutedNotes + 5);
   } finally { audio.dispose(); }
   assert.equal(closed, true);
   await audio.unlock();
   assert.equal(created, 1);
+});
+
+test('board effects play after resuming a suspended audio context', async () => {
+  let context;
+  let sounds = 0;
+  class Context {
+    constructor() { this.currentTime = 0; this.state = 'suspended'; context = this; }
+    createGain() { return { gain: { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} }; }
+    createOscillator() { return { frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: node => node, disconnect() {}, start() { sounds++; }, stop() {} }; }
+    createBuffer(_channels, length) { return { getChannelData: () => new Float32Array(length) }; }
+    createBufferSource() { return { connect: node => node, disconnect() {}, start() { sounds++; }, stop() {} }; }
+    createBiquadFilter() { return { frequency: {}, connect: node => node, disconnect() {} }; }
+    async resume() { this.state = 'running'; }
+    async close() {}
+  }
+  const audio = createGameAudio(Context);
+  await audio.unlock();
+  context.state = 'suspended';
+  audio.play('boardMove');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(sounds, 3);
+  audio.dispose();
 });
 
 test('MP3 loops after interaction, pauses on mute/hidden and is released', async () => {

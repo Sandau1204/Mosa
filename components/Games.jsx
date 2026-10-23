@@ -1247,7 +1247,7 @@ export default function Games() {
   }
 
   return (
-    <div onClickCapture={event => { if (event.target.closest('button:not(:disabled):not([data-board-interaction])')) playSound('click'); }} className="w-full h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
+    <div onClickCapture={event => { if (event.target.closest('button:not(:disabled)') && !event.target.closest('[data-board-interaction]')) playSound('click'); }} className="w-full h-dvh bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden antialiased bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:16px_16px]">
 
       <button type="button" onClick={toggleActiveAudio} aria-label={activeAudioLabel} title={activeAudioLabel} aria-pressed={!activeAudioMuted} className="fixed bottom-3 right-3 z-[70] rounded-full border-2 border-slate-600 bg-slate-900 p-2 text-white shadow-lg">
         {activeAudioMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
