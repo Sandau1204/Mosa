@@ -1,9 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ChessPiece from './ChessPiece';
 
-const ChessRoom = ({ board, lastMove, isFlipped = false, isPlaying = false, activeSide, playerSide, selectedPiece, legalMoves, allLegalMoves = [], checkSide, pendingPromotion, lang = 'VI', onPromote, onCancelPromotion, onSelectPiece, onMove }) => {
+const ChessRoom = ({ board, lastMove, isFlipped = false, isPlaying = false, activeSide, playerSide, selectedPiece, legalMoves, allLegalMoves = [], checkSide, pendingPromotion, lang = 'VI', onPromote, onCancelPromotion, onCancelSelect, onSelectPiece, onMove }) => {
+  const [pointer, setPointer] = useState(null);
+  const selected = selectedPiece && board.find(piece => piece.x === selectedPiece.x && piece.y === selectedPiece.y);
+  useEffect(() => {
+    const track = event => setPointer({ x: event.clientX, y: event.clientY });
+    window.addEventListener('pointermove', track);
+    return () => window.removeEventListener('pointermove', track);
+  }, []);
   const findPiece = (x, y) => board.find(piece => piece.x === x && piece.y === y);
   const canMove = isPlaying && playerSide === activeSide && !pendingPromotion;
   const isLegalDestination = (x, y) => legalMoves.some(move => move.x === x && move.y === y);
@@ -25,7 +32,7 @@ const ChessRoom = ({ board, lastMove, isFlipped = false, isPlaying = false, acti
           return (
             <div
               key={`cell-${x}-${y}`}
-              onClick={() => { if (canMove && isDestination && selectedPiece) onMove(selectedPiece.x, selectedPiece.y, x, y); else if (isSelectable && piece) onSelectPiece(x, y); }}
+              onClick={() => { if (canMove && isDestination && selectedPiece) onMove(selectedPiece.x, selectedPiece.y, x, y); else if (isSelectable && piece) { if (isSelected) onCancelSelect(); else onSelectPiece(x, y); } else if (selectedPiece) onCancelSelect(); }}
               className={`relative flex items-center justify-center ${isDark ? 'bg-[#C36F5A]' : 'bg-[#F3D7B6]'} ${isSelectable ? 'cursor-pointer' : ''}`}
             >
               {isLastMove && <div className="absolute inset-0 bg-amber-300/40 ring-2 ring-inset ring-amber-500/80 z-10" />}
@@ -33,7 +40,7 @@ const ChessRoom = ({ board, lastMove, isFlipped = false, isPlaying = false, acti
               {isSelected && <div className="absolute inset-0 bg-yellow-400/50 z-10" />}
               {isDestination && ( <div className={`absolute z-20 rounded-full ${piece ? 'w-[80%] h-[80%] border-[6px] border-emerald-500/80 shadow-[0_0_10px_rgba(16,185,129,0.8)]' : 'w-[30%] h-[30%] bg-emerald-500/80 shadow-[0_0_10px_rgba(16,185,129,0.8)]'}`} /> )}
               {piece && (
-                <div className={`absolute inset-0 flex items-center justify-center filter drop-shadow-[0_5px_4px_rgba(0,0,0,0.6)] select-none transition-transform ${isSelectable ? 'hover:scale-110 z-40' : 'z-30'} ${isFlipped ? 'rotate-180' : ''}`}>
+                <div className={`absolute inset-0 flex items-center justify-center filter drop-shadow-[0_5px_4px_rgba(0,0,0,0.6)] select-none transition-transform ${isSelected ? 'opacity-20' : ''} ${isSelectable ? 'hover:scale-110 z-40' : 'z-30'} ${isFlipped ? 'rotate-180' : ''}`}>
                   <ChessPiece type={piece.type} side={piece.side} />
                 </div>
               )}
@@ -42,6 +49,7 @@ const ChessRoom = ({ board, lastMove, isFlipped = false, isPlaying = false, acti
         })}
       </div>
     </div>
+    {selected && pointer && <div aria-hidden="true" className="fixed z-[100] pointer-events-none -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_5px_5px_rgba(0,0,0,0.7)]" style={{ left: pointer.x, top: pointer.y, width: 'min(10vw, 64px)', height: 'min(10vw, 64px)' }}><ChessPiece type={selected.type} side={selected.side} /></div>}
     {pendingPromotion && (
       <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 rounded-xl">
         <section role="dialog" aria-modal="true" aria-labelledby="chess-promotion-title" className="bg-slate-900 border-2 border-slate-700 rounded-xl p-4 text-center shadow-xl">

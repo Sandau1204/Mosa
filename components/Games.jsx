@@ -1399,6 +1399,7 @@ export default function Games() {
                   submitMatchAction('move', { ...move, promotion });
                 }}
                 onCancelPromotion={() => setPendingPromotion(null)}
+                onCancelSelect={() => { setSelectedPiece(null); setLegalMoves([]); }}
                 onSelectPiece={handleSelectPiece}
                 onMove={handleMove}
               />
@@ -1416,6 +1417,7 @@ export default function Games() {
                 selectedPiece={selectedPiece}
                 legalMoves={legalMoves}
                 checkSide={checkSide}
+                onCancelSelect={() => { setSelectedPiece(null); setLegalMoves([]); }}
                 onSelectPiece={handleSelectPiece}
                 onMove={handleMove}
               />

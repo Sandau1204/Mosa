@@ -1,8 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
-const XiangqiRoom = ({ pieceLabels, board, lastMove, isFlipped = false, isPlaying = false, activeSide, playerSide, selectablePieces = [], selectedPiece, legalMoves, checkSide, lang = 'VI', onSelectPiece, onMove }) => {
+const XiangqiRoom = ({ pieceLabels, board, lastMove, isFlipped = false, isPlaying = false, activeSide, playerSide, selectablePieces = [], selectedPiece, legalMoves, checkSide, lang = 'VI', onCancelSelect, onSelectPiece, onMove }) => {
+  const [pointer, setPointer] = useState(null);
+  const selected = selectedPiece && board.find(piece => piece.x === selectedPiece.x && piece.y === selectedPiece.y);
+  useEffect(() => {
+    const track = event => setPointer({ x: event.clientX, y: event.clientY });
+    window.addEventListener('pointermove', track);
+    return () => window.removeEventListener('pointermove', track);
+  }, []);
   const findPiece = (x, y) => board.find(piece => piece.x === x && piece.y === y);
   const canMove = isPlaying && playerSide === activeSide;
   const isLegalDestination = (x, y) => canMove && selectedPiece && legalMoves.some(move => move.x === x && move.y === y);
@@ -66,11 +73,12 @@ const XiangqiRoom = ({ pieceLabels, board, lastMove, isFlipped = false, isPlayin
               <button
                 key={`piece-${x}-${y}`}
                 data-board-interaction
-                onClick={() => { if (isDestination) onMove(selectedPiece.x, selectedPiece.y, x, y); else if (isSelectable) onSelectPiece(x, y); }}
+                onClick={() => { if (isDestination) onMove(selectedPiece.x, selectedPiece.y, x, y); else if (isSelectable) { if (isSelected) onCancelSelect(); else onSelectPiece(x, y); } else if (selectedPiece) onCancelSelect(); }}
                 disabled={!isSelectable && !isDestination}
                 className={`absolute z-20 flex aspect-square w-[clamp(24px,8cqw,48px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 font-serif text-[clamp(14px,4cqw,24px)] font-black shadow-[3px_3px_0px_rgba(0,0,0,0.6)] transition-all
                   ${piece.side === 'red' ? 'border-red-700 bg-amber-50 text-red-600' : 'border-slate-300 bg-slate-900 text-amber-200'}
                   ${isSelectable ? 'cursor-pointer hover:scale-110' : 'cursor-default'}
+                  ${isSelected ? 'opacity-20' : ''}
                   ${isSelected ? 'ring-2 sm:ring-4 ring-emerald-400 scale-105' : ''}
                   ${isDestination ? 'ring-2 sm:ring-4 ring-emerald-500' : ''}
                   ${isCheckedKing ? 'animate-check-pulse ring-2 sm:ring-4 ring-rose-500' : ''}`}
@@ -83,6 +91,7 @@ const XiangqiRoom = ({ pieceLabels, board, lastMove, isFlipped = false, isPlayin
         )}
       </div>
     </div>
+    {selected && pointer && <div aria-hidden="true" className={`fixed z-[100] pointer-events-none -translate-x-1/2 -translate-y-1/2 flex aspect-square items-center justify-center rounded-full border-2 font-serif text-2xl font-black shadow-[3px_3px_0px_rgba(0,0,0,0.6)] ${selected.side === 'red' ? 'border-red-700 bg-amber-50 text-red-600' : 'border-slate-300 bg-slate-900 text-amber-200'}`} style={{ left: pointer.x, top: pointer.y, width: 'min(10vw, 56px)' }}><span className={isFlipped ? 'rotate-180' : ''}>{pieceLabels[selected.type][selected.side]}</span></div>}
     </>
   );
 };
