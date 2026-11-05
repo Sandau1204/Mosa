@@ -127,7 +127,13 @@ class Voice(commands.Cog):
         if voice_client and getattr(voice_client, "is_connected", lambda: False)():
             if interaction.guild_id in self.welcome_channels:
                 del self.welcome_channels[interaction.guild_id]
+            music_cog = self.bot.get_cog("Music")
+            voice_channel = voice_client.channel
+            if music_cog:
+                await music_cog.stop_player(interaction.guild_id)
             await voice_client.disconnect(force=True)
+            if music_cog:
+                await music_cog.cleanup_on_disconnect(interaction.guild_id, voice_channel=voice_channel)
             await interaction.followup.send("👋 Bye bye!")
         else:
             await interaction.followup.send("❌ Bot không ở trong kênh nào.")

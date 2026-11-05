@@ -347,13 +347,20 @@ class Music(commands.Cog):
                     if res: await self._web_process_song(guild_id, res[0], target_channel)
             elif action == 'toggle_play':
                 if vc:
-                    if vc.is_playing(): self.pause_music(guild_id)
-                    elif vc.is_paused(): self.resume_music(guild_id)
+                    if vc.is_playing():
+                        self.pause_music(guild_id)
+                        await self.update_channel_status(guild_id, None)
+                    elif vc.is_paused():
+                        self.resume_music(guild_id)
+                        song = self.current_songs.get(guild_id)
+                        if song:
+                            await self.update_channel_status(guild_id, f"🎶 {song.get('title', 'Unknown')}"[:500])
                     await self.update_ui(guild_id)
             elif action == 'skip':
                 await self.skip_song(guild_id)
             elif action == 'clear':
                 if guild_id in self.queues: self.queues[guild_id].clear()
+                await self.update_channel_status(guild_id, None)
                 await self.update_ui(guild_id)
             elif action == 'remove':
                 song_id = data.get('song_id')
@@ -526,12 +533,15 @@ class Music(commands.Cog):
                 break
         try: await msg.edit(embed=view.create_embed(), view=view)
         except: pass
-    async def update_channel_status(self, guild_id, text=None):
+    async def update_channel_status(self, guild_id, text=None, voice_channel=None):
         guild = self.bot.get_guild(guild_id)
-        if not guild or not guild.voice_client or not guild.voice_client.channel: return
+        if not guild: return
+        if voice_channel is None:
+            voice_client = guild.voice_client
+            voice_channel = voice_client.channel if voice_client else None
+        if not voice_channel: return
         is_status_enabled = self.settings.get(str(guild_id), {}).get("status_enabled", False)
-        if not is_status_enabled: return
-        voice_channel = guild.voice_client.channel
+        if text is not None and not is_status_enabled: return
         if isinstance(voice_channel, discord.VoiceChannel):
             try: await voice_channel.edit(status=text)
             except discord.Forbidden: print(f"⚠️ CẢNH BÁO: Bot thiếu quyền 'Set Voice Channel Status' ở kênh {voice_channel.name}")
@@ -558,7 +568,8 @@ class Music(commands.Cog):
             print(f"⚠️ Lỗi khi tự động rời kênh: {e}")
         finally:
             if guild_id in self.idle_timers: del self.idle_timers[guild_id]
-    async def cleanup_on_disconnect(self, guild_id):
+    async def cleanup_on_disconnect(self, guild_id, voice_channel=None):
+        await self.update_channel_status(guild_id, None, voice_channel=voice_channel)
         if guild_id in self.idle_timers:
             try: self.idle_timers[guild_id].cancel()
             except: pass
@@ -587,6 +598,7 @@ class Music(commands.Cog):
             # --- CƠ CHẾ PROXY RECONNECT ---
             if before.channel is not None and after.channel is None:
                 guild_id = before.channel.guild.id
+                await self.update_channel_status(guild_id, None, voice_channel=before.channel)
                 player = self.players.get(guild_id)
                 if player and player.get('is_playing') and player.get('current_song'):
                     print(f"[Proxy Reconnect] Đang phục hồi kết nối cho kênh {before.channel.name}...")
@@ -728,7 +740,6 @@ class Music(commands.Cog):
                 if not target_channel and guild.voice_client and guild.voice_client.channel:
                     target_channel = guild.voice_client.channel
                 view = MusicController(self, guild_id, song_data)
-                await self.update_channel_status(guild_id, f"🎶 {song_data['title']}"[:500])
                 if target_channel:
                     if start_offset > 0 and guild_id in self.ui_messages:
                         try: await self.ui_messages[guild_id].edit(embed=view.create_embed(), view=view)
@@ -750,6 +761,7 @@ class Music(commands.Cog):
                 if guild_id in self.pause_times: del self.pause_times[guild_id]
                 # PHÁT NHẠC VÀ ĐỢI
                 guild.voice_client.play(discord.PCMVolumeTransformer(source, volume=vol), after=after)
+                await self.update_channel_status(guild_id, f"🎶 {song_data['title']}"[:500])
                 await next_song.wait()
                 # VÒNG LẶP TIẾP TỤC SAU KHI HẾT BÀI
                 if self.seek_flags.get(guild_id, False): continue
@@ -1014,9 +1026,11 @@ class Music(commands.Cog):
                 voice_channel = guild.voice_client.channel
                 if isinstance(voice_channel, discord.VoiceChannel):
                     if not new_status: await voice_channel.edit(status=None)
-                    elif interaction.guild_id in self.current_songs:
+                    elif interaction.guild_id in self.current_songs and guild.voice_client.is_playing():
                         song_title = self.current_songs[interaction.guild_id].get('title', 'Unknown')
                         await voice_channel.edit(status=f"🎶 {song_title}"[:500])
+                    else:
+                        await voice_channel.edit(status=None)
             except discord.Forbidden: msg += " ⚠️ Bot không có quyền chỉnh sửa trạng thái kênh."
             except Exception: pass
         await interaction.followup.send(msg)
