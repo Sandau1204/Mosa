@@ -222,7 +222,7 @@ function updateUI(state) {
                     <i class="ph ph-dots-six-vertical text-discord-muted hover:text-white cursor-grab drag-handle mr-2 text-xl" title="Kéo để di chuyển"></i>
                     <span class="w-6 text-center text-xs ${song.is_current ? 'text-discord-blurple' : 'text-discord-muted'}">${i + 1}</span>
                     <div class="flex-1 min-w-0 flex flex-col pl-2">
-                        <div class="text-sm font-medium ${song.is_current ? 'text-white' : 'text-discord-text'} truncate">${song.title}${song.is_current ? ' <span class="text-xs text-discord-blurple">• Đang phát</span>' : ''}</div>
+                        <button type="button" onclick="playQueueSong(${i})" class="text-sm font-medium ${song.is_current ? 'text-white' : 'text-discord-text hover:text-white'} text-left truncate" title="Phát bài này">${song.title}${song.is_current ? ' <span class="text-xs text-discord-blurple">• Đang phát</span>' : ''}</button>
                         <div class="text-xs text-discord-muted truncate">${song.author}</div>
                     </div>
                     <span class="text-xs text-discord-muted mx-4 font-mono">${song.duration}</span>
@@ -271,6 +271,7 @@ function addFromInput() {
 
 function togglePlay() { sendAction('toggle_play'); }
 function skipSong() { sendAction('skip'); }
+function playQueueSong(queueIndex) { sendAction('play_queue', { queue_index: queueIndex }); }
 function clearQueue() { sendAction('clear'); }
 function inviteBot() {
     const cid = document.getElementById('channel-select').value;
@@ -342,6 +343,7 @@ function bootstrapMusic() {
     window.handleLogin = handleLogin;
     window.togglePlay = togglePlay;
     window.skipSong = skipSong;
+    window.playQueueSong = playQueueSong;
     window.clearQueue = clearQueue;
     window.inviteBot = inviteBot;
     window.toggleLoop = toggleLoop;

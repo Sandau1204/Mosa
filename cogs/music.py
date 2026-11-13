@@ -230,6 +230,8 @@ class Music(commands.Cog):
         self.shuffle_played = {}
         self.played_songs = {}
         self.last_songs = {}
+        self.requested_songs = {}
+        self.force_skips = {}
         self.loops = {} # Trạng thái lặp
         self.volumes = {} # Mức âm lượng từng server
         self.current_songs = {} # Thông tin bài đang hát
@@ -372,14 +374,17 @@ class Music(commands.Cog):
                     await self.update_ui(guild_id)
             elif action == 'skip':
                 await self.skip_song(guild_id)
+            elif action == 'play_queue':
+                queue_index = data.get('queue_index')
+                if queue_index is not None and self.request_queue_song(guild_id, int(queue_index)):
+                    if not self.active_tasks.get(guild_id) or self.active_tasks[guild_id].done():
+                        setup_id = self.settings.get(str(guild_id), {}).get("music_channel_id")
+                        target_channel = self.bot.get_channel(int(setup_id)) if setup_id else None
+                        if target_channel is None and vc:
+                            target_channel = vc.channel
+                        await self.start_playing(target_channel, guild_id)
             elif action == 'clear':
-                current = self.current_songs.get(guild_id)
-                played = self.played_songs.get(guild_id, set())
-                if guild_id in self.queues:
-                    self.queues[guild_id] = [
-                        song for song in self.queues[guild_id]
-                        if song is current or id(song) in played
-                    ]
+                self.clear_queue(guild_id)
                 await self.update_channel_status(guild_id, None)
                 await self.update_ui(guild_id)
             elif action == 'remove':
@@ -547,6 +552,12 @@ class Music(commands.Cog):
         return enabled
     def _select_next_song(self, guild_id):
         queue = self.queues.get(guild_id, [])
+        requested = self.requested_songs.pop(guild_id, None)
+        if requested is not None and any(song is requested for song in queue):
+            self.played_songs.setdefault(guild_id, set()).add(id(requested))
+            if self.shuffle_modes.get(guild_id, False):
+                self.shuffle_played.setdefault(guild_id, set()).add(id(requested))
+            return requested
         if not queue:
             return None
         if self.shuffle_modes.get(guild_id, False):
@@ -568,6 +579,26 @@ class Music(commands.Cog):
                 song = queue[0]
         self.played_songs.setdefault(guild_id, set()).add(id(song))
         return song
+    def request_queue_song(self, guild_id, index):
+        queue = self.queues.get(guild_id, [])
+        if index < 0 or index >= len(queue):
+            return False
+        song = queue[index]
+        if song is self.current_songs.get(guild_id):
+            guild = self.bot.get_guild(guild_id)
+            vc = guild.voice_client if guild else None
+            if vc and (vc.is_playing() or vc.is_paused()):
+                return False
+        self.requested_songs[guild_id] = song
+        self.played_songs.setdefault(guild_id, set()).discard(id(song))
+        if self.shuffle_modes.get(guild_id, False):
+            self.shuffle_played.setdefault(guild_id, set()).discard(id(song))
+        self.force_skips[guild_id] = True
+        guild = self.bot.get_guild(guild_id)
+        vc = guild.voice_client if guild else None
+        if vc and (vc.is_playing() or vc.is_paused()):
+            vc.stop()
+        return True
     def remove_song(self, guild_id, index):
         queue = self.queues.get(guild_id, [])
         if index < 0 or index >= len(queue):
@@ -577,6 +608,15 @@ class Music(commands.Cog):
             return False
         queue.pop(index)
         return True
+    def clear_queue(self, guild_id):
+        self.queues.setdefault(guild_id, []).clear()
+        self.played_songs.pop(guild_id, None)
+        if self.shuffle_modes.get(guild_id, False):
+            self.shuffle_played[guild_id] = set()
+        else:
+            self.shuffle_played.pop(guild_id, None)
+        self.requested_songs.pop(guild_id, None)
+        self.force_skips[guild_id] = True
     def prioritize_song(self, guild_id, index):
         queue = self.queues.get(guild_id, [])
         if index < 0 or index >= len(queue):
@@ -811,6 +851,10 @@ class Music(commands.Cog):
                     self.current_songs[guild_id] = song_data
                 else:
                     play_url = song_data.get('stream_url')
+                if self.requested_songs.get(guild_id) is not None and self.requested_songs[guild_id] is not song_data:
+                    continue
+                if self.requested_songs.get(guild_id) is song_data:
+                    self.requested_songs.pop(guild_id, None)
                 if not play_url:
                     if channel: await channel.send(f"⚠️ Không thể trích xuất âm thanh cho bài: **{song_data['title']}** (Có thể do YouTube chặn). Đang bỏ qua...")
                     continue
@@ -893,6 +937,7 @@ class Music(commands.Cog):
             self.active_tasks[guild_id] = asyncio.create_task(self.player_loop(guild_id, channel))
     async def stop_player(self, guild_id):
         self.manual_stops[guild_id] = True; self.force_skips[guild_id] = True
+        self.requested_songs.pop(guild_id, None)
         if guild_id in self.current_songs: del self.current_songs[guild_id]
         await self.update_channel_status(guild_id, None)
         guild = self.bot.get_guild(guild_id)
