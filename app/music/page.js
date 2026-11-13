@@ -88,9 +88,9 @@ export default function MusicDashboard() {
                                 <span id="queue-count" className="bg-discord-panel text-discord-muted text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">0 bài</span>
                             </div>
                             <div className="flex gap-1.5 md:gap-2">
-                                <button onClick={() => {window.shuffleQueue()}} className="bg-discord-panel hover:bg-discord-hover text-discord-text px-2 md:px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 md:gap-2 text-[11px] md:text-sm">
+                                <button id="shuffle-btn" onClick={() => {window.shuffleQueue()}} className="bg-discord-panel hover:bg-discord-hover text-discord-text px-2 md:px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 md:gap-2 text-[11px] md:text-sm">
                                     <i className="ph ph-shuffle text-sm md:text-base"></i>
-                                    <span className="hidden md:inline">Trộn bài</span>
+                                    <span className="hidden md:inline">Trộn bài: Tắt</span>
                                 </button>
                                 <button onClick={() => {window.clearQueue()}} className="bg-discord-panel hover:bg-discord-hover text-discord-danger hover:text-red-400 px-2 md:px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 md:gap-2 text-[11px] md:text-sm">
                                     <i className="ph ph-trash text-sm md:text-base"></i>

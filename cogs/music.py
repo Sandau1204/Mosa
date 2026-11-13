@@ -124,7 +124,8 @@ class MusicController(discord.ui.View):
         embed = discord.Embed(title="🎶 Đang phát nhạc", description=f"**{self.song_info['title']}**", color=discord.Color.purple())
         if self.song_info.get('thumbnail'):
             embed.set_thumbnail(url=self.song_info['thumbnail'])
-        embed.set_footer(text=f"Vol: {int(volume*100)}% | Loop: {'Bật' if loop_status else 'Tắt'} | Tune: {current_filter_name}")
+        shuffle_status = "Bật" if self.cog.shuffle_modes.get(self.guild_id, False) else "Tắt"
+        embed.set_footer(text=f"Vol: {int(volume*100)}% | Loop: {'Bật' if loop_status else 'Tắt'} | Shuffle: {shuffle_status} | Tune: {current_filter_name}")
         return embed
     @discord.ui.button(emoji="⏸️", style=discord.ButtonStyle.secondary, row=0, custom_id="btn_pause")
     async def pause_resume(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -148,8 +149,9 @@ class MusicController(discord.ui.View):
         await self._safe_reply(interaction, "⏭️ Đã bỏ qua bài hát", ephemeral=True)
     @discord.ui.button(emoji="🔀", style=discord.ButtonStyle.secondary, row=0)
     async def shuffle(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.cog.shuffle_queue(self.guild_id)
-        await self._safe_reply(interaction, "🔀 Đã trộn ngẫu nhiên hàng đợi.", ephemeral=True)
+        enabled = self.cog.toggle_shuffle(self.guild_id)
+        status = "bật" if enabled else "tắt"
+        await self._safe_reply(interaction, f"🔀 Đã {status} chế độ trộn bài.", ephemeral=True)
         await self.cog.update_ui(self.guild_id)
     @discord.ui.button(emoji="🔂", style=discord.ButtonStyle.secondary, row=0)
     async def loop(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -158,7 +160,10 @@ class MusicController(discord.ui.View):
         await self._safe_reply(interaction, defer=True)
     @discord.ui.button(emoji="📜", style=discord.ButtonStyle.secondary, row=0)
     async def queue_list(self, interaction: discord.Interaction, button: discord.ui.Button):
-        msg = "\n".join([f"{i+1}. {s['title']}" for i, s in enumerate(self.cog.queues.get(self.guild_id, [])[:10])]) or "Trống"
+        msg = "\n".join([
+            f"{i+1}. {'▶️ ' if s is self.cog.current_songs.get(self.guild_id) else ''}{s['title']}"
+            for i, s in enumerate(self.cog.queues.get(self.guild_id, [])[:10])
+        ]) or "Trống"
         await self._safe_reply(interaction, f"**Hàng chờ tiếp theo:**\n{msg}", ephemeral=True)
     @discord.ui.button(emoji="🔉", style=discord.ButtonStyle.gray, row=1)
     async def vol_down(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -202,8 +207,10 @@ class PrioritizeSelect(discord.ui.Select):
         super().__init__(placeholder="🔻 Chọn bài ưu tiên...", min_values=1, max_values=1, options=options)
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        if self.cog.move_song(self.guild_id, int(self.values[0]), 0): await interaction.followup.send("✅ Đã đưa lên đầu!", ephemeral=True)
-        else: await interaction.followup.send("❌ Lỗi", ephemeral=True)
+        if self.cog.prioritize_song(self.guild_id, int(self.values[0])):
+            await interaction.followup.send("✅ Đã chuyển bài ngay sau bài đang phát.", ephemeral=True)
+        else:
+            await interaction.followup.send("❌ Không thể ưu tiên bài đang phát hoặc bài không còn trong hàng chờ.", ephemeral=True)
 
 class PrioritizeView(discord.ui.View):
     def __init__(self, cog, interaction, queue_list):
@@ -219,6 +226,10 @@ class Music(commands.Cog):
         # --- CÁC BIẾN QUẢN LÝ TRẠNG THÁI ---
         self.channel_status_enabled = {}
         self.queues = {} # Chứa danh sách bài hát chờ phát
+        self.shuffle_modes = {}
+        self.shuffle_played = {}
+        self.played_songs = {}
+        self.last_songs = {}
         self.loops = {} # Trạng thái lặp
         self.volumes = {} # Mức âm lượng từng server
         self.current_songs = {} # Thông tin bài đang hát
@@ -296,7 +307,9 @@ class Music(commands.Cog):
                     'author': s.get('channel', 'Unknown'),
                     'duration': dur_str,
                     'thumb': s.get('thumbnail', ''),
-                    'url': s.get('webpage_url', '')
+                    'url': s.get('webpage_url', ''),
+                    'is_current': s is now_playing,
+                    'is_removable': s is not now_playing and id(s) not in self.played_songs.get(gid, set())
                 })
             playlists_web = []
             pl_id = 1
@@ -309,6 +322,7 @@ class Music(commands.Cog):
                 'now_playing': web_np,
                 'volume': int(self.volumes.get(gid, self.get_default_volume(gid)) * 100),
                 'is_loop': 1 if self.loops.get(gid, False) else 0,
+                'is_shuffle': self.shuffle_modes.get(gid, False),
                 'playlists': playlists_web
             }
     @commands.Cog.listener()
@@ -359,13 +373,19 @@ class Music(commands.Cog):
             elif action == 'skip':
                 await self.skip_song(guild_id)
             elif action == 'clear':
-                if guild_id in self.queues: self.queues[guild_id].clear()
+                current = self.current_songs.get(guild_id)
+                played = self.played_songs.get(guild_id, set())
+                if guild_id in self.queues:
+                    self.queues[guild_id] = [
+                        song for song in self.queues[guild_id]
+                        if song is current or id(song) in played
+                    ]
                 await self.update_channel_status(guild_id, None)
                 await self.update_ui(guild_id)
             elif action == 'remove':
-                song_id = data.get('song_id')
-                if guild_id in self.queues:
-                    self.queues[guild_id] = [s for s in self.queues[guild_id] if s.get('webpage_url') != song_id]
+                queue_index = data.get('queue_index')
+                if queue_index is not None:
+                    self.remove_song(guild_id, int(queue_index))
                 await self.update_ui(guild_id)
             elif action == 'volume':
                 vol = int(data.get('level', 100)) / 100
@@ -374,6 +394,9 @@ class Music(commands.Cog):
                 await self.update_ui(guild_id)
             elif action == 'loop':
                 self.loops[guild_id] = not self.loops.get(guild_id, False)
+                await self.update_ui(guild_id)
+            elif action == 'shuffle':
+                self.toggle_shuffle(guild_id)
                 await self.update_ui(guild_id)
             elif action == 'seek':
                 position = data.get('position')
@@ -420,6 +443,10 @@ class Music(commands.Cog):
                 data[str(gid)] = {
                     "queue": queue,
                     "current_song": self.current_songs.get(gid),
+                    "current_index": next(
+                        (index for index, song in enumerate(queue) if song is self.current_songs.get(gid)),
+                        None
+                    ),
                     "voice_channel_id": guild.voice_client.channel.id,
                     "loop": self.loops.get(gid, False),
                     "volume": self.volumes.get(gid, 0.5)
@@ -444,7 +471,20 @@ class Music(commands.Cog):
                     self.volumes[gid] = info.get("volume", 0.5)
                     current_song = info.get("current_song")
                     if current_song:
-                        self.queues[gid].insert(0, current_song)
+                        current_index = info.get("current_index")
+                        restored_song = None
+                        if isinstance(current_index, int) and 0 <= current_index < len(self.queues[gid]):
+                            candidate = self.queues[gid][current_index]
+                            if candidate == current_song:
+                                restored_song = candidate
+                        if restored_song is None:
+                            restored_song = next((song for song in self.queues[gid] if song == current_song), None)
+                        if restored_song is None:
+                            self.queues[gid].insert(0, current_song)
+                            restored_song = current_song
+                        self.current_songs[gid] = restored_song
+                        self.seek_flags[gid] = True
+                        self.seek_pos[gid] = 0
                     vc_id = info.get("voice_channel_id")
                     voice_channel = guild.get_channel(vc_id)
                     if voice_channel:
@@ -493,10 +533,65 @@ class Music(commands.Cog):
             return False
         return True
     def shuffle_queue(self, guild_id):
-        if guild_id in self.queues and self.queues[guild_id]:
-            random.shuffle(self.queues[guild_id])
-            return True
-        return False
+        return self.toggle_shuffle(guild_id)
+    def toggle_shuffle(self, guild_id):
+        enabled = not self.shuffle_modes.get(guild_id, False)
+        self.shuffle_modes[guild_id] = enabled
+        if enabled:
+            self.shuffle_played[guild_id] = set()
+            current = self.current_songs.get(guild_id)
+            if current is not None:
+                self.shuffle_played[guild_id].add(id(current))
+        else:
+            self.shuffle_played.pop(guild_id, None)
+        return enabled
+    def _select_next_song(self, guild_id):
+        queue = self.queues.get(guild_id, [])
+        if not queue:
+            return None
+        if self.shuffle_modes.get(guild_id, False):
+            played = self.shuffle_played.setdefault(guild_id, set())
+            candidates = [song for song in queue if id(song) not in played]
+            if not candidates:
+                return None
+            song = random.choice(candidates)
+            played.add(id(song))
+        else:
+            current = self.current_songs.get(guild_id) or self.last_songs.get(guild_id)
+            current_index = next((index for index, queued_song in enumerate(queue) if queued_song is current), -1)
+            if current_index >= 0:
+                song_index = current_index + 1
+                if song_index >= len(queue):
+                    return None
+                song = queue[song_index]
+            else:
+                song = queue[0]
+        self.played_songs.setdefault(guild_id, set()).add(id(song))
+        return song
+    def remove_song(self, guild_id, index):
+        queue = self.queues.get(guild_id, [])
+        if index < 0 or index >= len(queue):
+            return False
+        song = queue[index]
+        if song is self.current_songs.get(guild_id) or id(song) in self.played_songs.get(guild_id, set()):
+            return False
+        queue.pop(index)
+        return True
+    def prioritize_song(self, guild_id, index):
+        queue = self.queues.get(guild_id, [])
+        if index < 0 or index >= len(queue):
+            return False
+        song = queue[index]
+        if song is self.current_songs.get(guild_id):
+            return False
+        return self.move_song(guild_id, index, self._index_after_current(guild_id, index))
+    def _index_after_current(self, guild_id, moving_index):
+        queue = self.queues[guild_id]
+        current = self.current_songs.get(guild_id)
+        current_index = next((index for index, queued_song in enumerate(queue) if queued_song is current), -1)
+        if current_index < 0:
+            return 0
+        return current_index if moving_index < current_index else current_index + 1
     # [BẢN VÁ LỖI PYLANCE] Khai báo kiểu trả về `-> list` và sử dụng `list(cast(Any, ...))`
     async def search_youtube(self, q) -> list:
         loop = asyncio.get_event_loop()
@@ -650,16 +745,24 @@ class Music(commands.Cog):
     # VÒNG LẶP PHÁT NHẠC
     # ====================================================
     async def player_loop(self, guild_id, channel):
+        repeat_current = False
         while True:
+            if self.manual_stops.get(guild_id, False):
+                break
             is_seeking = self.seek_flags.get(guild_id, False)
             if is_seeking:
                 song_data = self.current_songs[guild_id]
+                self.last_songs[guild_id] = song_data
+                self.played_songs.setdefault(guild_id, set()).add(id(song_data))
+                if self.shuffle_modes.get(guild_id, False):
+                    self.shuffle_played.setdefault(guild_id, set()).add(id(song_data))
                 start_offset = self.seek_pos.get(guild_id, 0)
                 self.seek_flags[guild_id] = False
             else:
                 self.force_skips[guild_id] = False
-                # NẾU HÀNG ĐỢI RỖNG
-                if guild_id not in self.queues or not self.queues[guild_id]:
+                song_data = self.current_songs.get(guild_id) if repeat_current else self._select_next_song(guild_id)
+                repeat_current = False
+                if song_data is None:
                     await self.update_channel_status(guild_id, None)
                     if guild_id in self.current_songs: del self.current_songs[guild_id]
                     if guild_id in self.ui_messages:
@@ -686,8 +789,8 @@ class Music(commands.Cog):
                                     self.idle_timers[guild_id] = asyncio.create_task(self.idle_disconnect(guild_id, idle_channel))
                     if guild_id in self.manual_stops: del self.manual_stops[guild_id]
                     break
-                song_data = self.queues[guild_id].pop(0)
                 self.current_songs[guild_id] = song_data
+                self.last_songs[guild_id] = song_data
                 start_offset = 0
             voice_cog = self.bot.get_cog("Voice")
             if voice_cog and guild_id in voice_cog.welcome_channels: del voice_cog.welcome_channels[guild_id]
@@ -725,6 +828,8 @@ class Music(commands.Cog):
                     before_options=current_opts.get('before_options'),
                     options=current_opts.get('options')
                 )
+                if self.manual_stops.get(guild_id, False):
+                    break
                 vol = self.volumes.get(guild_id, self.get_default_volume(guild_id))
                 self.volumes[guild_id] = vol
                 # --- [BẢN VÁ FALLBACK CHANNEL] Xử lý hiển thị UI nếu channel = None ---
@@ -764,9 +869,11 @@ class Music(commands.Cog):
                 await self.update_channel_status(guild_id, f"🎶 {song_data['title']}"[:500])
                 await next_song.wait()
                 # VÒNG LẶP TIẾP TỤC SAU KHI HẾT BÀI
+                if self.manual_stops.get(guild_id, False):
+                    break
                 if self.seek_flags.get(guild_id, False): continue
                 if self.loops.get(guild_id, False) and not self.force_skips.get(guild_id, False):
-                    self.queues[guild_id].insert(0, song_data)
+                    repeat_current = True
             except asyncio.TimeoutError:
                 # [BẢN VÁ LỖI TREO 2] Tự động bỏ qua bài hát nếu quá 20s YouTube không phản hồi
                 print(f"⚠️ YouTube phản hồi quá chậm, đã bỏ qua bài: {song_data['title']}")
@@ -785,7 +892,7 @@ class Music(commands.Cog):
         if guild_id not in self.active_tasks or self.active_tasks[guild_id].done():
             self.active_tasks[guild_id] = asyncio.create_task(self.player_loop(guild_id, channel))
     async def stop_player(self, guild_id):
-        self.queues[guild_id] = []; self.manual_stops[guild_id] = True; self.force_skips[guild_id] = True
+        self.manual_stops[guild_id] = True; self.force_skips[guild_id] = True
         if guild_id in self.current_songs: del self.current_songs[guild_id]
         await self.update_channel_status(guild_id, None)
         guild = self.bot.get_guild(guild_id)
@@ -802,8 +909,12 @@ class Music(commands.Cog):
         return True
     def move_song(self, guild_id, from_idx, to_idx):
         if guild_id not in self.queues: return False
-        try: s = self.queues[guild_id].pop(from_idx); self.queues[guild_id].insert(to_idx, s); return True
-        except: return False
+        queue = self.queues[guild_id]
+        if from_idx < 0 or from_idx >= len(queue) or to_idx < 0 or to_idx >= len(queue):
+            return False
+        song = queue.pop(from_idx)
+        queue.insert(to_idx, song)
+        return True
     async def process_song_request(self, interaction, song_data, from_selection=False):
         if not await self.check_music_channel(interaction): return
         gid = interaction.guild_id

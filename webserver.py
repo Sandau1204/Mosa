@@ -131,6 +131,7 @@ def get_music_state(guild_id):
             'now_playing': None,
             'volume': 100,
             'is_loop': 0,
+            'is_shuffle': False,
             'playlists': [
                 {'id': 1, 'name': "Chill Lofi Vibes", 'count': 4, 'icon': "ph-headphones"},
                 {'id': 2, 'name': "Coding Focus", 'count': 2, 'icon': "ph-code"}
@@ -976,10 +977,10 @@ def api_music_state():
         return jsonify({'error': 'Missing guild_id'}), 400
     guild = bot_instance.get_guild(int(guild_id))
     if not guild or not guild.voice_client:
-        return jsonify({'connected': False, 'queue': [], 'playlists': [], 'now_playing': None})
+        return jsonify({'connected': False, 'queue': [], 'playlists': [], 'now_playing': None, 'is_shuffle': False})
     raw_vc = guild.voice_client
     if not isinstance(raw_vc, discord.VoiceClient):
-        return jsonify({'connected': False, 'queue': [], 'playlists': [], 'now_playing': None})
+        return jsonify({'connected': False, 'queue': [], 'playlists': [], 'now_playing': None, 'is_shuffle': False})
     vc = raw_vc
     channel_name = getattr(vc.channel, 'name', 'Voice Channel')
     state_data = get_music_state(int(guild_id))
@@ -992,6 +993,7 @@ def api_music_state():
         'is_paused': vc.is_paused(),
         'volume': state_data['volume'],
         'loop_mode': state_data['is_loop'],
+        'is_shuffle': state_data.get('is_shuffle', False),
         'now_playing': state_data['now_playing'],
         'queue': state_data['queue'],
         'playlists': state_data['playlists']

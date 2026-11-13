@@ -9,6 +9,9 @@ let currentVolume = 100;
 let previousVolume = 100;
 let isDraggingQueue = false;
 let queueSortable = null;
+let pendingQueueOrder = null;
+let pendingQueueOrderTimeout = null;
+let lastQueueIds = [];
 
 function shuffleQueue() {
     sendAction('shuffle');
@@ -123,9 +126,22 @@ async function sendAction(action, payload = {}) {
             body: JSON.stringify({ guild_id: currentGuildId, action, ...payload })
         });
         const data = await res.json();
-        if(data.success) fetchMusicState();
-        else showToast(data.error || 'Lỗi thao tác', 'error');
-    } catch (e) { showToast('Mất kết nối server', 'error'); }
+        if(data.success) {
+            if (action !== 'reorder') fetchMusicState();
+        } else {
+            clearPendingQueueOrder();
+            showToast(data.error || 'Lỗi thao tác', 'error');
+        }
+    } catch (e) {
+        clearPendingQueueOrder();
+        showToast('Mất kết nối server', 'error');
+    }
+}
+
+function clearPendingQueueOrder() {
+    pendingQueueOrder = null;
+    if (pendingQueueOrderTimeout) clearTimeout(pendingQueueOrderTimeout);
+    pendingQueueOrderTimeout = null;
 }
 
 function updateUI(state) {
@@ -192,44 +208,39 @@ function updateUI(state) {
     }
     const qList = document.getElementById('queue-list');
     document.getElementById('queue-count').innerText = `${state.queue.length} bài`;
-    if (!isDraggingQueue) {
+    const incomingQueueOrder = state.queue.map(song => song.id);
+    if (pendingQueueOrder && incomingQueueOrder.length === pendingQueueOrder.length &&
+        incomingQueueOrder.every((id, index) => id === pendingQueueOrder[index])) {
+        clearPendingQueueOrder();
+    }
+    if (!isDraggingQueue && !pendingQueueOrder) {
         if(state.queue.length === 0) {
-            qList.innerHTML = `<div class="flex flex-col items-center justify-center py-10 text-discord-muted"><i class="ph ph-ghost text-4xl mb-2"></i><p>Hàng chờ rỗng</p></div>`;
+            qList.innerHTML = `<div class="flex flex-col items-center justify-center py-10 text-discord-muted"><i class="ph ph-ghost text-4xl mb-2"></i><p>Hàng chờ trống</p></div>`;
         } else {
-            // Thêm icon "drag-handle" (6 dấu chấm) để kéo thả
             qList.innerHTML = state.queue.map((song, i) => `
-                <li class="group flex items-center p-2 rounded-md hover:bg-discord-hover transition-colors" data-index="${i}">
+                <li class="group flex items-center p-2 rounded-md transition-colors ${song.is_current ? 'bg-discord-active ring-1 ring-discord-blurple' : 'hover:bg-discord-hover'}" data-index="${i}">
                     <i class="ph ph-dots-six-vertical text-discord-muted hover:text-white cursor-grab drag-handle mr-2 text-xl" title="Kéo để di chuyển"></i>
-                    <span class="w-6 text-center text-xs text-discord-muted">${i + 1}</span>
+                    <span class="w-6 text-center text-xs ${song.is_current ? 'text-discord-blurple' : 'text-discord-muted'}">${i + 1}</span>
                     <div class="flex-1 min-w-0 flex flex-col pl-2">
-                        <div class="text-sm font-medium text-discord-text truncate">${song.title}</div>
+                        <div class="text-sm font-medium ${song.is_current ? 'text-white' : 'text-discord-text'} truncate">${song.title}${song.is_current ? ' <span class="text-xs text-discord-blurple">• Đang phát</span>' : ''}</div>
                         <div class="text-xs text-discord-muted truncate">${song.author}</div>
                     </div>
                     <span class="text-xs text-discord-muted mx-4 font-mono">${song.duration}</span>
-                    <button onclick="sendAction('remove', {song_id: '${song.id}'})" class="opacity-0 group-hover:opacity-100 text-discord-muted hover:text-discord-danger p-1">
-                        <i class="ph ph-trash"></i>
-                    </button>
+                    ${song.is_removable ? `<button onclick="sendAction('remove', {queue_index: ${i}})" class="opacity-0 group-hover:opacity-100 text-discord-muted hover:text-discord-danger p-1"><i class="ph ph-trash"></i></button>` : ''}
                 </li>
             `).join('');
         }
-        // Khởi tạo tính năng kéo thả
+        lastQueueIds = state.queue.map(song => song.id);
         initSortable();
     }
-    if(state.queue.length === 0) {
-        qList.innerHTML = `<div class="flex flex-col items-center justify-center py-10 text-discord-muted"><i class="ph ph-ghost text-4xl mb-2"></i><p>Hàng chờ trống</p></div>`;
-    } else {
-        qList.innerHTML = state.queue.map((song, i) => `
-            <li class="group flex items-center p-2 rounded-md hover:bg-discord-hover transition-colors">
-                <span class="w-8 text-center text-xs text-discord-muted">${i + 1}</span>
-                <div class="flex-1 min-w-0 flex flex-col pl-2">
-                    <div class="text-sm font-medium text-discord-text truncate">${song.title}</div>
-                    <div class="text-xs text-discord-muted truncate">${song.author}</div>
-                </div>
-                <span class="text-xs text-discord-muted mx-4 font-mono">${song.duration}</span>
-                <button onclick="sendAction('remove', {song_id: '${song.id}'})" class="opacity-0 group-hover:opacity-100 text-discord-muted hover:text-discord-danger p-1"><i class="ph ph-trash"></i></button>
-            </li>
-        `).join('');
-    }
+    const shuffleBtn = document.getElementById('shuffle-btn');
+    const shuffleIcon = shuffleBtn.querySelector('i');
+    const shuffleLabel = shuffleBtn.querySelector('span');
+    shuffleBtn.className = state.is_shuffle
+        ? "bg-discord-blurple hover:bg-discord-blurple_hover text-white px-2 md:px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 md:gap-2 text-[11px] md:text-sm"
+        : "bg-discord-panel hover:bg-discord-hover text-discord-text px-2 md:px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 md:gap-2 text-[11px] md:text-sm";
+    shuffleIcon.className = state.is_shuffle ? 'ph-fill ph-shuffle text-sm md:text-base' : 'ph ph-shuffle text-sm md:text-base';
+    shuffleLabel.innerText = state.is_shuffle ? 'Trộn bài: Bật' : 'Trộn bài: Tắt';
     const loopBtn = document.getElementById('loop-btn');
     const loopIcon = loopBtn.querySelector('i');
     if (state.loop_mode > 0) {
@@ -314,8 +325,13 @@ function initSortable() {
             onEnd: function (evt) {
                 isDraggingQueue = false;
                 if (evt.oldIndex !== evt.newIndex) {
-                    // Gửi API về backend với vị trí cũ và vị trí mới
+                    pendingQueueOrder = Array.from(qList.querySelectorAll('li'))
+                        .map(item => lastQueueIds[Number(item.dataset.index)]);
                     sendAction('reorder', { from: evt.oldIndex, to: evt.newIndex });
+                    pendingQueueOrderTimeout = setTimeout(() => {
+                        clearPendingQueueOrder();
+                        fetchMusicState();
+                    }, 5000);
                 }
             }
         });
