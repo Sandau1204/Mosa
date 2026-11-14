@@ -230,7 +230,7 @@ function updateUI(state) {
                         <div class="text-xs text-discord-muted truncate">${song.author}</div>
                     </div>
                     <span class="text-xs text-discord-muted mx-4 font-mono">${song.duration}</span>
-                    ${song.is_removable ? `<button onclick="sendAction('remove', {queue_index: ${i}})" class="opacity-0 group-hover:opacity-100 text-discord-muted hover:text-discord-danger p-1"><i class="ph ph-trash"></i></button>` : ''}
+                    ${song.is_removable ? `<button type="button" onclick="removeQueueSong(${i})" class="opacity-0 group-hover:opacity-100 text-discord-muted hover:text-discord-danger p-1" title="Xóa khỏi hàng chờ"><i class="ph ph-trash"></i></button>` : ''}
                 </li>
             `).join('');
         }
@@ -276,6 +276,7 @@ function addFromInput() {
 function togglePlay() { sendAction('toggle_play'); }
 function skipSong() { sendAction('skip'); }
 function playQueueSong(queueIndex) { sendAction('play_queue', { queue_index: queueIndex }); }
+function removeQueueSong(queueIndex) { sendAction('remove', { queue_index: queueIndex }); }
 function clearQueue() { sendAction('clear'); }
 function inviteBot() {
     const cid = document.getElementById('channel-select').value;
@@ -348,6 +349,7 @@ function bootstrapMusic() {
     window.togglePlay = togglePlay;
     window.skipSong = skipSong;
     window.playQueueSong = playQueueSong;
+    window.removeQueueSong = removeQueueSong;
     window.clearQueue = clearQueue;
     window.inviteBot = inviteBot;
     window.toggleLoop = toggleLoop;
