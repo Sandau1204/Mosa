@@ -53,7 +53,7 @@ class MusicQueueTests(unittest.TestCase):
         self.assertNotIn(1, self.music.shuffle_played)
         self.assertIs(self.music._select_next_song(1), next_song)
 
-    def test_prioritize_moves_song_after_current_and_protects_played_items(self):
+    def test_prioritize_moves_song_after_current_and_allows_removing_played_items(self):
         previous, current, upcoming, prioritized = (
             self.song(name) for name in ('previous', 'current', 'upcoming', 'prioritized')
         )
@@ -63,9 +63,13 @@ class MusicQueueTests(unittest.TestCase):
         self.assertTrue(self.music.prioritize_song(1, 3))
         self.assertEqual(self.music.queues[1], [previous, current, prioritized, upcoming])
         self.music.played_songs[1] = {id(previous)}
+        self.music.shuffle_played[1] = {id(previous)}
+        self.assertTrue(self.music.remove_song(1, 0))
+        self.assertNotIn(id(previous), self.music.played_songs[1])
+        self.assertNotIn(id(previous), self.music.shuffle_played[1])
+        self.assertEqual(self.music.queues[1], [current, prioritized, upcoming])
         self.assertFalse(self.music.remove_song(1, 0))
-        self.assertFalse(self.music.remove_song(1, 1))
-        self.assertTrue(self.music.remove_song(1, 3))
+        self.assertTrue(self.music.remove_song(1, 2))
 
     def test_requesting_a_queue_song_selects_it_without_removing_it(self):
         current, selected, following = (

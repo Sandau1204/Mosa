@@ -460,12 +460,15 @@ def api_server_voice_channels(guild_id):
     guild = bot_instance.get_guild(int(guild_id))
     if not guild:
         return jsonify([])
+    member = guild.get_member(int(session['user']['id']))
+    user_voice_channel = member.voice.channel if member and member.voice else None
     channels = []
     # Chỉ lấy các kênh thoại (Voice Channels)
     for vc in guild.voice_channels:
         channels.append({
             'id': str(vc.id),
-            'name': vc.name
+            'name': vc.name,
+            'is_user_channel': user_voice_channel is not None and vc.id == user_voice_channel.id
         })
     return jsonify(channels)
 

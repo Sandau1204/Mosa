@@ -311,7 +311,7 @@ class Music(commands.Cog):
                     'thumb': s.get('thumbnail', ''),
                     'url': s.get('webpage_url', ''),
                     'is_current': s is now_playing,
-                    'is_removable': s is not now_playing and id(s) not in self.played_songs.get(gid, set())
+                    'is_removable': s is not now_playing
                 })
             playlists_web = []
             pl_id = 1
@@ -604,9 +604,14 @@ class Music(commands.Cog):
         if index < 0 or index >= len(queue):
             return False
         song = queue[index]
-        if song is self.current_songs.get(guild_id) or id(song) in self.played_songs.get(guild_id, set()):
+        if song is self.current_songs.get(guild_id):
             return False
         queue.pop(index)
+        song_id = id(song)
+        self.played_songs.get(guild_id, set()).discard(song_id)
+        self.shuffle_played.get(guild_id, set()).discard(song_id)
+        if self.requested_songs.get(guild_id) is song:
+            self.requested_songs.pop(guild_id, None)
         return True
     def clear_queue(self, guild_id):
         self.queues.setdefault(guild_id, []).clear()

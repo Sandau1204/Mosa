@@ -98,6 +98,8 @@ async function loadVoiceChannels(guildId) {
         const channelSelect = document.getElementById('channel-select');
         channelSelect.innerHTML = channels.length === 0 ? '<option value="">Không có kênh thoại</option>' :
             channels.map(c => `<option value="${c.id}">🔊 ${c.name}</option>`).join('');
+        const userChannel = channels.find(channel => channel.is_user_channel);
+        if (userChannel) channelSelect.value = userChannel.id;
     } catch (e) { console.error("Lỗi load kênh thoại", e); }
 }
 
@@ -222,7 +224,7 @@ function updateUI(state) {
                     <i class="ph ph-dots-six-vertical text-discord-muted hover:text-white cursor-grab drag-handle mr-2 text-xl" title="Kéo để di chuyển"></i>
                     <span class="w-6 text-center text-xs ${song.is_current ? 'text-discord-blurple' : 'text-discord-muted'}">${i + 1}</span>
                     <div class="flex-1 min-w-0 flex flex-col pl-2">
-                        <button type="button" onclick="playQueueSong(${i})" class="text-sm font-medium ${song.is_current ? 'text-white' : 'text-discord-text hover:text-white'} text-left truncate" title="Phát bài này">${song.title}${song.is_current ? ' <span class="text-xs text-discord-blurple">• Đang phát</span>' : ''}</button>
+                        <button type="button" onclick="playQueueSong(${i})" class="self-start w-fit max-w-full text-sm font-medium ${song.is_current ? 'text-white' : 'text-discord-text hover:text-white'} text-left truncate" title="Phát bài này">${song.title}${song.is_current ? ' <span class="text-xs text-discord-blurple">• Đang phát</span>' : ''}</button>
                         <div class="text-xs text-discord-muted truncate">${song.author}</div>
                     </div>
                     <span class="text-xs text-discord-muted mx-4 font-mono">${song.duration}</span>
