@@ -80,7 +80,9 @@ async function loadServers() {
         const serverSelect = document.getElementById('server-select');
         serverSelect.innerHTML = servers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
         if(servers.length > 0) {
-            currentGuildId = servers[0].id;
+            const preferredServer = servers.find(server => server.is_user_in_voice) || servers[0];
+            currentGuildId = preferredServer.id;
+            serverSelect.value = currentGuildId;
             await loadVoiceChannels(currentGuildId);
             serverSelect.addEventListener('change', async (e) => {
                 currentGuildId = e.target.value;

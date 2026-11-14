@@ -438,16 +438,18 @@ def api_servers():
     is_owner = str(user_id) == str(owner_id)
     servers = []
     for g in bot_instance.guilds:
+        member = g.get_member(user_id) if user_id else None
         # Nếu không phải là Owner, tiến hành lọc
         if user_id and not is_owner:
             # Dùng cache của bot để xem người dùng này có nằm trong server không
             # Nếu get_member trả về None nghĩa là người dùng không ở trong server này -> Bỏ qua
-            if not g.get_member(user_id):
+            if not member:
                 continue
         servers.append({
             'id': str(g.id),
             'name': g.name,
             'members': g.member_count,
+            'is_user_in_voice': bool(member and member.voice and member.voice.channel),
             'icon': str(g.icon.url) if g.icon else "https://placehold.co/100/5865F2/fff?text=SV"
         })
     return jsonify(servers)
