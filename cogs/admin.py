@@ -59,9 +59,9 @@ class Admin(commands.Cog):
     async def clear(self, interaction: discord.Interaction, amount: str):
         await interaction.response.defer(ephemeral=True)
         channel = interaction.channel
-        # Đảm bảo lệnh chạy trong TextChannel
-        if not isinstance(channel, discord.TextChannel):
-            await interaction.followup.send("❌ Lệnh chỉ có thể chạy trong kênh văn bản (Text Channel).")
+        # VoiceChannel supports message history and purge for its text chat.
+        if not isinstance(channel, (discord.TextChannel, discord.VoiceChannel)):
+            await interaction.followup.send("❌ Lệnh chỉ có thể chạy trong kênh văn bản hoặc chat của kênh thoại.")
             return
         # Kiểm tra giá trị amount
         limit = None
